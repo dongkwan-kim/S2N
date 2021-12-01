@@ -216,6 +216,18 @@ def count_parameters(model: nn.Module):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
+def to_symmetric_matrix(matrix: torch.Tensor, direction="upper2lower"):
+    diag = torch.diag(torch.diagonal(matrix))
+    if direction == "upper2lower":
+        triu = torch.triu(matrix, diagonal=1)
+        return diag + triu + triu.t()
+    if direction == "lower2upper":
+        tril = torch.tril(matrix, diagonal=1)
+        return diag + tril + tril.t()
+    else:
+        raise NotImplementedError
+
+
 def torch_setdiff1d(tensor_1: Tensor, tensor_2: Tensor):
     dtype, device = tensor_1.dtype, tensor_1.device
     o = np.setdiff1d(tensor_1.numpy(), tensor_2.numpy())
@@ -285,35 +297,6 @@ def subgraph_and_edge_mask(subset, edge_index, edge_attr=None, relabel_nodes=Fal
         edge_index = n_idx[edge_index]
 
     return edge_index, edge_attr, mask
-
-
-def add_self_loops_v2(edge_index, edge_weight: Optional[torch.Tensor] = None,
-                      edge_attr: Optional[torch.Tensor] = None, edge_attr_reduce: str = "mean",
-                      fill_value: float = 1., num_nodes: Optional[int] = None):
-    r"""Extended method of torch_geometric.utils.add_self_loops that
-    supports :attr:`edge_attr`."""
-    N = maybe_num_nodes(edge_index, num_nodes)
-
-    loop_index = torch.arange(0, N, dtype=torch.long, device=edge_index.device)
-    loop_index = loop_index.unsqueeze(0).repeat(2, 1)
-
-    if edge_weight is not None:
-        assert edge_weight.numel() == edge_index.size(1)
-        loop_weight = edge_weight.new_full((N,), fill_value)
-        edge_weight = torch.cat([edge_weight, loop_weight], dim=0)
-
-    if edge_attr is not None:
-        assert edge_attr.size(0) == edge_index.size(1)
-        if edge_attr_reduce != "fill":
-            loop_attr = scatter(edge_attr, edge_index[0], dim=0, dim_size=N,
-                                reduce=edge_attr_reduce)
-        else:
-            loop_attr = edge_attr.new_full((N, edge_attr.size(1)), fill_value)
-        edge_attr = torch.cat([edge_attr, loop_attr], dim=0)
-
-    edge_index = torch.cat([edge_index, loop_index], dim=1)
-
-    return edge_index, edge_weight, edge_attr
 
 
 def idx_to_mask(idx_dict: Dict[Any, Tensor], num_nodes: int):
@@ -394,7 +377,7 @@ def from_networkx_customized_ordering(G, ordering="default"):
 
 if __name__ == '__main__':
 
-    METHOD = "ld_to_dl"
+    METHOD = "make_symmetric"
 
     from pytorch_lightning import seed_everything
 
@@ -438,20 +421,11 @@ if __name__ == '__main__':
              {"a": 100, "b": 200}],
             reduce_values=sum))
 
-    elif METHOD == "add_self_loops_v2":
-        _edge_index = torch.Tensor([[0, 0, 1],
-                                    [1, 2, 2]]).long()
-        _edge_attr = torch.eye(3).float()
-
-        _edge_index, _edge_attr = to_undirected(_edge_index, _edge_attr)
-        print(_edge_index)
-        print(_edge_attr)
-        print("-" * 7)
-
-        _edge_index, _, _edge_attr = add_self_loops_v2(
-            edge_index=_edge_index, edge_attr=_edge_attr, edge_attr_reduce="sum")
-        print(_edge_index)
-        print(_edge_attr)
+    elif METHOD == "make_symmetric":
+        m = torch.Tensor([[ 1,  2, 3],
+                          [-1,  4, 5],
+                          [-1, -1, 6]])
+        print(to_symmetric_matrix(m))
 
     else:
         raise ValueError("Wrong method: {}".format(METHOD))
