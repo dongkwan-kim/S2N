@@ -113,6 +113,11 @@ class SubgraphToNode:
         return self._node_task_data_precursor
 
     def node_task_data(self, edge_thres: float, save=True):
+        """
+        :return: Data(x=[N, 1], edge_index=[2, E], edge_attr=[E], y=[C], batch=[N])
+            - N is the number of subgraphs = batch.sum()
+            - edge_attr >= edge_thres
+        """
         path = self.path / f"{self.name}_node_task_data_e{edge_thres}.pth"
         try:
             self._node_task_data = torch.load(path)
