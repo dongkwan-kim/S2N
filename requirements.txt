@@ -39,6 +39,7 @@ MarkupSafe==2.0.1
 multidict==5.2.0
 networkx==2.6.3
 numpy==1.21.4
+numpy-indexed==0.3.5
 oauthlib==3.1.1
 omegaconf==2.1.1
 optuna==2.10.0
