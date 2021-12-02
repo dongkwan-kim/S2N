@@ -1,7 +1,8 @@
 import os
 import multiprocessing as mp
 from pathlib import Path
-from typing import List, Callable
+from pprint import pprint
+from typing import List, Callable, Union
 
 from termcolor import cprint
 import networkx as nx
@@ -10,16 +11,21 @@ from torch import Tensor
 from torch_geometric.data import Data, Batch
 from torch_geometric.utils import to_networkx, from_networkx, is_undirected, dense_to_sparse
 
-from utils import to_symmetric_matrix
+from utils import to_symmetric_matrix, try_getattr
 
 
 class SubgraphToNode:
+    _node_spl_mat = None
+    _node_task_data_precursor = None
+    _node_task_data_list: List[Data] = []
 
     def __init__(self,
-                 global_data, subgraph_data_list,
-                 name, path,
+                 global_data: Data,
+                 subgraph_data_list: List[Data],
+                 name: str, path: str,
+                 splits: List[int],
                  edge_aggr: Callable[[Tensor], float] = None,
-                 undirected=None,
+                 undirected: bool = None,
                  node_spl_cutoff=None):
         """
         :param global_data: Single Data(edge_index=[2, *], x=[*, F])
@@ -31,16 +37,15 @@ class SubgraphToNode:
         self.subgraph_data_list: List[Data] = subgraph_data_list
         self.name: str = name
         self.path: Path = Path(path)
+        self.splits = splits + [len(self.subgraph_data_list)]
 
         self.edge_aggr = edge_aggr or torch.min
 
         self.undirected = undirected or is_undirected(global_data.edge_index)
         self.node_spl_cutoff = node_spl_cutoff
 
-        self._node_spl_mat = None
-        self._node_task_data_precursor = None
-        self._node_task_data = None
         assert self.undirected, "Now only support undirected graphs"
+        assert len(splits) == 2  # num_train, num_val
 
     @property
     def S(self):
@@ -85,7 +90,6 @@ class SubgraphToNode:
         # Node aggregation: x, y, batch, ...
         node_task_data_precursor = Batch.from_data_list(self.subgraph_data_list)
         del node_task_data_precursor.edge_index
-        del node_task_data_precursor.ptr
         self._node_task_data_precursor = node_task_data_precursor
 
         # Edge aggregation
@@ -112,7 +116,7 @@ class SubgraphToNode:
 
         return self._node_task_data_precursor
 
-    def node_task_data(self, edge_thres: float, save=True):
+    def node_task_data_splits(self, edge_thres: Union[float, List[float]], save=True) -> List[Data]:
         """
         :return: Data(x=[N, 1], edge_index=[2, E], edge_attr=[E], y=[C], batch=[N])
             - N is the number of subgraphs = batch.sum()
@@ -120,31 +124,50 @@ class SubgraphToNode:
         """
         path = self.path / f"{self.name}_node_task_data_e{edge_thres}.pth"
         try:
-            self._node_task_data = torch.load(path)
-            cprint(f"Load: {self._node_task_data} at {path}", "green")
-            return self._node_task_data
+            self._node_task_data_list = torch.load(path)
+            cprint(f"Load: {self._node_task_data_list} at {path}", "green")
+            return self._node_task_data_list
         except FileNotFoundError:
             pass
 
+        if isinstance(edge_thres, float):
+            edge_thres = [edge_thres, edge_thres, edge_thres]
+        assert len(edge_thres) == len(self.splits)
+
         node_task_data_precursor = self.node_task_data_precursor(save)
         ew_mat = node_task_data_precursor.edge_weight_matrix
-        ew_mat[ew_mat < edge_thres] = 0
-        edge_index, edge_attr = dense_to_sparse(ew_mat)
-        self._node_task_data = Data(
-            edge_index=edge_index, edge_attr=edge_attr,
-            **{k: getattr(node_task_data_precursor, k)
-               for k in node_task_data_precursor.keys
-               if k != "edge_weight_matrix"},
-        )
-        if save:
-            torch.save(self._node_task_data, path)
-            cprint(f"Save: {self._node_task_data} at {path}", "blue")
 
-        return self._node_task_data
+        for i, (s, et) in enumerate(zip(self.splits, edge_thres)):
+            x, y, batch, ptr = try_getattr(node_task_data_precursor,
+                                           ["x", "y", "batch", "ptr"], as_dict=False)
+            sub_x = x[:ptr[s], :]
+            sub_batch = batch[:ptr[s]]
+            y = y[:s]
+
+            num_nodes = y.size(0)
+            eval_mask = None
+            if i > 0:
+                eval_mask = torch.zeros(num_nodes, dtype=torch.bool)
+                eval_mask[self.splits[i - 1]:] = True
+
+            ew_mat_s_by_s = ew_mat[:s, :s]
+            ew_mat_s_by_s[ew_mat_s_by_s < et] = 0
+            edge_index, edge_attr = dense_to_sparse(ew_mat_s_by_s)
+
+            self._node_task_data_list.append(Data(
+                sub_x=sub_x, sub_batch=sub_batch, y=y, eval_mask=eval_mask,
+                edge_index=edge_index, edge_attr=edge_attr.view(-1, 1),
+                num_nodes=num_nodes,
+            ))
+
+        if save:
+            torch.save(self._node_task_data_list, path)
+            cprint(f"Save: {self._node_task_data_list} at {path}", "blue")
+
+        return self._node_task_data_list
 
 
 if __name__ == '__main__':
-
     _global_data = from_networkx(nx.path_graph(10))
     _subgraph_data_list = [
         Data(x=torch.Tensor([0, 1]).long().view(-1, 1),
@@ -165,5 +188,9 @@ if __name__ == '__main__':
         name="test",
         path="./",
         undirected=True,
+        splits=[1, 2],
     )
-    print(s2n.node_task_data(0.25))
+    ntds = s2n.node_task_data_splits(0.25, save=True)
+    pprint(ntds)
+    print(ntds[-2].eval_mask)
+    print(ntds[-1].eval_mask)
