@@ -112,11 +112,11 @@ class SubgraphToNode:
         # sub_spl_ij = min { d_uv | u \in S_i, v in S_j }
         node_spl_mat = self.node_spl_mat(save)
         sub_spl_mat = torch.full((self.S, self.S), fill_value=-1)
-        for i, sub_data_i in enumerate(self.subgraph_data_list):
+        for i, sub_data_i in enumerate(tqdm(self.subgraph_data_list)):
             for j, sub_data_j in enumerate(self.subgraph_data_list):
                 if self.undirected and i <= j:
-                    x_i = sub_data_i.x.squeeze()
-                    x_j = sub_data_j.x.squeeze()
+                    x_i = sub_data_i.x.squeeze(-1)
+                    x_j = sub_data_j.x.squeeze(-1)
                     sub_spl = self.edge_aggr(node_spl_mat[x_i, :][:, x_j])
                     sub_spl_mat[i, j] = sub_spl
                     sub_spl_mat[j, i] = sub_spl
@@ -130,13 +130,16 @@ class SubgraphToNode:
 
         return self._node_task_data_precursor
 
-    def node_task_data_splits(self, edge_thres: Union[float, List[float]], save=True) -> List[Data]:
+    def node_task_data_splits(self,
+                              edge_thres: Union[float, Callable, List[float]],
+                              save=True) -> List[Data]:
         """
         :return: Data(x=[N, 1], edge_index=[2, E], edge_attr=[E], y=[C], batch=[N])
             - N is the number of subgraphs = batch.sum()
             - edge_attr >= edge_thres
         """
-        path = self.path / f"{self.name}_node_task_data_e{edge_thres}.pth"
+        str_et = edge_thres.__name__ if isinstance(edge_thres, Callable) else edge_thres
+        path = self.path / f"{self.name}_node_task_data_e{str_et}.pth"
         try:
             self._node_task_data_list = torch.load(path)
             cprint(f"Load: {self._node_task_data_list} at {path}", "green")
@@ -144,7 +147,7 @@ class SubgraphToNode:
         except FileNotFoundError:
             pass
 
-        if isinstance(edge_thres, float):
+        if not isinstance(edge_thres, list):
             edge_thres = [edge_thres, edge_thres, edge_thres]
         assert len(edge_thres) == len(self.splits)
 
@@ -164,7 +167,8 @@ class SubgraphToNode:
                 eval_mask = torch.zeros(num_nodes, dtype=torch.bool)
                 eval_mask[self.splits[i - 1]:] = True
 
-            ew_mat_s_by_s = ew_mat[:s, :s]
+            ew_mat_s_by_s = ew_mat.clone()[:s, :s]
+            et = et(ew_mat_s_by_s) if isinstance(et, Callable) else et
             ew_mat_s_by_s[ew_mat_s_by_s < et] = 0
             edge_index, edge_attr = dense_to_sparse(ew_mat_s_by_s)
 
@@ -185,7 +189,7 @@ if __name__ == '__main__':
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser
 
-    MODE = "EMUser"
+    MODE = "PPIBP"  # "HPOMetab", "PPIBP", "HPONeuro", "EMUser"
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
     DEBUG = False
 
@@ -231,6 +235,10 @@ if __name__ == '__main__':
             splits=dts.splits,
         )
         print(s2n)
-        ntds = s2n.node_task_data_splits(0.25, save=True)
-        pprint(ntds)
+        ntds = s2n.node_task_data_splits(
+            edge_thres=1.0,  # 0.5, 1.0
+            save=True,
+        )
+        for _d in ntds:
+            print(_d, _d.edge_index.size(1) / (_d.num_nodes ** 2))
 
