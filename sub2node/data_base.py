@@ -12,23 +12,6 @@ import numpy_indexed as npi
 from sklearn.model_selection import StratifiedKFold, KFold, train_test_split
 
 
-def get_int_range(r1: Union[int, float], r2: int, N: int):
-    # (r1: int, r2: int) -> same (r1, r2)
-    if isinstance(r1, int):
-        _r1, _r2 = r1, r2
-
-    # (r1: float, window: int) -> (N * r1 - window, N * r1 + window)
-    elif isinstance(r1, float):
-        _n = int(r1 * N)
-        _r1 = max(_n - r2, 1)  # not zero
-        _r2 = _n + r2
-
-    else:
-        raise TypeError("Wrong type: {}".format(type(r1)))
-
-    return _r1, _r2
-
-
 class DatasetBase(InMemoryDataset):
     """Dataset base class"""
 
@@ -45,7 +28,6 @@ class DatasetBase(InMemoryDataset):
         self.num_train = -1
         self.num_val = -1
         self.global_data = None
-        self.vocab = None
         self._num_nodes_global = None
         super(DatasetBase, self).__init__(root, transform, pre_transform)
 
@@ -72,11 +54,6 @@ class DatasetBase(InMemoryDataset):
         if self._num_nodes_global is None:
             self._num_nodes_global = self.global_data.edge_index.max().item() + 1
         return self._num_nodes_global
-
-    @property
-    def vocab_size(self):
-        assert self.vocab is not None
-        return len(self.vocab)
 
     def _get_important_elements(self):
         ie = {
@@ -172,6 +149,13 @@ class DatasetBase(InMemoryDataset):
         data_val = data_list[self.num_train:num_train_and_val]
         data_test = data_list[num_train_and_val:]
         return data_train, data_val, data_test
+
+    def get_data_list_with_split_attr(self):
+        data_train, data_val, data_test = self.get_train_val_test()
+        for i, d_set in enumerate([data_train, data_val, data_test]):
+            for d in d_set:
+                setattr(d, "split", torch.Tensor([i]).long())
+        return data_train + data_val + data_test
 
     def print_summary(self):
 

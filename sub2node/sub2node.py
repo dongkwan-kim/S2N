@@ -10,11 +10,13 @@ import torch
 from torch import Tensor
 from torch_geometric.data import Data, Batch
 from torch_geometric.utils import to_networkx, from_networkx, is_undirected, dense_to_sparse
+from tqdm import tqdm
 
 from utils import to_symmetric_matrix, try_getattr
 
 
 class SubgraphToNode:
+    _global_nxg = None
     _node_spl_mat = None
     _node_task_data_precursor = None
     _node_task_data_list: List[Data] = []
@@ -25,6 +27,7 @@ class SubgraphToNode:
                  name: str, path: str,
                  splits: List[int],
                  edge_aggr: Callable[[Tensor], float] = None,
+                 num_workers: int = None,
                  undirected: bool = None,
                  node_spl_cutoff=None):
         """
@@ -33,7 +36,6 @@ class SubgraphToNode:
         :param node_spl_cutoff:
         """
         self.global_data: Data = global_data
-        self.global_nxg: nx.Graph = to_networkx(global_data)
         self.subgraph_data_list: List[Data] = subgraph_data_list
         self.name: str = name
         self.path: Path = Path(path)
@@ -41,15 +43,26 @@ class SubgraphToNode:
 
         self.edge_aggr = edge_aggr or torch.min
 
+        self.num_workers = num_workers
         self.undirected = undirected or is_undirected(global_data.edge_index)
         self.node_spl_cutoff = node_spl_cutoff
 
         assert self.undirected, "Now only support undirected graphs"
-        assert len(splits) == 2  # num_train, num_val
+        assert len(self.splits) == 3
+        self.path.mkdir(exist_ok=True)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(name='{self.name}', path='{self.path}')"
 
     @property
     def S(self):
         return len(self.subgraph_data_list)
+
+    @property
+    def global_nxg(self) -> nx.Graph:
+        if self._global_nxg is None:
+            self._global_nxg = to_networkx(self.global_data)
+        return self._global_nxg
 
     def single_source_shortest_path_length_for_global_data(self, n):
         spl_dict = nx.single_source_shortest_path_length(
@@ -57,14 +70,17 @@ class SubgraphToNode:
         spl_list = [val for node, val in sorted(spl_dict.items(), key=lambda t: t[0])]
         return spl_list
 
-    def all_pairs_shortest_path_length_for_global_data(self, processes=None):
-        processes = processes or os.cpu_count()
-        with mp.Pool(processes=processes) as pool:
-            shortest_paths = pool.map(self.single_source_shortest_path_length_for_global_data,
-                                      self.global_nxg.nodes)
+    def all_pairs_shortest_path_length_for_global_data(self):
+        if self.num_workers is not None:
+            with mp.Pool(processes=self.num_workers) as pool:
+                shortest_paths = pool.map(self.single_source_shortest_path_length_for_global_data,
+                                          self.global_nxg.nodes)
+        else:
+            shortest_paths = [self.single_source_shortest_path_length_for_global_data(n)
+                              for n in tqdm(self.global_nxg.nodes)]
         return torch.tensor(shortest_paths, dtype=torch.long)
 
-    def node_spl_mat(self, save=True, **kwargs):
+    def node_spl_mat(self, save=True):
         path = self.path / f"{self.name}_spl_mat.pth"
         try:
             self._node_spl_mat = torch.load(path)
@@ -72,7 +88,7 @@ class SubgraphToNode:
             return self._node_spl_mat
         except FileNotFoundError:
             pass
-        self._node_spl_mat = self.all_pairs_shortest_path_length_for_global_data(**kwargs)
+        self._node_spl_mat = self.all_pairs_shortest_path_length_for_global_data()
         if save:
             torch.save(self._node_spl_mat, path)
             cprint(f"Save: tensor of {self._node_spl_mat.size()} at {path}", "blue")
@@ -104,8 +120,6 @@ class SubgraphToNode:
                     sub_spl = self.edge_aggr(node_spl_mat[x_i, :][:, x_j])
                     sub_spl_mat[i, j] = sub_spl
                     sub_spl_mat[j, i] = sub_spl
-        if self.undirected:
-            sub_spl_mat = to_symmetric_matrix(sub_spl_mat)
 
         # edge = 1 / (spl + 1) where 0 <= spl, then 0 < edge <= 1
         self._node_task_data_precursor.edge_weight_matrix = 1 / (sub_spl_mat + 1)
@@ -168,29 +182,55 @@ class SubgraphToNode:
 
 
 if __name__ == '__main__':
-    _global_data = from_networkx(nx.path_graph(10))
-    _subgraph_data_list = [
-        Data(x=torch.Tensor([0, 1]).long().view(-1, 1),
-             edge_index=torch.Tensor([[0, 1],
-                                      [1, 0]]).long(),
-             y=torch.Tensor([0])),
-        Data(x=torch.Tensor([1, 2, 4, 5]).long().view(-1, 1),
-             edge_index=torch.Tensor([[1, 2, 4, 5],
-                                      [2, 1, 5, 4]]).long(),
-             y=torch.Tensor([1])),
-        Data(x=torch.Tensor([8, 9]).long().view(-1, 1),
-             edge_index=torch.Tensor([[8, 9], [9, 8]]).long(),
-             y=torch.Tensor([2])),
-    ]
 
-    s2n = SubgraphToNode(
-        _global_data, _subgraph_data_list,
-        name="test",
-        path="./",
-        undirected=True,
-        splits=[1, 2],
-    )
-    ntds = s2n.node_task_data_splits(0.25, save=True)
-    pprint(ntds)
-    print(ntds[-2].eval_mask)
-    print(ntds[-1].eval_mask)
+    from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser
+
+    MODE = "EMUser"
+    PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
+    DEBUG = False
+
+    if MODE == "TEST":
+        _global_data = from_networkx(nx.path_graph(10))
+        _subgraph_data_list = [
+            Data(x=torch.Tensor([0, 1]).long().view(-1, 1),
+                 edge_index=torch.Tensor([[0, 1],
+                                          [1, 0]]).long(),
+                 y=torch.Tensor([0])),
+            Data(x=torch.Tensor([1, 2, 4, 5]).long().view(-1, 1),
+                 edge_index=torch.Tensor([[1, 2, 4, 5],
+                                          [2, 1, 5, 4]]).long(),
+                 y=torch.Tensor([1])),
+            Data(x=torch.Tensor([8, 9]).long().view(-1, 1),
+                 edge_index=torch.Tensor([[8, 9], [9, 8]]).long(),
+                 y=torch.Tensor([2])),
+        ]
+
+        s2n = SubgraphToNode(
+            _global_data, _subgraph_data_list,
+            name="test",
+            path="./",
+            undirected=True,
+            splits=[1, 2],
+        )
+        ntds = s2n.node_task_data_splits(0.25, save=True)
+        pprint(ntds)
+        print(ntds[-2].eval_mask)
+        print(ntds[-1].eval_mask)
+
+    elif MODE in ["HPOMetab", "PPIBP", "HPONeuro", "EMUser"]:
+        _cls = eval(MODE)
+        dts = _cls(root=PATH, name=MODE, debug=DEBUG)
+        _subgraph_data_list = dts.get_data_list_with_split_attr()
+        _global_data = dts.global_data
+
+        s2n = SubgraphToNode(
+            _global_data, _subgraph_data_list,
+            name=MODE,
+            path=f"{PATH}/{MODE.upper()}/sub2node/",
+            undirected=True,
+            splits=dts.splits,
+        )
+        print(s2n)
+        ntds = s2n.node_task_data_splits(0.25, save=True)
+        pprint(ntds)
+

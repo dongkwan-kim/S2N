@@ -180,6 +180,10 @@ class SubgraphDataset(DatasetBase):
         self.num_val = int(meta[1])
 
     @property
+    def splits(self):
+        return [self.num_train, self.num_train + self.num_val]
+
+    @property
     def raw_file_names(self):
         return ["edge_list.txt", "subgraphs.pth", "graphsaint_gcn_embeddings.pth"]
 
