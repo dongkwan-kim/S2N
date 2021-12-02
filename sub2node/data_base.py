@@ -6,7 +6,7 @@ import os.path as osp
 
 import torch
 from termcolor import cprint
-from torch_geometric.data import InMemoryDataset
+from torch_geometric.data import InMemoryDataset, Data
 import numpy as np
 import numpy_indexed as npi
 from sklearn.model_selection import StratifiedKFold, KFold, train_test_split
@@ -142,7 +142,7 @@ class DatasetBase(InMemoryDataset):
     def tolist(self):
         return list(self)
 
-    def get_train_val_test(self):
+    def get_train_val_test(self) -> Tuple[List[Data], List[Data], List[Data]]:
         data_list = self.tolist()
         num_train_and_val = self.num_train + self.num_val
         data_train = data_list[:self.num_train]
@@ -150,7 +150,7 @@ class DatasetBase(InMemoryDataset):
         data_test = data_list[num_train_and_val:]
         return data_train, data_val, data_test
 
-    def get_data_list_with_split_attr(self):
+    def get_data_list_with_split_attr(self) -> List[Data]:
         data_train, data_val, data_test = self.get_train_val_test()
         for i, d_set in enumerate([data_train, data_val, data_test]):
             for d in d_set:

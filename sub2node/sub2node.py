@@ -2,7 +2,7 @@ import os
 import multiprocessing as mp
 from pathlib import Path
 from pprint import pprint
-from typing import List, Callable, Union
+from typing import List, Callable, Union, Tuple
 
 from termcolor import cprint
 import networkx as nx
@@ -19,7 +19,7 @@ class SubgraphToNode:
     _global_nxg = None
     _node_spl_mat = None
     _node_task_data_precursor = None
-    _node_task_data_list: List[Data] = []
+    _node_task_data_list: Tuple[Data, Data, Data] = []
 
     def __init__(self,
                  global_data: Data,
@@ -132,7 +132,7 @@ class SubgraphToNode:
 
     def node_task_data_splits(self,
                               edge_thres: Union[float, Callable, List[float]],
-                              save=True) -> List[Data]:
+                              save=True) -> Tuple[Data, Data, Data]:
         """
         :return: Data(x=[N, 1], edge_index=[2, E], edge_attr=[E], y=[C], batch=[N])
             - N is the number of subgraphs = batch.sum()
@@ -182,7 +182,7 @@ class SubgraphToNode:
             torch.save(self._node_task_data_list, path)
             cprint(f"Save: {self._node_task_data_list} at {path}", "blue")
 
-        return self._node_task_data_list
+        return tuple(self._node_task_data_list)
 
 
 if __name__ == '__main__':
