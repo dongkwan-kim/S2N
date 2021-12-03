@@ -43,8 +43,8 @@ class MyGATConv(GATConv):
                  add_self_loops: bool = True, edge_dim: Optional[int] = None,
                  fill_value: Union[float, Tensor, str] = 'mean',
                  bias: bool = True, **kwargs):
-        assert concat
-        assert out_channels % heads == 0
+        if concat:
+            assert out_channels % heads == 0
         out_channels = out_channels // heads
         super().__init__(in_channels, out_channels, heads, concat, negative_slope,
                          dropout, add_self_loops, edge_dim, fill_value, bias, **kwargs)
