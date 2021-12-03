@@ -24,6 +24,7 @@ class SubgraphDataModule(LightningDataModule):
     def __init__(self,
                  dataset_name: str,
                  dataset_path: str,
+                 embedding_type: str,
                  use_s2n: bool,
                  edge_thres: Union[float, Callable, List[float]],
                  batch_size: int,
@@ -77,10 +78,14 @@ class SubgraphDataModule(LightningDataModule):
                 }[self.h.dataset_name]
 
     def prepare_data(self) -> None:
-        self.dataset_class(root=self.h.dataset_path, name=self.h.dataset_name)
+        self.dataset_class(root=self.h.dataset_path, name=self.h.dataset_name,
+                           embedding_type=self.h.embedding_type)
 
     def setup(self, stage: Optional[str] = None) -> None:
-        self.dataset: SubgraphDataset = self.dataset_class(root=self.h.dataset_path, name=self.h.dataset_name)
+        self.dataset: SubgraphDataset = self.dataset_class(
+            root=self.h.dataset_path, name=self.h.dataset_name,
+            embedding_type=self.h.embedding_type,
+        )
         if self.h.use_s2n:
             s2n = SubgraphToNode(
                 global_data=self.dataset.global_data,
@@ -130,6 +135,7 @@ if __name__ == '__main__':
 
     NAME = "PPIBP"  # "HPOMetab", "PPIBP", "HPONeuro", "EMUser"
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
+    E_TYPE = "gin"  # gin, graphsaint_gcn
 
     USE_S2N = False
     USE_SPARSE_TENSOR = False
@@ -137,6 +143,7 @@ if __name__ == '__main__':
     _sdm = SubgraphDataModule(
         dataset_name=NAME,
         dataset_path=PATH,
+        embedding_type=E_TYPE,
         use_s2n=USE_S2N,
         edge_thres=0.5,
         batch_size=32,

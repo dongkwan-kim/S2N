@@ -145,7 +145,7 @@ class GraphNeuralModel(LightningModule):
         ys = torch.cat(ys)  # [*] or [*, C]
         for metric, value in self.evaluator(logits, ys).items():
             self.log(f"{prefix}/{metric}", value, prog_bar=True)
-            if self.h.hp_metric is not None and self.h.hp_metric == metric:
+            if prefix == "test" and self.h.hp_metric == metric:
                 self.logger.log_metrics({"hp_metric": float(value)})
 
     def training_epoch_end(self, outputs: EPOCH_OUTPUT) -> None:
@@ -165,6 +165,7 @@ class GraphNeuralModel(LightningModule):
 if __name__ == '__main__':
     NAME = "PPIBP"  # "HPOMetab", "PPIBP", "HPONeuro", "EMUser"
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
+    E_TYPE = "gin"  # gin, graphsaint_gcn
 
     USE_S2N = True
     USE_SPARSE_TENSOR = False
@@ -172,6 +173,7 @@ if __name__ == '__main__':
     _sdm = SubgraphDataModule(
         dataset_name=NAME,
         dataset_path=PATH,
+        embedding_type=E_TYPE,
         use_s2n=USE_S2N,
         edge_thres=1.0,
         batch_size=32,

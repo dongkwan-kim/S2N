@@ -153,9 +153,11 @@ class SubgraphDataset(DatasetBase):
 
     url = "https://github.com/mims-harvard/SubGNN"
 
-    def __init__(self, root, name,
+    def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
+        assert embedding_type in ["gin", "graphsaint_gcn"]
+        self.embedding_type = embedding_type
         self.save_directed_edges = save_directed_edges
         super().__init__(
             root, name, val_ratio, test_ratio, debug, seed,
@@ -185,11 +187,11 @@ class SubgraphDataset(DatasetBase):
 
     @property
     def raw_file_names(self):
-        return ["edge_list.txt", "subgraphs.pth", "graphsaint_gcn_embeddings.pth"]
+        return ["edge_list.txt", "subgraphs.pth", f"{self.embedding_type}_embeddings.pth"]
 
     @property
     def processed_file_names(self):
-        return ["data.pt", "global.pt", "meta.pt"]
+        return ["data.pt", f"global_{self.embedding_type}.pt", "meta.pt"]
 
     def download(self):
         raise FileNotFoundError("Please download: {} \n\t at {} \n\t from {}".format(
@@ -220,10 +222,10 @@ class SubgraphDataset(DatasetBase):
 
 class HPONeuro(SubgraphDataset):
 
-    def __init__(self, root, name,
+    def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
-        super().__init__(root, name, val_ratio, test_ratio,
+        super().__init__(root, name, embedding_type, val_ratio, test_ratio,
                          save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
 
     def download(self):
@@ -235,10 +237,10 @@ class HPONeuro(SubgraphDataset):
 
 class HPOMetab(SubgraphDataset):
 
-    def __init__(self, root, name,
+    def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
-        super().__init__(root, name, val_ratio, test_ratio,
+        super().__init__(root, name, embedding_type, val_ratio, test_ratio,
                          save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
 
     def download(self):
@@ -250,10 +252,10 @@ class HPOMetab(SubgraphDataset):
 
 class EMUser(SubgraphDataset):
 
-    def __init__(self, root, name,
+    def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
-        super().__init__(root, name, val_ratio, test_ratio,
+        super().__init__(root, name, embedding_type, val_ratio, test_ratio,
                          save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
 
     def download(self):
@@ -265,10 +267,10 @@ class EMUser(SubgraphDataset):
 
 class PPIBP(SubgraphDataset):
 
-    def __init__(self, root, name,
+    def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
-        super().__init__(root, name, val_ratio, test_ratio,
+        super().__init__(root, name, embedding_type, val_ratio, test_ratio,
                          save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
 
     def download(self):
@@ -280,33 +282,38 @@ class PPIBP(SubgraphDataset):
 
 if __name__ == '__main__':
 
-    TYPE = "PPIBP"
+    TYPE = "EMUser"  # PPIBP, HPOMetab, HPONeuro, EMUser
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
+    E_TYPE = "gin"  # gin, graphsaint_gcn
     DEBUG = False
 
     if TYPE == "HPONeuro":  # multi-label
         dts = HPONeuro(
             root=PATH,
             name="HPONeuro",
+            embedding_type=E_TYPE,
             debug=DEBUG,
         )
     elif TYPE == "HPOMetab":
         dts = HPOMetab(
             root=PATH,
             name="HPOMetab",
+            embedding_type=E_TYPE,
             debug=DEBUG,
         )
     elif TYPE == "EMUser":
         dts = EMUser(
             root=PATH,
             name="EMUser",
+            embedding_type=E_TYPE,
             debug=DEBUG,
         )
     elif TYPE == "PPIBP":
         dts = PPIBP(
             root=PATH,
             name="PPIBP",
+            embedding_type=E_TYPE,
             debug=DEBUG,
         )
     else:
