@@ -11,6 +11,8 @@ import numpy as np
 import numpy_indexed as npi
 from sklearn.model_selection import StratifiedKFold, KFold, train_test_split
 
+from data_utils import RelabelNodes
+
 
 class DatasetBase(InMemoryDataset):
     """Dataset base class"""
@@ -156,6 +158,14 @@ class DatasetBase(InMemoryDataset):
             for d in d_set:
                 setattr(d, "split", torch.Tensor([i]).long())
         return data_train + data_val + data_test
+
+    def get_train_val_test_with_relabeling(self):
+        rn_transform = RelabelNodes()
+        data_train, data_val, data_test = self.get_train_val_test()
+        data_train = [rn_transform(d) for d in data_train]
+        data_val = [rn_transform(d) for d in data_val]
+        data_test = [rn_transform(d) for d in data_test]
+        return data_train, data_val, data_test
 
     def print_summary(self):
 

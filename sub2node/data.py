@@ -39,7 +39,6 @@ class SubgraphDataModule(LightningDataModule):
         self.dataset: Optional[SubgraphDataset] = None
         self.train_data, self.val_data, self.test_data = None, None, None
         self.split_idx: Union[Dict, None] = None
-        self.model_kwargs = dict()
 
         if prepare_data:
             self.prepare_data()
@@ -52,6 +51,10 @@ class SubgraphDataModule(LightningDataModule):
     @property
     def num_nodes_global(self):
         return self.dataset.num_nodes_global
+
+    @property
+    def num_channels_global(self):
+        return self.dataset.global_data.x.size(1)
 
     @property
     def num_classes(self):
@@ -93,7 +96,7 @@ class SubgraphDataModule(LightningDataModule):
                 data_list = [transform(d) for d in data_list]
             self.train_data, self.val_data, self.test_data = data_list
         else:
-            self.train_data, self.val_data, self.test_data = self.dataset.get_train_val_test()
+            self.train_data, self.val_data, self.test_data = self.dataset.get_train_val_test_with_relabeling()
 
     def train_dataloader(self):
         if self.h.use_s2n:
@@ -127,7 +130,9 @@ if __name__ == '__main__':
 
     NAME = "PPIBP"  # "HPOMetab", "PPIBP", "HPONeuro", "EMUser"
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
-    USE_S2N = True
+
+    USE_S2N = False
+    USE_SPARSE_TENSOR = False
 
     _sdm = SubgraphDataModule(
         dataset_name=NAME,
@@ -136,21 +141,24 @@ if __name__ == '__main__':
         edge_thres=0.5,
         batch_size=32,
         eval_batch_size=5,
-        use_sparse_tensor=True,
+        use_sparse_tensor=USE_SPARSE_TENSOR,
     )
     print(_sdm)
     cprint("Train ----", "green")
     for _i, _b in enumerate(_sdm.train_dataloader()):
         pprint(_b)
+        print("E", _b.edge_index.min(), _b.edge_index.max())
         if _i == 2:
             break
     cprint("Valid ----", "green")
     for _i, _b in enumerate(_sdm.val_dataloader()):
         pprint(_b)
+        print("E", _b.edge_index.min(), _b.edge_index.max())
         if _i == 2:
             break
     cprint("Test ----", "green")
     for _i, _b in enumerate(_sdm.test_dataloader()):
         pprint(_b)
+        print("E", _b.edge_index.min(), _b.edge_index.max())
         if _i == 2:
             break
