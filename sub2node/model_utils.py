@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Union, Tuple
+from typing import Union, Tuple, Optional
 
 import torch
 import torch.nn as nn
@@ -40,12 +40,14 @@ class MyGATConv(GATConv):
     def __init__(self, in_channels: Union[int, Tuple[int, int]],
                  out_channels: int, heads: int = 1, concat: bool = True,
                  negative_slope: float = 0.2, dropout: float = 0.0,
-                 add_self_loops: bool = True, bias: bool = True, **kwargs):
+                 add_self_loops: bool = True, edge_dim: Optional[int] = None,
+                 fill_value: Union[float, Tensor, str] = 'mean',
+                 bias: bool = True, **kwargs):
         assert concat
         assert out_channels % heads == 0
         out_channels = out_channels // heads
         super().__init__(in_channels, out_channels, heads, concat, negative_slope,
-                         dropout, add_self_loops, bias, **kwargs)
+                         dropout, add_self_loops, edge_dim, fill_value, bias, **kwargs)
 
 
 class PositionalEncoding(nn.Module):
@@ -197,7 +199,10 @@ def get_gnn_conv_and_kwargs(gnn_name, **kwargs):
         gnn_cls = SAGEConv
     elif gnn_name == "GATConv":
         gnn_cls = MyGATConv
-        gkw = merge_dict_by_keys(gkw, kwargs, ["add_self_loops", "heads", "dropout"])
+        gkw = merge_dict_by_keys(
+            gkw, kwargs,
+            ["add_self_loops", "heads", "dropout", "edge_dim"],
+        )
     elif gnn_name == "Linear":
         gnn_cls = MyLinear
     else:
@@ -243,14 +248,14 @@ class GraphEncoder(nn.Module):
         for bn in self.bns:
             bn.reset_parameters()
 
-    def forward(self, x, edge_index, **kwargs):
+    def forward(self, x, edge_index, edge_attr=None, **kwargs):
         # Order references.
         #  https://d2l.ai/chapter_convolutional-modern/resnet.html#residual-blocks
         #  https://github.com/rusty1s/pytorch_geometric/blob/master/examples/ppi.py#L30-L34
         #  https://github.com/snap-stanford/ogb/blob/master/examples/nodeproppred/arxiv/gnn.py#L69-L76
         for i, conv in enumerate(self.convs):
             x_before_layer = x
-            x = conv(x, edge_index, **kwargs)
+            x = conv(x, edge_index, edge_attr, **kwargs)
             if i != self.num_layers - 1 or self.activate_last:
                 if self.use_bn:
                     x = self.bns[i](x)
@@ -520,6 +525,7 @@ if __name__ == '__main__':
     MODE = "DeepSets"
 
     from pytorch_lightning import seed_everything
+
     seed_everything(42)
 
     if MODE == "BilinearWith1d":
@@ -556,7 +562,7 @@ if __name__ == '__main__':
         print(_ro)
         print("_z", _z.size())  # [2, 128]
         print("_logits", _logits.size())  # [2, 3]
-    
+
     elif MODE == "DeepSets":
         _x = torch.ones(10 * 64).view(10, 64)
         _batch = torch.zeros(10).long()
