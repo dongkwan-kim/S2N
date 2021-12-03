@@ -147,7 +147,6 @@ class GraphNeuralModel(LightningModule):
             self.log(f"{prefix}/{metric}", value, prog_bar=True)
             if self.h.hp_metric is not None and self.h.hp_metric == metric:
                 self.logger.log_metrics({"hp_metric": float(value)})
-                log.info(f"Log '{metric}' as hp_metric")
 
     def training_epoch_end(self, outputs: EPOCH_OUTPUT) -> None:
         self.epoch_end("train", ld_to_dl(outputs))

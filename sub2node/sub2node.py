@@ -19,7 +19,7 @@ class SubgraphToNode:
     _global_nxg = None
     _node_spl_mat = None
     _node_task_data_precursor = None
-    _node_task_data_list: Tuple[Data, Data, Data] = []
+    _node_task_data_list: List[Data] = []
 
     def __init__(self,
                  global_data: Data,
