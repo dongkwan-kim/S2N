@@ -191,6 +191,7 @@ if __name__ == '__main__':
 
     MODE = "PPIBP"  # "HPOMetab", "PPIBP", "HPONeuro", "EMUser"
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
+    E_TYPE = "gin"
     DEBUG = False
 
     if MODE == "TEST":
@@ -223,7 +224,7 @@ if __name__ == '__main__':
 
     elif MODE in ["HPOMetab", "PPIBP", "HPONeuro", "EMUser"]:
         _cls = eval(MODE)
-        dts = _cls(root=PATH, name=MODE, debug=DEBUG)
+        dts = _cls(root=PATH, name=MODE, debug=DEBUG, embedding_type=E_TYPE)
         _subgraph_data_list = dts.get_data_list_with_split_attr()
         _global_data = dts.global_data
 
@@ -236,7 +237,8 @@ if __name__ == '__main__':
         )
         print(s2n)
         ntds = s2n.node_task_data_splits(
-            edge_thres=1.0,  # 0.5, 1.0
+            # 0.5, 1.0
+            edge_thres=1.0,
             save=True,
         )
         for _d in ntds:
