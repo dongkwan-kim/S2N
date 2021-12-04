@@ -38,6 +38,7 @@ class GraphNeuralModel(LightningModule):
                  is_multi_labels: bool,
                  use_s2n: bool,
                  sub_node_num_layers: int = None,
+                 sub_node_encoder_aggr: str = "sum",
                  subname: str = "default",
                  metrics=["micro_f1", "macro_f1", "accuracy"],
                  hp_metric=None,
@@ -67,7 +68,7 @@ class GraphNeuralModel(LightningModule):
             self.sub_node_encoder = DeepSets(
                 encoder=MLP(in_channels=given_datamodule.num_channels_global, **kws),
                 decoder=MLP(in_channels=self.h.hidden_channels, **kws),
-                aggr="sum",
+                aggr=self.h.sub_node_encoder_aggr,
             )
             in_channels = self.h.hidden_channels
             out_channels = given_datamodule.num_classes
