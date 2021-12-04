@@ -11,6 +11,7 @@ from termcolor import cprint
 from torch import Tensor
 from torch_geometric.nn.glob import global_mean_pool, global_max_pool, global_add_pool
 from torch_geometric.nn import GlobalAttention, GCNConv, SAGEConv, GATConv
+from torch_geometric.utils import dropout_adj
 from torch_scatter import scatter_add
 
 from utils import softmax_half, act, merge_dict_by_keys
@@ -213,7 +214,8 @@ def get_gnn_conv_and_kwargs(gnn_name, **kwargs):
 class GraphEncoder(nn.Module):
 
     def __init__(self, layer_name, num_layers, in_channels, hidden_channels, out_channels,
-                 activation="relu", use_bn=False, use_skip=False, dropout_channels=0.0,
+                 activation="relu", use_bn=False, use_skip=False,
+                 dropout_channels=0.0, dropout_edges=0.0,
                  activate_last=True, **kwargs):
         super().__init__()
 
@@ -222,6 +224,7 @@ class GraphEncoder(nn.Module):
         self.activation = activation
         self.use_bn, self.use_skip = use_bn, use_skip
         self.dropout_channels = dropout_channels
+        self.dropout_edges = dropout_edges
         self.activate_last = activate_last
 
         self._gnn_kwargs = {}
@@ -255,7 +258,10 @@ class GraphEncoder(nn.Module):
         #  https://github.com/snap-stanford/ogb/blob/master/examples/nodeproppred/arxiv/gnn.py#L69-L76
         for i, conv in enumerate(self.convs):
             x_before_layer = x
-            x = conv(x, edge_index, edge_attr, **kwargs)
+            _edge_index, _edge_attr = dropout_adj(
+                edge_index, edge_attr,
+                p=self.dropout_edges, training=self.training)
+            x = conv(x, _edge_index, _edge_attr, **kwargs)
             if i != self.num_layers - 1 or self.activate_last:
                 if self.use_bn:
                     x = self.bns[i](x)
@@ -522,7 +528,7 @@ class GlobalAttentionHalf(GlobalAttention):
 
 if __name__ == '__main__':
 
-    MODE = "DeepSets"
+    MODE = "GraphEncoder"
 
     from pytorch_lightning import seed_everything
 
@@ -577,7 +583,7 @@ if __name__ == '__main__':
     elif MODE == "GraphEncoder":
         enc = GraphEncoder(
             layer_name="SAGEConv", num_layers=3, in_channels=32, hidden_channels=64, out_channels=128,
-            activation="relu", use_bn=False, use_skip=False, dropout_channels=0.0,
+            activation="relu", use_bn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
             activate_last=True,
         )
         cprint(enc, "red")
