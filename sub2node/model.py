@@ -47,7 +47,8 @@ class GraphNeuralModel(LightningModule):
                  dropout_channels: float = 0.0,
                  dropout_edges: float = 0.0,
                  layer_kwargs: Dict[str, Any] = {},
-                 given_datamodule: SubgraphDataModule = None):
+                 given_datamodule: SubgraphDataModule = None,
+                 **kwargs):
         super().__init__()
         self.save_hyperparameters(ignore=["given_datamodule"])
         assert given_datamodule is not None
@@ -65,9 +66,10 @@ class GraphNeuralModel(LightningModule):
                        out_channels=self.h.hidden_channels,
                        activation=self.h.activation,
                        dropout=self.h.dropout_channels)
+            num_aggr = self.h.sub_node_encoder_aggr.count("-") + 1
             self.sub_node_encoder = DeepSets(
                 encoder=MLP(in_channels=given_datamodule.num_channels_global, **kws),
-                decoder=MLP(in_channels=self.h.hidden_channels, **kws),
+                decoder=MLP(in_channels=self.h.hidden_channels * num_aggr, **kws),
                 aggr=self.h.sub_node_encoder_aggr,
             )
             in_channels = self.h.hidden_channels
