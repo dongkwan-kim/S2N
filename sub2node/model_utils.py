@@ -428,10 +428,19 @@ class DeepSets(nn.Module):
         self.encoder = encoder
         self.decoder = decoder
         self.aggr = aggr or "sum"  # e.g., mean, max, sum, mean-max, ...,
+        self.att = None
+        if aggr == "attention":
+            self.att = GlobalAttention(nn.Linear(encoder.out_channels, 1))
+
+    def aggregate(self, x, batch):
+        if self.att is None:
+            return Readout.aggregate(self.aggr, x, batch)
+        else:
+            return self.att(x, batch)
 
     def forward(self, x, batch=None, *args, **kwargs):
         x = self.encoder(x)
-        x = Readout.aggregate(self.aggr, x, batch)
+        x = self.aggregate(x, batch)
         x = self.decoder(x)
         return x
 
@@ -528,7 +537,7 @@ class GlobalAttentionHalf(GlobalAttention):
 
 if __name__ == '__main__':
 
-    MODE = "GraphEncoder"
+    MODE = "DeepSets"
 
     from pytorch_lightning import seed_everything
 
@@ -572,10 +581,11 @@ if __name__ == '__main__':
     elif MODE == "DeepSets":
         _x = torch.ones(10 * 64).view(10, 64)
         _batch = torch.zeros(10).long()
-        _batch[:4] = 1
+        _batch[4:] = 1
         _ds = DeepSets(
             encoder=MLP(2, 64, 17, 17, "relu"),
             decoder=MLP(2, 17, 17, 10, "relu"),
+            aggr="attention",
         )
         print(_ds)
         print(_ds(_x, _batch).size())

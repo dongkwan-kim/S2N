@@ -65,7 +65,8 @@ class GraphNeuralModel(LightningModule):
                        hidden_channels=self.h.hidden_channels,
                        out_channels=self.h.hidden_channels,
                        activation=self.h.activation,
-                       dropout=self.h.dropout_channels)
+                       dropout=self.h.dropout_channels,
+                       activate_last=True)
             num_aggr = self.h.sub_node_encoder_aggr.count("-") + 1
             self.sub_node_encoder = DeepSets(
                 encoder=MLP(in_channels=given_datamodule.num_channels_global, **kws),
