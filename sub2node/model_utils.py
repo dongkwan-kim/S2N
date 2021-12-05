@@ -50,6 +50,11 @@ class MyGATConv(GATConv):
         super().__init__(in_channels, out_channels, heads, concat, negative_slope,
                          dropout, add_self_loops, edge_dim, fill_value, bias, **kwargs)
 
+    def forward(self, x, edge_index, edge_attr, size=None, return_attention_weights=None):
+        if self.edge_dim is None and edge_attr is not None:
+            edge_attr = None
+        return super().forward(x, edge_index, edge_attr, size, return_attention_weights)
+
 
 class PositionalEncoding(nn.Module):
 
