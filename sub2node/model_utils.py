@@ -146,14 +146,14 @@ class MLP(nn.Module):
 
     def __repr__(self):
         if self.num_layers > 1:
-            return "{}(L={}, I={}, H={}, O={}, act={}, bn={}, do={})".format(
+            return "{}(L={}, I={}, H={}, O={}, act={}, act_last={}, bn={}, do={})".format(
                 self.__class__.__name__, self.num_layers, self.in_channels, self.hidden_channels, self.out_channels,
-                self.activation, self.use_bn, self.dropout,
+                self.activation, self.activate_last, self.use_bn, self.dropout,
             )
         else:
-            return "{}(L={}, I={}, O={}, act={}, bn={}, do={})".format(
+            return "{}(L={}, I={}, O={}, act={}, act_last={}, bn={}, do={})".format(
                 self.__class__.__name__, self.num_layers, self.in_channels, self.out_channels,
-                self.activation, self.use_bn, self.dropout,
+                self.activation, self.activate_last, self.use_bn, self.dropout,
             )
 
     def layer_repr(self):
