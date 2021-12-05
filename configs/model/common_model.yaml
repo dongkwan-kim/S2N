@@ -1,0 +1,11 @@
+activation: relu
+hidden_channels: 64
+
+is_multi_labels: ${datamodule._is_multi_labels}
+use_s2n: ${datamodule.use_s2n}
+
+metrics: ["micro_f1", "macro_f1", "accuracy"]
+hp_metric: "micro_f1"
+
+# To Trainer
+_gradient_clip_val: 0.0

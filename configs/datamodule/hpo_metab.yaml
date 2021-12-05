@@ -1,0 +1,17 @@
+_target_: data.SubgraphDataModule
+
+dataset_name: "HPOMetab"
+dataset_path: ${dataset_path} # dataset_path is specified in config.yaml
+embedding_type: "gin"  # gin, graphsaint_gcn
+
+use_s2n: True
+edge_thres: 1.0  # important
+
+batch_size: 128  # for use_s2n=False
+
+verbose: 2
+num_workers: 0
+
+# Will be inherited to the trainer, model
+_max_epochs: 2500
+_is_multi_labels: False

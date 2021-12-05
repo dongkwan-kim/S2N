@@ -1,0 +1,16 @@
+_target_: pytorch_lightning.Trainer
+
+# set `1` to train on GPU, `0` to train on CPU only
+# set `[n]` to use nth GPU
+gpus: [3]
+
+min_epochs: 100
+max_epochs: ${datamodule._max_epochs}
+gradient_clip_val: ${model._gradient_clip_val}
+# check_val_every_n_epoch: 5
+
+progress_bar_refresh_rate: 1
+num_sanity_val_steps: 0
+
+benchmark: False
+deterministic: False  # scatter_add_cuda_kernel does not have a deterministic implementation
