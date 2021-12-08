@@ -280,44 +280,86 @@ class PPIBP(SubgraphDataset):
         super().process()
 
 
+class Density(SubgraphDataset):
+
+    def __init__(self, root, name, embedding_type,
+                 val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
+                 transform=None, pre_transform=None, **kwargs):
+        assert embedding_type == "graphsaint_gcn"
+        super().__init__(root, name, embedding_type, val_ratio, test_ratio,
+                         save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
+
+    def download(self):
+        super().download()
+
+    def process(self):
+        super().process()
+
+
+class Coreness(SubgraphDataset):
+
+    def __init__(self, root, name, embedding_type,
+                 val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
+                 transform=None, pre_transform=None, **kwargs):
+        assert embedding_type == "graphsaint_gcn"
+        super().__init__(root, name, embedding_type, val_ratio, test_ratio,
+                         save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
+
+    def download(self):
+        super().download()
+
+    def process(self):
+        super().process()
+
+
+class CutRatio(SubgraphDataset):
+
+    def __init__(self, root, name, embedding_type,
+                 val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
+                 transform=None, pre_transform=None, **kwargs):
+        assert embedding_type == "graphsaint_gcn"
+        super().__init__(root, name, embedding_type, val_ratio, test_ratio,
+                         save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
+
+    def download(self):
+        super().download()
+
+    def process(self):
+        super().process()
+
+
+class CC(SubgraphDataset):
+
+    def __init__(self, root, name, embedding_type,
+                 val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
+                 transform=None, pre_transform=None, **kwargs):
+        assert embedding_type == "graphsaint_gcn"
+        super().__init__(root, name, embedding_type, val_ratio, test_ratio,
+                         save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
+
+    def download(self):
+        super().download()
+
+    def process(self):
+        super().process()
+
+
 if __name__ == '__main__':
 
-    TYPE = "EMUser"  # PPIBP, HPOMetab, HPONeuro, EMUser
+    TYPE = "CutRatio"
+    # PPIBP, HPOMetab, HPONeuro, EMUser
+    # Density, CC, Coreness, CutRatio
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
-    E_TYPE = "gin"  # gin, graphsaint_gcn
+    E_TYPE = "graphsaint_gcn"  # gin, graphsaint_gcn
     DEBUG = False
 
-    if TYPE == "HPONeuro":  # multi-label
-        dts = HPONeuro(
-            root=PATH,
-            name="HPONeuro",
-            embedding_type=E_TYPE,
-            debug=DEBUG,
-        )
-    elif TYPE == "HPOMetab":
-        dts = HPOMetab(
-            root=PATH,
-            name="HPOMetab",
-            embedding_type=E_TYPE,
-            debug=DEBUG,
-        )
-    elif TYPE == "EMUser":
-        dts = EMUser(
-            root=PATH,
-            name="EMUser",
-            embedding_type=E_TYPE,
-            debug=DEBUG,
-        )
-    elif TYPE == "PPIBP":
-        dts = PPIBP(
-            root=PATH,
-            name="PPIBP",
-            embedding_type=E_TYPE,
-            debug=DEBUG,
-        )
-    else:
-        raise ValueError
+    dts = eval(TYPE)(
+        root=PATH,
+        name=TYPE,
+        embedding_type=E_TYPE,
+        debug=DEBUG,
+    )
 
     train_dts, val_dts, test_dts = dts.get_train_val_test()
 

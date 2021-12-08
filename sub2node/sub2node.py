@@ -116,7 +116,7 @@ class SubgraphToNode:
         # sub_spl_ij = min { d_uv | u \in S_i, v in S_j }
         node_spl_mat = self.node_spl_mat(save).float()
         sub_spl_mat = torch.full((self.S, self.S), fill_value=-1)
-        for i, sub_data_i in enumerate(tqdm(self.subgraph_data_list)):
+        for i, sub_data_i in enumerate(tqdm(self.subgraph_data_list, desc="sub_spl_mat")):
             for j, sub_data_j in enumerate(self.subgraph_data_list):
                 if self.undirected and i <= j:
                     x_i = sub_data_i.x.squeeze(-1)
@@ -197,14 +197,41 @@ class SubgraphToNode:
 
 if __name__ == '__main__':
 
-    from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser
+    from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, CC, Coreness, CutRatio
 
-    MODE = "HPONeuro"  # "HPOMetab", "PPIBP", "HPONeuro", "EMUser"
+    MODE = "Density"
+    # PPIBP, HPOMetab, HPONeuro, EMUser
+    # Density, CC, Coreness, CutRatio
+
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
-    E_TYPE = "gin"
+    E_TYPE = "graphsaint_gcn"
     DEBUG = False
 
-    if MODE == "TEST":
+    if MODE in ["HPOMetab", "PPIBP", "HPONeuro", "EMUser",
+                "Density", "CC", "Coreness", "CutRatio"]:
+        _cls = eval(MODE)
+        dts = _cls(root=PATH, name=MODE, debug=DEBUG, embedding_type=E_TYPE)
+        _subgraph_data_list = dts.get_data_list_with_split_attr()
+        _global_data = dts.global_data
+
+        s2n = SubgraphToNode(
+            _global_data, _subgraph_data_list,
+            name=MODE,
+            path=f"{PATH}/{MODE.upper()}/sub2node/",
+            undirected=True,
+            splits=dts.splits,
+            edge_aggr=torch.min,
+        )
+        print(s2n)
+        ntds = s2n.node_task_data_splits(
+            # 0.5, 1.0
+            edge_thres=0.5,
+            save=True,
+        )
+        for _d in ntds:
+            print(_d, _d.edge_index.size(1) / (_d.num_nodes ** 2))
+
+    elif MODE == "TEST":
         _global_data = from_networkx(nx.path_graph(10))
         _subgraph_data_list = [
             Data(x=torch.Tensor([0, 1]).long().view(-1, 1),
@@ -231,27 +258,4 @@ if __name__ == '__main__':
         pprint(ntds)
         print(ntds[-2].eval_mask)
         print(ntds[-1].eval_mask)
-
-    elif MODE in ["HPOMetab", "PPIBP", "HPONeuro", "EMUser"]:
-        _cls = eval(MODE)
-        dts = _cls(root=PATH, name=MODE, debug=DEBUG, embedding_type=E_TYPE)
-        _subgraph_data_list = dts.get_data_list_with_split_attr()
-        _global_data = dts.global_data
-
-        s2n = SubgraphToNode(
-            _global_data, _subgraph_data_list,
-            name=MODE,
-            path=f"{PATH}/{MODE.upper()}/sub2node/",
-            undirected=True,
-            splits=dts.splits,
-            edge_aggr=torch.min,
-        )
-        print(s2n)
-        ntds = s2n.node_task_data_splits(
-            # 0.5, 1.0
-            edge_thres=1.0,
-            save=True,
-        )
-        for _d in ntds:
-            print(_d, _d.edge_index.size(1) / (_d.num_nodes ** 2))
 

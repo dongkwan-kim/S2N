@@ -6,7 +6,7 @@
 # python run.py -m hparams_search=mnist_optuna experiment=example_simple logger=wandb
 
 defaults:
-  - optuna_tpe.yaml
+  - optuna_random.yaml
   - override /callbacks: checkpoint.yaml # If set no checkpoint, it cannot use the best model path
 
 # choose metric which will be optimized by Optuna
@@ -16,7 +16,7 @@ optimized_metric: "test/micro_f1"  # valid/acc
 remove_best_model_ckpt: True
 
 # The number of runs to get average of metrics
-num_averaging: 1
+num_averaging: 10
 
 # Set optuna specific logger dirs
 logger:
@@ -36,7 +36,7 @@ hydra:
     direction: maximize
 
     # number of experiments that will be executed
-    n_trials: 300
+    n_trials: 30
 
     # define range of hyperparameters
     # https://hydra.cc/docs/plugins/optuna_sweeper/
@@ -51,7 +51,7 @@ hydra:
         type: float
         log: True
         low: 1e-9
-        high: 1e-5
+        high: 1e-6
       model.sub_node_num_layers:
         type: int
         low: 1

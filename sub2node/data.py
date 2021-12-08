@@ -11,6 +11,7 @@ from pytorch_lightning import LightningDataModule
 from torch_geometric.loader import DataLoader
 
 from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, SubgraphDataset
+from data_sub import Density, CC, Coreness, CutRatio
 from sub2node import SubgraphToNode
 from utils import get_log_func, EternalIter
 
@@ -71,11 +72,9 @@ class SubgraphDataModule(LightningDataModule):
 
     @property
     def dataset_class(self):
-        return {"HPOMetab": HPOMetab,
-                "PPIBP": PPIBP,
-                "HPONeuro": HPONeuro,
-                "EMUser": EMUser,
-                }[self.h.dataset_name]
+        assert self.h.dataset_name in ["HPOMetab", "PPIBP", "HPONeuro", "EMUser",
+                                       "Density", "CC", "Coreness", "CutRatio"]
+        return eval(self.h.dataset_name)
 
     def prepare_data(self) -> None:
         self.dataset_class(root=self.h.dataset_path, name=self.h.dataset_name,
@@ -133,9 +132,12 @@ class SubgraphDataModule(LightningDataModule):
 
 if __name__ == '__main__':
 
-    NAME = "PPIBP"  # "HPOMetab", "PPIBP", "HPONeuro", "EMUser"
+    NAME = "Density"
+    # PPIBP, HPOMetab, HPONeuro, EMUser
+    # Density, CC, Coreness, CutRatio
+
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
-    E_TYPE = "gin"  # gin, graphsaint_gcn
+    E_TYPE = "graphsaint_gcn"  # gin, graphsaint_gcn
 
     USE_S2N = False
     USE_SPARSE_TENSOR = False

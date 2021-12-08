@@ -5,7 +5,7 @@ dataset_path: ${dataset_path} # dataset_path is specified in config.yaml
 embedding_type: "gin"  # gin, graphsaint_gcn
 
 use_s2n: True
-edge_thres: 1.0  # important
+edge_thres: 0.5  # important
 
 batch_size: 128  # for use_s2n=False
 

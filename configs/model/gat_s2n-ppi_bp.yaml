@@ -8,15 +8,15 @@ num_layers: 2
 use_bn: True
 use_skip: False
 dropout_channels: 0.1
-dropout_edges: 0.1
+dropout_edges: 0.0
 layer_kwargs: {
   heads: 1,
   dropout: "${model.dropout_channels}",
 }
 
 learning_rate: 0.0005
-weight_decay: 0.0000014077
-_gradient_clip_val: 0.50000
+weight_decay: 0.000009863545918
+_gradient_clip_val: 0.3
 
 sub_node_num_layers: 1
 sub_node_encoder_aggr: "sum"
