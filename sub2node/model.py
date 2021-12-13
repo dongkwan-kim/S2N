@@ -40,7 +40,7 @@ class GraphNeuralModel(LightningModule):
                  sub_node_num_layers: int = None,
                  sub_node_encoder_aggr: str = "sum",
                  subname: str = "default",
-                 metrics=["micro_f1", "macro_f1", "accuracy"],
+                 metrics=["micro_f1", "macro_f1"],
                  hp_metric=None,
                  use_bn: bool = False,
                  use_skip: bool = False,
