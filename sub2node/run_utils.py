@@ -1,16 +1,21 @@
+import csv
 import logging
 import os
 import warnings
-from typing import List, Sequence
+from collections import defaultdict, OrderedDict
+from datetime import datetime
+from pathlib import Path
+from pprint import pprint
+from typing import List, Sequence, Dict
 
 import pytorch_lightning as pl
 import rich.syntax
 import rich.tree
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning.utilities import rank_zero_only
+from tqdm import tqdm
 
-
-"""Codes are adopted from
+"""Most of the codes are adopted from
     https://github.com/ashleve/lightning-hydra-template/blob/main/src/utils/utils.py"""
 
 
@@ -180,3 +185,80 @@ def finish(
             import wandb
 
             wandb.finish()
+
+
+def aggregate_csv_metrics(in_path, out_path,
+                          key_hparams=None,
+                          path_hparams=None,
+                          metric=None):
+    import yaml
+    import pandas as pd
+    import numpy as np
+
+    metric = metric or "test/micro_f1"
+    assert metric.startswith("test"), f"Wrong metric format: {metric}"
+    key_hparams = key_hparams or [
+        "datamodule/dataset_name",
+        "model/subname",
+        "model/learning_rate",
+        "model/num_layers",
+        "model/sub_node_num_layers",
+        "model/sub_node_encoder_aggr",
+        "trainer/gradient_clip_val",
+        "model/weight_decay",
+    ]
+    path_hparams = path_hparams or key_hparams[:1]
+
+    in_path = Path(in_path)
+    key_to_values = defaultdict(lambda: defaultdict(list))
+    key_to_ingredients = dict()
+    for csv_path in tqdm(in_path.glob("**/*.csv")):
+        csv_path = Path(csv_path)
+        yaml_path = csv_path.parent / "hparams.yaml"
+
+        try:
+            with open(yaml_path, "r") as stream:
+                yaml_data = yaml.safe_load(stream)
+                key_dict = OrderedDict()
+                for h in key_hparams:
+                    parsed = h.split("/")
+                    yd = yaml_data
+                    for p in parsed:
+                        yd = yd[p]
+                    key_dict[h] = yd
+                experiment_key = "+".join(str(s) for s in key_dict.values())
+                path_key = "+".join(str(v) for k, v in key_dict.items()
+                                    if k in path_hparams)
+
+            csv_data = pd.read_csv(csv_path)
+            metric_value = csv_data[metric].tail(1)
+
+            key_to_values[path_key][experiment_key].append(float(metric_value))
+            key_to_ingredients[experiment_key] = key_dict
+
+        except KeyError as e:
+            pass
+        except TypeError as e:
+            pass
+
+    for path_key, experiment_key_to_values in key_to_values.items():
+        out_file = Path(out_path) / f"_log_{path_key}_{datetime.now()}.csv"
+        with open(out_file, "w") as f:
+            writer = csv.DictWriter(
+                f, fieldnames=[
+                    *key_hparams,
+                    f"mean/{metric}", f"std/{metric}", f"N/{metric}", "list",
+                ])
+            writer.writeheader()
+            for experiment_key, values in experiment_key_to_values.items():
+                key_dict = key_to_ingredients[experiment_key]
+                writer.writerow({**key_dict,
+                                 f"mean/{metric}": float(np.mean(values)),
+                                 f"std/{metric}": float(np.std(values)),
+                                 f"N/{metric}": len(values),
+                                 "list": str(values)})
+            print(f"Saved: {out_file}")
+
+
+if __name__ == '__main__':
+    aggregate_csv_metrics("../logs_multi_csv", "./")
