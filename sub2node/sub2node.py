@@ -26,7 +26,7 @@ class SubgraphToNode:
                  subgraph_data_list: List[Data],
                  name: str, path: str,
                  splits: List[int],
-                 edge_aggr: Callable[[Tensor], Tensor] = None,
+                 edge_aggr: Union[Callable[[Tensor], Tensor], str] = None,
                  num_workers: int = None,
                  undirected: bool = None,
                  node_spl_cutoff=None):
@@ -41,7 +41,7 @@ class SubgraphToNode:
         self.path: Path = Path(path)
         self.splits = splits + [len(self.subgraph_data_list)]
 
-        self.edge_aggr = edge_aggr or torch.min
+        self.edge_aggr = self.parse_edge_aggr(edge_aggr)
 
         self.num_workers = num_workers
         self.undirected = undirected or is_undirected(global_data.edge_index)
@@ -53,6 +53,12 @@ class SubgraphToNode:
 
     def __repr__(self):
         return f"{self.__class__.__name__}(name='{self.node_task_name}', path='{self.path}')"
+
+    def parse_edge_aggr(self, edge_aggr):
+        if isinstance(edge_aggr, str):
+            return eval(edge_aggr)
+        else:
+            return edge_aggr or torch.min
 
     @property
     def node_task_name(self):

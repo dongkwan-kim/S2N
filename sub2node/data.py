@@ -6,6 +6,7 @@ import torch
 from termcolor import cprint
 
 import torch_geometric.transforms as T
+from torch import Tensor
 from torch_geometric.data import Data
 from pytorch_lightning import LightningDataModule
 from torch_geometric.loader import DataLoader
@@ -28,7 +29,8 @@ class SubgraphDataModule(LightningDataModule):
                  embedding_type: str,
                  use_s2n: bool,
                  edge_thres: Union[float, Callable, List[float]],
-                 batch_size: int,
+                 s2n_edge_aggr: Union[Callable[[Tensor], Tensor], str] = None,
+                 batch_size: int = None,
                  eval_batch_size=None,
                  use_sparse_tensor=False,
                  num_workers=0,
@@ -91,8 +93,9 @@ class SubgraphDataModule(LightningDataModule):
                 subgraph_data_list=self.dataset.get_data_list_with_split_attr(),
                 name=self.h.dataset_name,
                 path=f"{self.h.dataset_path}/{self.h.dataset_name.upper()}/sub2node/",
-                undirected=True,
                 splits=self.dataset.splits,
+                edge_aggr=self.h.s2n_edge_aggr,
+                undirected=True,
             )
             data_list = s2n.node_task_data_splits(edge_thres=self.h.edge_thres)
             transform = T.ToSparseTensor("edge_attr") if self.h.use_sparse_tensor else None
