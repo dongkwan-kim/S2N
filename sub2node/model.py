@@ -79,6 +79,11 @@ class GraphNeuralModel(LightningModule):
             self.sub_node_encoder = None
             in_channels = given_datamodule.num_channels_global
             out_channels = self.h.hidden_channels
+
+        # If edge_thres == 1.0, edge_attr is 1.0, no need to use model edges (edge_dim).
+        if given_datamodule.h.edge_thres < 1.0 and encoder_layer_name in ["GATConv"]:
+            layer_kwargs["edge_dim"] = 1
+
         self.encoder = GraphEncoder(
             layer_name=self.h.encoder_layer_name,
             num_layers=self.h.num_layers,
