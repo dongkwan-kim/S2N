@@ -84,16 +84,16 @@ def extras(config: DictConfig) -> None:
 
 @rank_zero_only
 def print_config(
-    config: DictConfig,
-    fields: Sequence[str] = (
-        "trainer",
-        "model",
-        "datamodule",
-        "callbacks",
-        "logger",
-        "seed",
-    ),
-    resolve: bool = True,
+        config: DictConfig,
+        fields: Sequence[str] = (
+                "trainer",
+                "model",
+                "datamodule",
+                "callbacks",
+                "logger",
+                "seed",
+        ),
+        resolve: bool = True,
 ) -> None:
     """Prints content of DictConfig using Rich library and its tree structure.
     Args:
@@ -128,12 +128,12 @@ def empty(*args, **kwargs):
 
 @rank_zero_only
 def log_hyperparameters(
-    config: DictConfig,
-    model: pl.LightningModule,
-    datamodule: pl.LightningDataModule,
-    trainer: pl.Trainer,
-    callbacks: List[pl.Callback],
-    logger: List[pl.loggers.LightningLoggerBase],
+        config: DictConfig,
+        model: pl.LightningModule,
+        datamodule: pl.LightningDataModule,
+        trainer: pl.Trainer,
+        callbacks: List[pl.Callback],
+        logger: List[pl.loggers.LightningLoggerBase],
 ) -> None:
     """This method controls which parameters from Hydra config are saved by Lightning loggers.
     Additionally saves:
@@ -170,12 +170,12 @@ def log_hyperparameters(
 
 
 def finish(
-    config: DictConfig,
-    model: pl.LightningModule,
-    datamodule: pl.LightningDataModule,
-    trainer: pl.Trainer,
-    callbacks: List[pl.Callback],
-    logger: List[pl.loggers.LightningLoggerBase],
+        config: DictConfig,
+        model: pl.LightningModule,
+        datamodule: pl.LightningDataModule,
+        trainer: pl.Trainer,
+        callbacks: List[pl.Callback],
+        logger: List[pl.loggers.LightningLoggerBase],
 ) -> None:
     """Makes sure everything closed properly."""
 
