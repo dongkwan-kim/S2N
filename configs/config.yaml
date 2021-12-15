@@ -3,10 +3,13 @@
 # specify here default training configuration
 defaults:
   - config_sub.yaml  # args that can be overridden by below yamls
-  - datamodule: em_user.yaml  # ppi_bp, hpo_metab, hpo_neuro, em_user
-  - model: gcn_s2n-em_user.yaml  # gat_s2n, gcn_s2n
+  - datamodule: em_user.yaml
+    # ppi_bp, hpo_metab, hpo_neuro, em_user
+    # density, cc, coreness, cut_ratio
+  - model: gat_s2n-em_user.yaml
+    # gat_s2n, gcn_s2n
   - callbacks: checkpoint.yaml # set this to null if you don't want to use callbacks
-  - logger: tensorboard.yaml # tensorboard.yaml, csv.yaml, many_loggers.yaml
+  - logger: many_loggers.yaml # tensorboard.yaml, csv.yaml, many_loggers.yaml
   - trainer: default.yaml
 
   - experiment: null
