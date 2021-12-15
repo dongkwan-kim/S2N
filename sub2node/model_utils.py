@@ -11,10 +11,10 @@ from termcolor import cprint
 from torch import Tensor
 from torch_geometric.nn.glob import global_mean_pool, global_max_pool, global_add_pool
 from torch_geometric.nn import GlobalAttention, GCNConv, SAGEConv, GATConv
-from torch_geometric.utils import dropout_adj
 from torch_scatter import scatter_add
+from torch_sparse import SparseTensor
 
-from utils import softmax_half, act, merge_dict_by_keys
+from utils import softmax_half, act, merge_dict_by_keys, dropout_adj_st
 
 
 class EPSILON(object):
@@ -51,8 +51,11 @@ class MyGATConv(GATConv):
                          dropout, add_self_loops, edge_dim, fill_value, bias, **kwargs)
 
     def forward(self, x, edge_index, edge_attr, size=None, return_attention_weights=None):
-        if self.edge_dim is None and edge_attr is not None:
+        if self.edge_dim is None:
             edge_attr = None
+            if isinstance(edge_index, SparseTensor):
+                edge_index: SparseTensor
+                edge_index.set_value_(None)
         return super().forward(x, edge_index, edge_attr, size, return_attention_weights)
 
 
@@ -263,9 +266,10 @@ class GraphEncoder(nn.Module):
         #  https://github.com/snap-stanford/ogb/blob/master/examples/nodeproppred/arxiv/gnn.py#L69-L76
         for i, conv in enumerate(self.convs):
             x_before_layer = x
-            _edge_index, _edge_attr = dropout_adj(
+            _edge_index, _edge_attr = dropout_adj_st(
                 edge_index, edge_attr,
-                p=self.dropout_edges, training=self.training)
+                p=self.dropout_edges, num_nodes=x.size(0),
+                training=self.training)
             x = conv(x, _edge_index, _edge_attr, **kwargs)
             if i != self.num_layers - 1 or self.activate_last:
                 if self.use_bn:

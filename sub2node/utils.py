@@ -1,4 +1,3 @@
-
 import time
 import random
 from collections import namedtuple
@@ -13,7 +12,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 
 import torch_geometric
-from torch_geometric.utils import subgraph, to_undirected
+from torch_geometric.utils import subgraph, to_undirected, dropout_adj
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 from torch_geometric.utils import to_dense_batch, softmax
 
@@ -21,6 +20,7 @@ from torch_scatter import scatter
 
 import numpy as np
 import networkx as nx
+from torch_sparse import SparseTensor
 from tqdm import tqdm
 
 
@@ -81,7 +81,6 @@ def try_get_from_dict(o, name_list: List[Any],
 
 
 def get_log_func(func=print, **kwargs):
-
     def _func(*_args, **_kwargs):
         kwargs.update(**_kwargs)
         func(*_args, **kwargs)
@@ -317,6 +316,25 @@ def mean_std(values: Union[np.ndarray, torch.Tensor, List]) -> Tuple[float, floa
     return float(mean), float(std)
 
 
+def dropout_adj_st(edge_index: Union[Tensor, SparseTensor],
+                   edge_attr=None, p=0.5, force_undirected=False,
+                   num_nodes=None, training=True):
+    use_sparse_tensor = isinstance(edge_index, SparseTensor)
+    if use_sparse_tensor:
+        row, col, edge_attr = edge_index.coo()
+        edge_index = torch.stack([row, col], dim=0)
+        N = maybe_num_nodes(edge_index, num_nodes)
+
+    edge_index, edge_attr = dropout_adj(edge_index, edge_attr, p=p,
+                                        force_undirected=force_undirected,
+                                        num_nodes=num_nodes, training=training)
+    if use_sparse_tensor:
+        adj = SparseTensor.from_edge_index(edge_index, edge_attr, sparse_sizes=(N, N))
+        return adj, None
+    else:
+        return edge_index, edge_attr
+
+
 # networkx
 
 
@@ -377,7 +395,7 @@ def from_networkx_customized_ordering(G, ordering="default"):
 
 if __name__ == '__main__':
 
-    METHOD = "make_symmetric"
+    METHOD = "dropout_adj_st"
 
     from pytorch_lightning import seed_everything
 
@@ -396,8 +414,8 @@ if __name__ == '__main__':
 
     elif METHOD == "try_getattr":
         Point = namedtuple('Point', ['x', 'y'])
-        p = Point(x=11, y=22)
-        pprint(try_getattr(p, ["x", "z", "y"]))
+        _p = Point(x=11, y=22)
+        pprint(try_getattr(_p, ["x", "z", "y"]))
 
     elif METHOD == "try_get_from_dict":
         pprint(try_get_from_dict({"x": 1, "y": 2}, ["x", "z", "y"]))
@@ -426,6 +444,16 @@ if __name__ == '__main__':
                           [-1,  4, 5],
                           [-1, -1, 6]])
         print(to_symmetric_matrix(m))
+
+    elif METHOD == "dropout_adj_st":
+        _edge_index = torch.tensor([[0, 1, 1, 2, 2, 3], [1, 0, 2, 1, 3, 2]])
+        _edge_attr = torch.Tensor([1, 2, 3, 4, 5, 6])
+
+        _row, _col = _edge_index
+        _adj = SparseTensor(row=_row, col=_col, value=_edge_attr, sparse_sizes=(4, 4))
+
+        print(_adj)
+        print(dropout_adj_st(_adj, p=0.9)[0])
 
     else:
         raise ValueError("Wrong method: {}".format(METHOD))
