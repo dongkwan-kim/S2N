@@ -10,9 +10,11 @@ from torch import Tensor
 from torch_geometric.data import Data
 from pytorch_lightning import LightningDataModule
 from torch_geometric.loader import DataLoader
+from torch_sparse import SparseTensor
 
 from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, SubgraphDataset
 from data_sub import Density, CC, Coreness, CutRatio
+from data_utils import AddSelfLoopsV2
 from sub2node import SubgraphToNode
 from utils import get_log_func, EternalIter
 
@@ -33,6 +35,7 @@ class SubgraphDataModule(LightningDataModule):
                  batch_size: int = None,
                  eval_batch_size=None,
                  use_sparse_tensor=False,
+                 pre_add_self_loops=False,
                  num_workers=0,
                  verbose=2,
                  prepare_data=False,
@@ -98,7 +101,12 @@ class SubgraphDataModule(LightningDataModule):
                 undirected=True,
             )
             data_list = s2n.node_task_data_splits(edge_thres=self.h.edge_thres)
-            transform = T.ToSparseTensor("edge_attr") if self.h.use_sparse_tensor else None
+            transform_list = []
+            if self.h.pre_add_self_loops:
+                transform_list.append(AddSelfLoopsV2("edge_attr"))
+            if self.h.use_sparse_tensor:
+                transform_list.append(T.ToSparseTensor("edge_attr"))
+            transform = T.Compose(transform_list) if len(transform_list) > 0 else None
             if transform is not None:
                 data_list = [transform(d) for d in data_list]
             self.train_data, self.val_data, self.test_data = data_list
@@ -133,6 +141,18 @@ class SubgraphDataModule(LightningDataModule):
         return "{}(dataset={})".format(self.__class__.__name__, self.h.dataset_name)
 
 
+def _print_data(data):
+    pprint(_b)
+    if data.edge_index is not None:
+        print("\t- edge (Tensor)", f"{data.edge_index.min()} -- {data.edge_index.max()}")
+    else:
+        data.adj_t: SparseTensor
+        row, col, _ = data.adj_t.coo()
+        e = torch.cat([row, col])
+        print("\t- edge (SparseTensor)", f"{e.min()} -- {e.max()}")
+        print("\t- adj_t", data.adj_t)
+
+
 if __name__ == '__main__':
 
     NAME = "Density"
@@ -142,8 +162,8 @@ if __name__ == '__main__':
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
     E_TYPE = "graphsaint_gcn"  # gin, graphsaint_gcn
 
-    USE_S2N = False
-    USE_SPARSE_TENSOR = False
+    USE_S2N = True
+    USE_SPARSE_TENSOR = True
 
     _sdm = SubgraphDataModule(
         dataset_name=NAME,
@@ -154,23 +174,21 @@ if __name__ == '__main__':
         batch_size=32,
         eval_batch_size=5,
         use_sparse_tensor=USE_SPARSE_TENSOR,
+        pre_add_self_loops=True,
     )
     print(_sdm)
     cprint("Train ----", "green")
     for _i, _b in enumerate(_sdm.train_dataloader()):
-        pprint(_b)
-        print("E", _b.edge_index.min(), _b.edge_index.max())
+        _print_data(_b)
         if _i == 2:
             break
     cprint("Valid ----", "green")
     for _i, _b in enumerate(_sdm.val_dataloader()):
-        pprint(_b)
-        print("E", _b.edge_index.min(), _b.edge_index.max())
+        _print_data(_b)
         if _i == 2:
             break
     cprint("Test ----", "green")
     for _i, _b in enumerate(_sdm.test_dataloader()):
-        pprint(_b)
-        print("E", _b.edge_index.min(), _b.edge_index.max())
+        _print_data(_b)
         if _i == 2:
             break

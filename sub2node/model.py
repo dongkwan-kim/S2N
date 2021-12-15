@@ -183,7 +183,8 @@ if __name__ == '__main__':
     E_TYPE = "graphsaint_gcn"  # gin, graphsaint_gcn
 
     USE_S2N = True
-    USE_SPARSE_TENSOR = False
+    USE_SPARSE_TENSOR = True
+    PRE_ADD_SELF_LOOPS = True
 
     _sdm = SubgraphDataModule(
         dataset_name=NAME,
@@ -194,6 +195,7 @@ if __name__ == '__main__':
         batch_size=32,
         eval_batch_size=5,
         use_sparse_tensor=USE_SPARSE_TENSOR,
+        pre_add_self_loops=PRE_ADD_SELF_LOOPS,
     )
     _gnm = GraphNeuralModel(
         encoder_layer_name="GATConv",
@@ -209,7 +211,10 @@ if __name__ == '__main__':
         use_skip=False,
         dropout_channels=0.5,
         dropout_edges=0.5,
-        layer_kwargs={"edge_dim": 1},
+        layer_kwargs={
+            "edge_dim": 1,
+            "add_self_loops": not PRE_ADD_SELF_LOOPS,
+        },
         given_datamodule=_sdm,
     )
     print(_gnm)
