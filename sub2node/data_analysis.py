@@ -55,9 +55,15 @@ def analyze_node_properties(dataset_path, name_list, edge_thres_list, out_path=N
 
 
 if __name__ == '__main__':
-    NAME = "Density"
-    # PPIBP, HPOMetab, HPONeuro, EMUser
-    # Density, CC, Coreness, CutRatio
+    TARGETS = "SYNTHETIC"  # SYNTHETIC, REAL_WORLD, ALL
+
+    if TARGETS == "SYNTHETIC":
+        NAME_LIST = ["Density", "CC", "Coreness", "CutRatio"]
+    elif TARGETS == "REAL_WORLD":
+        NAME_LIST = ["PPIBP", "HPOMetab", "HPONeuro", "EMUser"]
+    else:
+        NAME_LIST = ["PPIBP", "HPOMetab", "HPONeuro", "EMUser",
+                     "Density", "CC", "Coreness", "CutRatio"]
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
     E_TYPE = "graphsaint_gcn"  # gin, graphsaint_gcn
@@ -65,7 +71,7 @@ if __name__ == '__main__':
 
     analyze_node_properties(
         dataset_path=PATH, out_path="./_data_analysis.csv",
-        name_list=["PPIBP", "HPOMetab", "HPONeuro", "EMUser"],
+        name_list=NAME_LIST,
         edge_thres_list=[1.0, 0.5],
         embedding_type=E_TYPE, use_sparse_tensor=USE_SPARSE_TENSOR,
     )
