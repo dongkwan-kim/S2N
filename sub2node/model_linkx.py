@@ -182,6 +182,10 @@ class LINKX(torch.nn.Module):
                 edge_weight: OptTensor = None) -> Tensor:
         """"""
         out = self.edge_lin(edge_index, edge_weight)
+
+        if x.size(0) < out.size(0):
+            out = out[:x.size(0), :]
+
         if self.num_edge_layers > 1:
             out = out.relu_()
             out = self.edge_norm(out)
