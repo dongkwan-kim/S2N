@@ -6,8 +6,8 @@ defaults:
   - datamodule: em_user.yaml
     # ppi_bp, hpo_metab, hpo_neuro, em_user
     # density, cc, coreness, cut_ratio
-  - model: gat_s2n-em_user.yaml
-    # gat_s2n, gcn_s2n
+  - model: linkx_s2n-em_user.yaml
+    # gat_s2n, gcn_s2n, linkx_s2n
   - callbacks: checkpoint.yaml # set this to null if you don't want to use callbacks
   - logger: many_loggers.yaml # tensorboard.yaml, csv.yaml, many_loggers.yaml
   - trainer: default.yaml
