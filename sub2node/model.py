@@ -3,7 +3,7 @@ from typing import Dict, Union, Optional, Tuple, Any, List
 
 import torch
 import torch.nn as nn
-from pytorch_lightning import (LightningModule)
+from pytorch_lightning import (LightningModule, seed_everything)
 from pytorch_lightning.utilities.types import EPOCH_OUTPUT
 
 from torch import Tensor
@@ -11,6 +11,7 @@ from torch_geometric.data import Batch, Data
 
 from data import SubgraphDataModule
 from evaluator import Evaluator
+from model_linkx import LINKX
 from model_utils import GraphEncoder, VersatileEmbedding, MLP, DeepSets, Readout
 from utils import try_getattr, ld_to_dl, try_get_from_dict
 from run_utils import get_logger
@@ -68,6 +69,7 @@ class GraphNeuralModel(LightningModule):
                        dropout=self.h.dropout_channels,
                        activate_last=True)
             num_aggr = self.h.sub_node_encoder_aggr.count("-") + 1
+            num_nodes = given_datamodule.test_data.num_nodes
             self.sub_node_encoder = DeepSets(
                 encoder=MLP(in_channels=given_datamodule.num_channels_global, **kws),
                 decoder=MLP(in_channels=self.h.hidden_channels * num_aggr, **kws),
@@ -77,6 +79,7 @@ class GraphNeuralModel(LightningModule):
             out_channels = given_datamodule.num_classes
         else:
             self.sub_node_encoder = None
+            num_nodes = given_datamodule.num_nodes_global
             in_channels = given_datamodule.num_channels_global
             out_channels = self.h.hidden_channels
 
@@ -84,20 +87,32 @@ class GraphNeuralModel(LightningModule):
         if given_datamodule.h.edge_thres < 1.0 and encoder_layer_name in ["GATConv"]:
             layer_kwargs["edge_dim"] = 1
 
-        self.encoder = GraphEncoder(
-            layer_name=self.h.encoder_layer_name,
-            num_layers=self.h.num_layers,
-            in_channels=in_channels,
-            hidden_channels=self.h.hidden_channels,
-            out_channels=out_channels,
-            activation=self.h.activation,
-            use_bn=self.h.use_bn,
-            use_skip=self.h.use_skip,
-            dropout_channels=self.h.dropout_channels,
-            dropout_edges=self.h.dropout_edges,
-            activate_last=False,
-            **self.h.layer_kwargs,
-        )
+        if self.h.encoder_layer_name == "LINKX":
+            self.encoder = LINKX(
+                num_nodes=num_nodes,
+                in_channels=in_channels,
+                hidden_channels=self.h.hidden_channels,
+                out_channels=out_channels,
+                num_layers=self.h.num_layers,
+                dropout=self.h.dropout_channels,
+                **self.h.layer_kwargs,  # num_edge_layers, num_node_layers
+            )
+        else:
+            self.encoder = GraphEncoder(
+                layer_name=self.h.encoder_layer_name,
+                num_layers=self.h.num_layers,
+                in_channels=in_channels,
+                hidden_channels=self.h.hidden_channels,
+                out_channels=out_channels,
+                activation=self.h.activation,
+                use_bn=self.h.use_bn,
+                use_skip=self.h.use_skip,
+                dropout_channels=self.h.dropout_channels,
+                dropout_edges=self.h.dropout_edges,
+                activate_last=False,
+                **self.h.layer_kwargs,
+            )
+
         if self.h.use_s2n:
             self.readout = None
         else:
@@ -175,7 +190,7 @@ class GraphNeuralModel(LightningModule):
 
 if __name__ == '__main__':
 
-    NAME = "Density"
+    NAME = "PPIBP"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
 
@@ -183,9 +198,24 @@ if __name__ == '__main__':
     E_TYPE = "graphsaint_gcn"  # gin, graphsaint_gcn
 
     USE_S2N = True
-    USE_SPARSE_TENSOR = True
-    PRE_ADD_SELF_LOOPS = True
+    USE_SPARSE_TENSOR = False
+    PRE_ADD_SELF_LOOPS = False
 
+    ENCODER_NAME = "LINKX"  # GATConv, LINKX
+    if ENCODER_NAME == "GATConv":
+        LAYER_KWARGS = {
+            "edge_dim": 1,
+            "add_self_loops": not PRE_ADD_SELF_LOOPS,
+        }
+    elif ENCODER_NAME == "LINKX":
+        LAYER_KWARGS = {
+            "num_edge_layers": 1,
+            "num_node_layers": 1,
+        }
+    else:
+        LAYER_KWARGS = {}
+
+    seed_everything(42)
     _sdm = SubgraphDataModule(
         dataset_name=NAME,
         dataset_path=PATH,
@@ -198,7 +228,7 @@ if __name__ == '__main__':
         pre_add_self_loops=PRE_ADD_SELF_LOOPS,
     )
     _gnm = GraphNeuralModel(
-        encoder_layer_name="GATConv",
+        encoder_layer_name=ENCODER_NAME,
         num_layers=2,
         hidden_channels=128,
         activation="relu",
@@ -209,12 +239,9 @@ if __name__ == '__main__':
         sub_node_num_layers=2,
         use_bn=False,
         use_skip=False,
-        dropout_channels=0.5,
-        dropout_edges=0.5,
-        layer_kwargs={
-            "edge_dim": 1,
-            "add_self_loops": not PRE_ADD_SELF_LOOPS,
-        },
+        dropout_channels=0.0,
+        dropout_edges=0.0,
+        layer_kwargs=LAYER_KWARGS,
         given_datamodule=_sdm,
     )
     print(_gnm)
