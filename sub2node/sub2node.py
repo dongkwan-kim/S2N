@@ -1,5 +1,6 @@
 import os
 import multiprocessing as mp
+from collections import Counter
 from pathlib import Path
 from pprint import pprint
 from typing import List, Callable, Union, Tuple
@@ -179,9 +180,11 @@ class SubgraphToNode:
             else:
                 print(
                     "Performing node_task_data_splits \n"
-                    f"mean +- std = {torch.mean(ew_mat)} +- {torch.std(ew_mat)} \n"
-                    f"min / median / max = {torch.min(ew_mat)} / {torch.median(ew_mat)} / {torch.max(ew_mat)} \n"
+                    f"\tmean +- std = {torch.mean(ew_mat)} +- {torch.std(ew_mat)} \n"
+                    f"\tmin / median / max = {torch.min(ew_mat)} / {torch.median(ew_mat)} / {torch.max(ew_mat)} \n"
+                    f"\tN = {ew_mat.numel()}"
                 )
+                print("\tCounters: ", Counter(ew_mat.flatten().tolist()))
 
             ew_mat_s_by_s = ew_mat.clone()[:s, :s]
             et = et(ew_mat_s_by_s) if isinstance(et, Callable) else et
@@ -201,11 +204,28 @@ class SubgraphToNode:
         return tuple(self._node_task_data_list)
 
 
+def get_topk_thres(thres):
+    def _func(x):
+        k = int(x.numel() * thres)
+        topk = torch.topk(x.flatten(), k, sorted=False).values
+        return torch.min(topk).item()
+    _func.__name__ = f"topk_{thres}"
+
+    return _func
+
+
+def dist_by_shared_nodes(node_spl_mat):
+    non_shared_nodes = torch.count_nonzero(node_spl_mat)
+    shared_nodes = node_spl_mat.numel() - non_shared_nodes
+    # edge_weight = 1 / (1 + d) = 1 / (1 + -1 + (1 / shared_nodes)) = shared_nodes
+    return -1 + (1 / shared_nodes)
+
+
 if __name__ == '__main__':
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, CC, Coreness, CutRatio
 
-    MODE = "Density"
+    MODE = "PPIBP"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
 
@@ -226,12 +246,12 @@ if __name__ == '__main__':
             path=f"{PATH}/{MODE.upper()}/sub2node/",
             undirected=True,
             splits=dts.splits,
-            edge_aggr=torch.min,
+            edge_aggr=dist_by_shared_nodes,
         )
         print(s2n)
         ntds = s2n.node_task_data_splits(
             # 0.5, 1.0
-            edge_thres=0.5,
+            edge_thres=1.0,
             save=True,
         )
         for _d in ntds:
@@ -259,9 +279,15 @@ if __name__ == '__main__':
             path="./",
             undirected=True,
             splits=[1, 2],
+            edge_aggr=torch.mean,
         )
-        ntds = s2n.node_task_data_splits(0.25, save=True)
+        ntds = s2n.node_task_data_splits(
+            # 0.25,
+            get_topk_thres(0.25),
+            save=False,
+        )
         pprint(ntds)
         print(ntds[-2].eval_mask)
         print(ntds[-1].eval_mask)
-
+        for _d in ntds:
+            print(_d, _d.edge_index.size(1) / (_d.num_nodes ** 2))
