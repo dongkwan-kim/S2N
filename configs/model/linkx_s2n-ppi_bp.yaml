@@ -4,7 +4,7 @@ defaults:
   - common_model.yaml
 
 encoder_layer_name: LINKX
-num_layers: 2
+num_layers: 1
 use_bn: False
 use_skip: False
 dropout_channels: 0.1
@@ -15,8 +15,8 @@ layer_kwargs: {
 }
 
 learning_rate: 0.0005
-weight_decay: 0.000027675
-_gradient_clip_val: 0.0
+weight_decay: 0.0000000551565828756384
+_gradient_clip_val: 0.4
 
 sub_node_num_layers: 1
 sub_node_encoder_aggr: "sum"

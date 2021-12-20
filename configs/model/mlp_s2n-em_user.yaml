@@ -3,22 +3,18 @@ _target_: model.GraphNeuralModel
 defaults:
   - common_model.yaml
 
-encoder_layer_name: LINKX
-num_layers: 2
-use_bn: False
+encoder_layer_name: Linear
+num_layers: 1
+use_bn: True
 use_skip: False
 dropout_channels: 0.1
 dropout_edges: 0.0
-layer_kwargs: {
-  num_edge_layers: 1,
-  num_node_layers: 1,
-}
 
 learning_rate: 0.001
-weight_decay: 0.00000084253385333434
-_gradient_clip_val: 0.2
+weight_decay: 0.000000356212857558898
+_gradient_clip_val: 0.3
 
 sub_node_num_layers: 1
 sub_node_encoder_aggr: "sum"
 
-subname: LINKX
+subname: MLP
