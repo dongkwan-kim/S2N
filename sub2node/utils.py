@@ -1,3 +1,4 @@
+import itertools
 import time
 import random
 from collections import namedtuple
@@ -31,6 +32,31 @@ class EternalIter:
 
     def __iter__(self):
         return iter(self.iterator)
+
+
+class ItertoolsIter:
+
+    def __init__(self, name, *iterators, use_enumerator=False):
+        self.name = name
+        assert name in ["product"]
+        self.iterators = iterators
+        self.use_enumerator = use_enumerator
+
+    def __iter__(self):
+        if not self.use_enumerator:
+            its = [it for it in self.iterators]
+        else:
+            its = [enumerate(it) for it in self.iterators]
+        if self.name == "product":
+            return itertools.product(*its)
+        else:
+            raise ValueError(f"Wrong name: {self.name}")
+
+    def __len__(self):
+        length = 1
+        for it in self.iterators:
+            length *= len(it)
+        return length
 
 
 __MAGIC__ = "This is magic, please trust the author."
@@ -395,7 +421,7 @@ def from_networkx_customized_ordering(G, ordering="default"):
 
 if __name__ == '__main__':
 
-    METHOD = "dropout_adj_st"
+    METHOD = "ItertoolsIter"
 
     from pytorch_lightning import seed_everything
 
@@ -454,6 +480,12 @@ if __name__ == '__main__':
 
         print(_adj)
         print(dropout_adj_st(_adj, p=0.9)[0])
+
+    elif METHOD == "ItertoolsIter":
+        _pi = ItertoolsIter("product", [1, 2, 3], [1, 2, 3])
+        for _emt_pi in _pi:
+            print(_emt_pi)
+        print("len", len(_pi))
 
     else:
         raise ValueError("Wrong method: {}".format(METHOD))
