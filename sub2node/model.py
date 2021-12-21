@@ -201,7 +201,7 @@ if __name__ == '__main__':
     USE_SPARSE_TENSOR = False
     PRE_ADD_SELF_LOOPS = False
 
-    ENCODER_NAME = "LINKX"  # GATConv, LINKX
+    ENCODER_NAME = "FAConv"  # GATConv, LINKX, FAConv
     if ENCODER_NAME == "GATConv":
         LAYER_KWARGS = {
             "edge_dim": 1,
@@ -211,6 +211,10 @@ if __name__ == '__main__':
         LAYER_KWARGS = {
             "num_edge_layers": 1,
             "num_node_layers": 1,
+        }
+    elif ENCODER_NAME == "FAConv":
+        LAYER_KWARGS = {
+            "eps": 0.2,
         }
     else:
         LAYER_KWARGS = {}

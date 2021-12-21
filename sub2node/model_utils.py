@@ -10,7 +10,8 @@ import math
 from termcolor import cprint
 from torch import Tensor
 from torch_geometric.nn.glob import global_mean_pool, global_max_pool, global_add_pool
-from torch_geometric.nn import GlobalAttention, GCNConv, SAGEConv, GATConv
+from torch_geometric.nn import GlobalAttention, GCNConv, SAGEConv, GATConv, FAConv
+from torch_geometric.typing import OptTensor, Adj
 from torch_scatter import scatter_add
 from torch_sparse import SparseTensor
 
@@ -57,6 +58,37 @@ class MyGATConv(GATConv):
                 edge_index: SparseTensor
                 edge_index.set_value_(None)
         return super().forward(x, edge_index, edge_attr, size, return_attention_weights)
+
+
+class MyFAConv(FAConv):
+
+    def __init__(self, in_channels, out_channels,
+                 eps: float = 0.1, dropout: float = 0.0,
+                 cached: bool = False, add_self_loops: bool = True,
+                 normalize: bool = True, **kwargs):
+        super().__init__(in_channels, eps, dropout, cached, add_self_loops, normalize, **kwargs)
+        if in_channels != out_channels:
+            self.out: nn.Linear = nn.Linear(in_channels, out_channels, bias=False)
+        else:
+            self.out = None
+
+    def forward(self, x: Tensor, edge_index: Adj, edge_weight: OptTensor = None,
+                return_attention_weights=None):
+        if self.normalize:
+            edge_weight = None
+            if isinstance(edge_index, SparseTensor):
+                edge_index: SparseTensor
+                edge_index.set_value_(None)
+        x = super().forward(x=x, x_0=x, edge_index=edge_index, edge_weight=edge_weight,
+                            return_attention_weights=return_attention_weights)
+        return self.out(x) if self.out is not None else x
+
+    def __repr__(self):
+        if self.out is None:
+            return super().__repr__()
+        else:
+            return "{}({}, {}, eps={})".format(self.__class__.__name__,
+                                               self.channels, self.out.out_features, self.eps)
 
 
 class PositionalEncoding(nn.Module):
@@ -212,6 +244,9 @@ def get_gnn_conv_and_kwargs(gnn_name, **kwargs):
             gkw, kwargs,
             ["add_self_loops", "heads", "dropout", "edge_dim"],
         )
+    elif gnn_name == "FAConv":
+        gnn_cls = MyFAConv
+        gkw = merge_dict_by_keys(gkw, kwargs, ["eps", "add_self_loops", "dropout"])
     elif gnn_name == "Linear":
         gnn_cls = MyLinear
     else:
@@ -546,7 +581,7 @@ class GlobalAttentionHalf(GlobalAttention):
 
 if __name__ == '__main__':
 
-    MODE = "DeepSets"
+    MODE = "MyFAConv"
 
     from pytorch_lightning import seed_everything
 
@@ -617,6 +652,19 @@ if __name__ == '__main__':
         )
         cprint(enc, "red")
         print(enc(_x, _ei).size())
+
+    elif MODE == "MyFAConv":
+
+        _x = torch.ones(10 * 32).view(10, -1)
+        _ei = torch.randint(0, 10, [2, 10])
+
+        _fac = MyFAConv(32, 32)
+        print(_fac)
+        print(_fac(_x, _ei).size())
+
+        _fac = MyFAConv(32, 7)
+        print(_fac)
+        print(_fac(_x, _ei).size())
 
     elif MODE == "VersatileEmbedding":
         _pte = torch.arange(11 * 32).view(11, 32).float()
