@@ -250,6 +250,7 @@ def aggregate_csv_metrics(in_path, out_path,
                     f"mean/{metric}", f"std/{metric}", f"N/{metric}", "list",
                 ])
             writer.writeheader()
+            num_lines = 0
             for experiment_key, values in experiment_key_to_values.items():
                 key_dict = key_to_ingredients[experiment_key]
                 writer.writerow({**key_dict,
@@ -257,7 +258,8 @@ def aggregate_csv_metrics(in_path, out_path,
                                  f"std/{metric}": float(np.std(values)),
                                  f"N/{metric}": len(values),
                                  "list": str(values)})
-            print(f"Saved: {out_file}")
+                num_lines += 1
+            print(f"Saved (lines {num_lines}): {out_file}")
 
 
 if __name__ == '__main__':
