@@ -1,6 +1,7 @@
 import csv
 import logging
 import os
+import time
 import warnings
 from collections import defaultdict, OrderedDict
 from datetime import datetime
@@ -212,7 +213,9 @@ def aggregate_csv_metrics(in_path, out_path,
     in_path = Path(in_path)
     key_to_values = defaultdict(lambda: defaultdict(list))
     key_to_ingredients = dict()
-    for csv_path in tqdm(in_path.glob("**/*.csv")):
+    for csv_path in tqdm(in_path.glob("**/*.csv"),
+                         desc="Reading CSVs",
+                         total=len(list(in_path.glob("**/*.csv")))):
         csv_path = Path(csv_path)
         yaml_path = csv_path.parent / "hparams.yaml"
 
@@ -246,8 +249,10 @@ def aggregate_csv_metrics(in_path, out_path,
         with open(out_file, "w") as f:
             writer = csv.DictWriter(
                 f, fieldnames=[
-                    *key_hparams,
-                    f"mean/{metric}", f"std/{metric}", f"N/{metric}", "list",
+                    *key_hparams[:2],
+                    f"mean/{metric}", f"std/{metric}", f"N/{metric}",
+                    *key_hparams[2:],
+                    "list",
                 ])
             writer.writeheader()
             num_lines = 0
