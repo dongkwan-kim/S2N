@@ -6,7 +6,7 @@
 # python run.py -m hparams_search=mnist_optuna experiment=example_simple logger=wandb
 
 defaults:
-  - optuna_random.yaml
+  - optuna_random.yaml  # optuna_random, optuna_tpe
   - override /callbacks: checkpoint.yaml # If set no checkpoint, it cannot use the best model path
 
 # choose metric which will be optimized by Optuna
@@ -36,7 +36,7 @@ hydra:
     direction: maximize
 
     # number of experiments that will be executed
-    n_trials: 30
+    n_trials: 40
 
     # define range of hyperparameters
     # https://hydra.cc/docs/plugins/optuna_sweeper/
@@ -53,6 +53,20 @@ hydra:
         low: 1e-9
         high: 1e-6
       model.sub_node_num_layers:
+        type: int
+        low: 1
+        high: 2
+      model.dropout_channels:
+        type: float
+        low: 0.0
+        high: 0.5
+        step: 0.1
+      model.dropout_edges:
+        type: float
+        low: 0.0
+        high: 0.5
+        step: 0.1
+      model.num_layers:
         type: int
         low: 1
         high: 2

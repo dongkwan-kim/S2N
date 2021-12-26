@@ -10,7 +10,7 @@ use_skip: False
 dropout_channels: 0.1
 dropout_edges: 0.0
 
-learning_rate: 0.005
+learning_rate: 0.001
 weight_decay: 0.0000000201984775115112
 _gradient_clip_val: 0.3
 

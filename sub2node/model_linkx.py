@@ -89,7 +89,12 @@ class SparseLinear(MessagePassing):
         inits.uniform(self.in_channels, self.bias)
 
     def forward(self, edge_index: Adj,
-                edge_weight: OptTensor = None) -> Tensor:
+                edge_weight: OptTensor = None,
+                mask_idx: int = None) -> Tensor:
+        # Mask untrained parameters.
+        if mask_idx is not None:
+            self.weight.data[mask_idx:, :] = 0.
+
         # propagate_type: (weight: Tensor, edge_weight: OptTensor)
         out = self.propagate(edge_index, weight=self.weight,
                              edge_weight=edge_weight, size=None)
@@ -108,10 +113,10 @@ class SparseLinear(MessagePassing):
         return matmul(adj_t, weight, reduce=self.aggr)
 
 
-class LINKX(torch.nn.Module):
-    r"""The LINKX model from the `"Large Scale Learning on Non-Homophilous
-    Graphs: New Benchmarks and Strong Simple Methods"
-    <https://arxiv.org/abs/2110.14446>`_ paper
+class InductiveLINKX(torch.nn.Module):
+    r"""The inductive version of the LINKX model from the `"Large Scale
+    Learning on Non-Homophilous Graphs: New Benchmarks and Strong Simple
+    Methods" <https://arxiv.org/abs/2110.14446>`_ paper
 
     .. math::
         \mathbf{H}_{\mathbf{A}} &= \textrm{MLP}_{\mathbf{A}}(\mathbf{A})
@@ -143,10 +148,12 @@ class LINKX(torch.nn.Module):
     """
     def __init__(self, num_nodes: int, in_channels: int, hidden_channels: int,
                  out_channels: int, num_layers: int, num_edge_layers: int = 1,
-                 num_node_layers: int = 1, dropout: float = 0.):
+                 num_node_layers: int = 1, dropout: float = 0.,
+                 num_train_nodes: int = None):
         super().__init__()
 
         self.num_nodes = num_nodes
+        self.num_train_nodes = num_train_nodes or num_nodes
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.num_edge_layers = num_edge_layers
@@ -155,10 +162,10 @@ class LINKX(torch.nn.Module):
         if self.num_edge_layers > 1:
             self.edge_norm = BatchNorm1d(hidden_channels)
             channels = [hidden_channels] * num_edge_layers
-            self.edge_mlp = MLP(channels, dropout=0., relu_first=True)
+            self.edge_mlp = MLP(channels, dropout=dropout, relu_first=True)
 
         channels = [in_channels] + [hidden_channels] * num_node_layers
-        self.node_mlp = MLP(channels, dropout=0., relu_first=True)
+        self.node_mlp = MLP(channels, dropout=dropout, relu_first=True)
 
         self.cat_lin1 = torch.nn.Linear(hidden_channels, hidden_channels)
         self.cat_lin2 = torch.nn.Linear(hidden_channels, hidden_channels)
@@ -181,7 +188,11 @@ class LINKX(torch.nn.Module):
     def forward(self, x: OptTensor, edge_index: Adj,
                 edge_weight: OptTensor = None) -> Tensor:
         """"""
-        out = self.edge_lin(edge_index, edge_weight)
+        # If x is larger than trained nodes, mask adj-params beyond the trained idx.
+        out = self.edge_lin(
+            edge_index, edge_weight,
+            mask_idx=self.num_train_nodes if x.size(0) > self.num_train_nodes else None,
+        )
 
         if x.size(0) < out.size(0):
             out = out[:x.size(0), :]
@@ -204,3 +215,40 @@ class LINKX(torch.nn.Module):
         return (f'{self.__class__.__name__}(num_nodes={self.num_nodes}, '
                 f'in_channels={self.in_channels}, '
                 f'out_channels={self.out_channels})')
+
+
+if __name__ == '__main__':
+    from torch_geometric.utils import to_undirected, add_self_loops, sort_edge_index
+    import torch_geometric
+
+    torch_geometric.seed_everything(100)
+
+    N = 8
+
+    _ei_N2 = torch.arange(N + 2).view(2, (N + 2) // 2)
+    _ei_N2 = to_undirected(_ei_N2)
+    _ei_N2, _ = add_self_loops(_ei_N2)
+    _ei_N2 = sort_edge_index(_ei_N2)
+
+    _ei_N = _ei_N2[:, _ei_N2[0] < N]
+    _ei_N = _ei_N[:, _ei_N[1] < N]
+
+    # _x_N2 = torch.randn((N + 2) * 32).view(N + 2, -1)
+    _x_N2 = torch.zeros((N + 2) * 32).view(N + 2, -1)
+    _x_N = _x_N2[:N, :]
+
+    _linkx = InductiveLINKX(N + 2, 32, 4, 3, 1, num_train_nodes=N)
+
+    _out = _linkx(_x_N, _ei_N)
+    print("Transductive X, E, _x_N, _ei_N, out", _out.size())
+    print(_out)
+    print("-" * 10)
+
+    _out = _linkx(_x_N2, _ei_N)
+    print("Transductive E, _x_N2, _ei_N, out", _out.size())
+    print(_out)
+    print("-" * 10)
+
+    _out = _linkx(_x_N2, _ei_N2)
+    print("Inductive, _x_N2, _ei_N2, out", _out.size())
+    print(_out)

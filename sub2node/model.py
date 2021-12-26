@@ -11,7 +11,7 @@ from torch_geometric.data import Batch, Data
 
 from data import SubgraphDataModule
 from evaluator import Evaluator
-from model_linkx import LINKX
+from model_linkx import InductiveLINKX
 from model_utils import GraphEncoder, VersatileEmbedding, MLP, DeepSets, Readout
 from utils import try_getattr, ld_to_dl, try_get_from_dict
 from run_utils import get_logger
@@ -68,8 +68,9 @@ class GraphNeuralModel(LightningModule):
                        activation=self.h.activation,
                        dropout=self.h.dropout_channels,
                        activate_last=True)
-            num_aggr = self.h.sub_node_encoder_aggr.count("-") + 1
             num_nodes = given_datamodule.test_data.num_nodes
+            num_train_nodes = given_datamodule.train_data.num_nodes
+            num_aggr = self.h.sub_node_encoder_aggr.count("-") + 1
             self.sub_node_encoder = DeepSets(
                 encoder=MLP(in_channels=given_datamodule.num_channels_global, **kws),
                 decoder=MLP(in_channels=self.h.hidden_channels * num_aggr, **kws),
@@ -80,6 +81,7 @@ class GraphNeuralModel(LightningModule):
         else:
             self.sub_node_encoder = None
             num_nodes = given_datamodule.num_nodes_global
+            num_train_nodes = None
             in_channels = given_datamodule.num_channels_global
             out_channels = self.h.hidden_channels
 
@@ -88,13 +90,14 @@ class GraphNeuralModel(LightningModule):
             layer_kwargs["edge_dim"] = 1
 
         if self.h.encoder_layer_name == "LINKX":
-            self.encoder = LINKX(
+            self.encoder = InductiveLINKX(
                 num_nodes=num_nodes,
                 in_channels=in_channels,
                 hidden_channels=self.h.hidden_channels,
                 out_channels=out_channels,
                 num_layers=self.h.num_layers,
                 dropout=self.h.dropout_channels,
+                num_train_nodes=num_train_nodes,
                 **self.h.layer_kwargs,  # num_edge_layers, num_node_layers
             )
         else:

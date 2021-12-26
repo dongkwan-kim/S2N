@@ -10,11 +10,11 @@ use_skip: False
 dropout_channels: 0.1
 dropout_edges: 0.0
 
-learning_rate: 0.0005
+learning_rate: 0.001
 weight_decay: 0.000000134291048994056
 _gradient_clip_val: 0.1
 
-sub_node_num_layers: 2
+sub_node_num_layers: 1
 sub_node_encoder_aggr: "sum"
 
 subname: MLP
