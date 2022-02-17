@@ -112,7 +112,7 @@ def train(config: DictConfig, seed_forced: int = None) -> Dict[str, Any]:
         os.remove(trainer.checkpoint_callback.best_model_path)
         log.info(f"Removed: {trainer.checkpoint_callback.best_model_path}")
 
-    return {trainer.checkpoint_callback.monitor: trainer.checkpoint_callback.best_model_score,
+    return {trainer.checkpoint_callback.monitor: trainer.checkpoint_callback.best_model_score.cpu(),
             **trainer.callback_metrics}
 
 
