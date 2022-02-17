@@ -10,7 +10,7 @@ use_skip: False
 dropout_channels: 0.1
 dropout_edges: 0.0
 layer_kwargs: {
-  eps: 0.1,
+  eps: 0.5,
   dropout: "${model.dropout_channels}",
 }
 
