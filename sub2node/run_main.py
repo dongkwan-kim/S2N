@@ -112,7 +112,8 @@ def train(config: DictConfig, seed_forced: int = None) -> Dict[str, Any]:
         os.remove(trainer.checkpoint_callback.best_model_path)
         log.info(f"Removed: {trainer.checkpoint_callback.best_model_path}")
 
-    return trainer.callback_metrics
+    return {trainer.checkpoint_callback.monitor: trainer.checkpoint_callback.best_model_score,
+            **trainer.callback_metrics}
 
 
 @hydra.main(config_path="../configs/", config_name="config.yaml")
