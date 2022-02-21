@@ -62,21 +62,25 @@ class GraphNeuralModel(LightningModule):
             pretrained_embedding=given_datamodule.embedding,
         )
         if self.h.use_s2n:
-            kws = dict(num_layers=self.h.sub_node_num_layers,
-                       hidden_channels=self.h.hidden_channels,
-                       out_channels=self.h.hidden_channels,
-                       activation=self.h.activation,
-                       dropout=self.h.dropout_channels,
-                       activate_last=True)
+            if self.h.sub_node_num_layers == 0:
+                encoder, decoder = nn.Identity(), nn.Identity()
+                in_channels = given_datamodule.num_channels_global
+            else:
+                kws = dict(num_layers=self.h.sub_node_num_layers,
+                           hidden_channels=self.h.hidden_channels,
+                           out_channels=self.h.hidden_channels,
+                           activation=self.h.activation,
+                           dropout=self.h.dropout_channels,
+                           activate_last=True)
+                num_aggr = self.h.sub_node_encoder_aggr.count("-") + 1
+                encoder = MLP(in_channels=given_datamodule.num_channels_global, **kws)
+                decoder = MLP(in_channels=self.h.hidden_channels * num_aggr, **kws)
+                in_channels = self.h.hidden_channels
+
+            self.sub_node_encoder = DeepSets(encoder=encoder, decoder=decoder,
+                                             aggr=self.h.sub_node_encoder_aggr)
             num_nodes = given_datamodule.test_data.num_nodes
             num_train_nodes = given_datamodule.train_data.num_nodes
-            num_aggr = self.h.sub_node_encoder_aggr.count("-") + 1
-            self.sub_node_encoder = DeepSets(
-                encoder=MLP(in_channels=given_datamodule.num_channels_global, **kws),
-                decoder=MLP(in_channels=self.h.hidden_channels * num_aggr, **kws),
-                aggr=self.h.sub_node_encoder_aggr,
-            )
-            in_channels = self.h.hidden_channels
             out_channels = given_datamodule.num_classes
         else:
             self.sub_node_encoder = None
@@ -237,13 +241,13 @@ if __name__ == '__main__':
     _gnm = GraphNeuralModel(
         encoder_layer_name=ENCODER_NAME,
         num_layers=2,
-        hidden_channels=128,
+        hidden_channels=64,
         activation="relu",
         learning_rate=0.001,
         weight_decay=1e-6,
         is_multi_labels=(NAME == "HPONeuro"),
         use_s2n=USE_S2N,
-        sub_node_num_layers=2,
+        sub_node_num_layers=0,
         use_bn=False,
         use_skip=False,
         dropout_channels=0.0,
