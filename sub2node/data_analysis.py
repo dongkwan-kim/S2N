@@ -6,6 +6,7 @@ from torch_geometric.data import Data
 from torch_geometric.utils import homophily, remove_self_loops
 
 from data import SubgraphDataModule
+from utils import multi_label_homophily
 
 
 def _analyze_node_properties(data: Data):
@@ -15,13 +16,20 @@ def _analyze_node_properties(data: Data):
     properties = dict()
 
     if data.y.squeeze().dim() == 1:
-        properties["homophily"] = homophily(data.edge_index, data.y)
-        properties["num_classes"] = data.y.max().item() + 1
+        properties["Node homophily"] = homophily(data.edge_index, data.y, method="node")
+        properties["Edge homophily"] = homophily(data.edge_index, data.y, method="edge")
+        properties["# classes"] = data.y.max().item() + 1
+        properties["Single- or multi-labels"] = "Single"
     else:
-        properties["num_classes"] = data.y.size(1)
+        properties["Node homophily"] = multi_label_homophily(data.edge_index, data.y, method="node")
+        properties["Edge homophily"] = multi_label_homophily(data.edge_index, data.y, method="edge")
+        properties["# classes"] = data.y.size(1)
+        properties["Single- or multi-labels"] = "Multi"
 
     edge_index, edge_attr = remove_self_loops(data.edge_index, getattr(data, "edge_attr", None))
-    properties["density"] = edge_index.size(1) / (N * (N - 1))
+    properties["Density"] = edge_index.size(1) / (N * (N - 1))
+    properties["# nodes"] = N
+    properties["# edges"] = data.edge_index.size(1)
 
     return properties
 
@@ -55,7 +63,7 @@ def analyze_node_properties(dataset_path, name_list, edge_thres_list, out_path=N
 
 
 if __name__ == '__main__':
-    TARGETS = "SYNTHETIC"  # SYNTHETIC, REAL_WORLD, ALL
+    TARGETS = "ALL"  # SYNTHETIC, REAL_WORLD, ALL
 
     if TARGETS == "SYNTHETIC":
         NAME_LIST = ["Density", "CC", "Coreness", "CutRatio"]

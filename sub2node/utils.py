@@ -13,11 +13,11 @@ import torch.nn.functional as F
 import torch.nn as nn
 
 import torch_geometric
-from torch_geometric.utils import subgraph, to_undirected, dropout_adj
+from torch_geometric.utils import subgraph, to_undirected, dropout_adj, homophily
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 from torch_geometric.utils import to_dense_batch, softmax
 
-from torch_scatter import scatter
+from torch_scatter import scatter, scatter_mean
 
 import numpy as np
 import networkx as nx
@@ -361,6 +361,36 @@ def dropout_adj_st(edge_index: Union[Tensor, SparseTensor],
         return edge_index, edge_attr
 
 
+def multi_label_homophily(edge_index, y, batch=None, method="edge") -> float:
+    # y: [N, C]
+    if isinstance(edge_index, SparseTensor):
+        col, row, _ = edge_index.coo()
+    else:
+        row, col = edge_index
+
+    y = y.bool()
+    y_row, y_col = y[row], y[col]
+    y_inter = y_row & y_col
+    y_union = y_row | y_col
+
+    if method == "edge":
+        # ml_eh = 1 / |E| \sum_{(u, v) \in E} ( | C_u ∩ C_v | / | C_u ∪ C_v | )
+        out = y_inter.sum(dim=-1) / y_union.sum(dim=-1)
+        if batch is None:
+            return float(out.mean())
+        else:
+            return scatter_mean(out, batch[col], dim=0)
+
+    else:
+        # ml_nh = 1 / |V| \sum_u \sum_{v \in N(u)} ( | C_u ∩ C_v | / | C_u ∪ C_v | ) / |N(u)|
+        out = y_inter.sum(dim=-1) / y_union.sum(dim=-1)
+        out = scatter_mean(out, col, 0, dim_size=y.size(0))
+        if batch is None:
+            return float(out.mean())
+        else:
+            return scatter_mean(out, batch, dim=0)
+
+
 # networkx
 
 
@@ -421,7 +451,7 @@ def from_networkx_customized_ordering(G, ordering="default"):
 
 if __name__ == '__main__':
 
-    METHOD = "ItertoolsIter"
+    METHOD = "multi_label_node_homophily"
 
     from pytorch_lightning import seed_everything
 
@@ -433,6 +463,66 @@ if __name__ == '__main__':
             transform=lambda kv: kv[1] + "/p",
             condition=lambda kv: kv[0] % 2 == 0,
         )))
+
+    elif METHOD == "multi_label_node_homophily":
+
+        _ei = torch.tensor([[0, 1, 1, 2, 2, 3],
+                            [1, 0, 2, 1, 3, 2]]).long()
+
+        _mlnh = multi_label_homophily(
+            edge_index=_ei,
+            y=torch.Tensor([[1, 0, 0],
+                            [1, 0, 0],
+                            [0, 1, 0],
+                            [0, 1, 0]]).float(),
+        )
+        print(_mlnh)
+
+        _mlnh = multi_label_homophily(
+            edge_index=_ei,
+            y=torch.Tensor([[1, 0, 0],
+                            [1, 0, 0],
+                            [1, 0, 0],
+                            [1, 0, 0]]).float(),
+        )
+        print(_mlnh)
+
+        _mlnh = multi_label_homophily(
+            edge_index=_ei,
+            y=torch.Tensor([[1, 0, 0],
+                            [0, 1, 0],
+                            [0, 0, 1],
+                            [1, 0, 0]]).float(),
+        )
+        print(_mlnh)
+
+        _mlnh = multi_label_homophily(
+            edge_index=_ei,
+            y=torch.Tensor([[1, 1, 1],
+                            [1, 1, 0],
+                            [1, 0, 0],
+                            [0, 1, 0]]).float(),
+        )
+        print(_mlnh)
+
+        _mlnh = multi_label_homophily(
+            edge_index=_ei,
+            y=torch.Tensor([[1, 1, 1],
+                            [1, 1, 1],
+                            [1, 1, 1],
+                            [1, 1, 1]]).float(),
+        )
+        print(_mlnh)
+
+        _mlnh = multi_label_homophily(
+            edge_index=_ei,
+            y=torch.Tensor([[0, 0, 0],
+                            [0, 0, 0],
+                            [1, 1, 1],
+                            [1, 1, 1]]).float(),
+        )
+        print(_mlnh)
+
 
     elif METHOD == "ld_to_dl":
         print(ld_to_dl([{}]))
@@ -466,8 +556,8 @@ if __name__ == '__main__':
             reduce_values=sum))
 
     elif METHOD == "make_symmetric":
-        m = torch.Tensor([[ 1,  2, 3],
-                          [-1,  4, 5],
+        m = torch.Tensor([[1, 2, 3],
+                          [-1, 4, 5],
                           [-1, -1, 6]])
         print(to_symmetric_matrix(m))
 
