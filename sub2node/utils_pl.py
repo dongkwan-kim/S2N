@@ -44,12 +44,13 @@ class TimerCallback(Callback):
         self.train_batch_count += 1
         cprint(f"\nTraining batch incremented: {self.train_batch_count}", "green")
 
-    def on_train_epoch_end(self, trainer, pl_module):
+    def on_train_all_batches_end(self, trainer, pl_module):
         self.interval_train_epochs.append(time.time() - self.time_train_epoch_start)
         self.num_batches_train_epochs.append(self.train_batch_count)
-        cprint("\nTraining epoch end", "green")
+        cprint("\nTraining all batches end", "green")
 
     def on_validation_epoch_start(self, trainer, pl_module):
+        self.on_train_all_batches_end(trainer, pl_module)
         self.valid_batch_count = 0
         self.time_valid_epoch_start = time.time()
         cprint("\nValidation epoch start", "green")
