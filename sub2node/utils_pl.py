@@ -61,9 +61,11 @@ class TimerCallback(Callback):
     def on_validation_epoch_end(self, trainer, pl_module):
         self.interval_valid_epochs.append(time.time() - self.time_valid_epoch_start)
         self.num_batches_valid_epochs.append(self.valid_batch_count)
+        cprint("\nValidation epoch end", "green")
+
+    def on_validation_end(self, trainer, pl_module):
 
         if self.total_epoch_count == self.stop_epochs:
-
             total_end = time.time()
             dt_init_start = total_end - self.time_init_start
             dt_fit_start = total_end - self.time_fit_start
