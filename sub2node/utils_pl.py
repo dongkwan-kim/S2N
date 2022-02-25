@@ -76,20 +76,28 @@ class TimerCallback(Callback):
             cprint(f"- fit_start ~ : {dt_fit_start}", "green")
 
             cprint("------------------", "yellow")
+            total_train_time = sum(self.interval_train_epochs)
+            dt_train_epoch = np.mean(self.interval_train_epochs)
+            dt_train_batch = sum(self.interval_train_epochs) / sum(self.num_batches_train_epochs)
+            total_valid_time = sum(self.interval_valid_epochs)
+            dt_valid_epoch = np.mean(self.interval_valid_epochs)
+            dt_valid_batch = sum(self.interval_valid_epochs) / sum(self.num_batches_valid_epochs)
 
             cprint(f"- total_epoch: {self.total_epoch_count}", "yellow")
 
-            cprint(f"- total_train_time: {sum(self.interval_train_epochs)}", "yellow")
-            m = np.mean(self.interval_train_epochs)
-            cprint(f"- time / train_epoch: {m}", "yellow")
-            m = sum(self.interval_train_epochs) / sum(self.num_batches_train_epochs)
-            cprint(f"- time / train_batch: {m}", "yellow")
+            cprint(f"- total_train_time: {total_train_time}", "yellow")
+            cprint(f"- time / train_epoch: {dt_train_epoch}", "yellow")
+            cprint(f"- time / train_batch: {dt_train_batch}", "yellow")
 
-            cprint(f"- total_valid_time: {sum(self.interval_valid_epochs)}", "yellow")
-            m = np.mean(self.interval_valid_epochs)
-            cprint(f"- time / valid_epoch: {m}", "yellow")
-            m = sum(self.interval_valid_epochs) / sum(self.num_batches_valid_epochs)
-            cprint(f"- time / valid_batch: {m}", "yellow")
+            cprint(f"- total_valid_time: {total_valid_time}", "yellow")
+            cprint(f"- time / valid_epoch: {dt_valid_epoch}", "yellow")
+            cprint(f"- time / valid_batch: {dt_valid_batch}", "yellow")
 
-            cprint("END------------------", "yellow")
+            cprint("Summary as Table ------------------", "yellow")
+            print("\t".join(str(t) for t in [
+                dt_init_start,
+                self.total_epoch_count,
+                total_train_time, dt_train_epoch, dt_train_batch,
+                total_valid_time, dt_valid_epoch, dt_valid_batch,
+            ]))
             exit()
