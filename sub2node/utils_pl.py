@@ -56,7 +56,7 @@ class TimerCallback(Callback):
 
     def on_validation_batch_start(self, trainer, pl_module, batch, batch_idx, dataloader_idx):
         self.valid_batch_count += 1
-        cprint(f"\nValid batch incremented: {self.valid_batch_count}", "green")
+        cprint(f"\nValidation batch incremented: {self.valid_batch_count}", "green")
 
     def on_validation_epoch_end(self, trainer, pl_module):
         self.interval_valid_epochs.append(time.time() - self.time_valid_epoch_start)
