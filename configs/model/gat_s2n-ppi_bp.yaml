@@ -7,16 +7,16 @@ encoder_layer_name: GATConv
 num_layers: 2
 use_bn: True
 use_skip: False
-dropout_channels: 0.1
-dropout_edges: 0.0
+dropout_channels: 0.3
+dropout_edges: 0.2
 layer_kwargs: {
   heads: 1,
   dropout: "${model.dropout_channels}",
 }
 
 learning_rate: 0.001
-weight_decay: 0.000009863545918
-_gradient_clip_val: 0.3
+weight_decay: 4.85E-09
+_gradient_clip_val: 0.1
 
 sub_node_num_layers: 1
 sub_node_encoder_aggr: "sum"

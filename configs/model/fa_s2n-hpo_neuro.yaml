@@ -4,19 +4,19 @@ defaults:
   - common_model.yaml
 
 encoder_layer_name: FAConv
-num_layers: 1
+num_layers: 2
 use_bn: True
 use_skip: False
-dropout_channels: 0.1
-dropout_edges: 0.0
+dropout_channels: 0.3
+dropout_edges: 0.3
 layer_kwargs: {
   eps: 0.5,
   dropout: "${model.dropout_channels}",
 }
 
 learning_rate: 0.001
-weight_decay: 3.5917e-9
-_gradient_clip_val: 0.0
+weight_decay: 3.62E-07
+_gradient_clip_val: 0.4
 
 sub_node_num_layers: 1
 sub_node_encoder_aggr: "sum"
