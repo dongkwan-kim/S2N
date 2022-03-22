@@ -141,7 +141,7 @@ class GraphNeuralModel(LightningModule):
             x = self.node_emb(x)
         edge_index = adj_t if adj_t is not None else edge_index
         x = self.encoder(x, edge_index, edge_attr)
-        if batch is not None:
+        if not self.h.use_s2n:
             _, x = self.readout(x, batch)
         return x
 
@@ -197,6 +197,17 @@ class GraphNeuralModel(LightningModule):
 
 if __name__ == '__main__':
 
+    def _pprint_tensor_dict(td: dict):
+        _kv_dict = {}
+        for k, v in td.items():
+            if isinstance(v, torch.Tensor) and v.dim() > 1:
+                _kv_dict[k] = f"Tensor({v.size()}, " \
+                              f"mean={round(v.mean().item(), 4)}, " \
+                              f"std={round(torch.std(v).item(), 4)})"
+            else:
+                _kv_dict[k] = v
+        print(_kv_dict)
+
     NAME = "PPIBP"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
@@ -204,7 +215,7 @@ if __name__ == '__main__':
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
     E_TYPE = "graphsaint_gcn"  # gin, graphsaint_gcn
 
-    USE_S2N = True
+    USE_S2N = False
     USE_SPARSE_TENSOR = False
     PRE_ADD_SELF_LOOPS = False
 
@@ -258,17 +269,17 @@ if __name__ == '__main__':
     print(_gnm)
     for _i, _b in enumerate(_sdm.train_dataloader()):
         _step_out = _gnm.training_step(_b, _i)
-        print(_step_out)
+        _pprint_tensor_dict(_step_out)
         _gnm.training_epoch_end([_step_out, _step_out])
         break
     for _i, _b in enumerate(_sdm.val_dataloader()):
         _step_out = _gnm.validation_step(_b, _i)
-        print(_step_out)
+        _pprint_tensor_dict(_step_out)
         _gnm.validation_epoch_end([_step_out, _step_out])
         break
     for _i, _b in enumerate(_sdm.test_dataloader()):
         _step_out = _gnm.test_step(_b, _i)
-        print(_step_out)
+        _pprint_tensor_dict(_step_out)
         _gnm.test_epoch_end([_step_out, _step_out])
         break
 
