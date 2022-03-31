@@ -10,10 +10,11 @@ import networkx as nx
 import torch
 from torch import Tensor
 from torch_geometric.data import Data, Batch
-from torch_geometric.utils import to_networkx, from_networkx, is_undirected, dense_to_sparse
+from torch_geometric.utils import (to_networkx, from_networkx, is_undirected, dense_to_sparse,
+                                   add_remaining_self_loops, remove_self_loops, to_dense_adj)
 from tqdm import tqdm
 
-from utils import to_symmetric_matrix, try_getattr
+from utils import to_symmetric_matrix, try_getattr, spspmm_quad
 
 
 class SubgraphToNode:
@@ -27,6 +28,7 @@ class SubgraphToNode:
                  subgraph_data_list: List[Data],
                  name: str, path: str,
                  splits: List[int],
+                 target_matrix: str = "adjacent",
                  edge_aggr: Union[Callable[[Tensor], Tensor], str] = None,
                  num_workers: int = None,
                  undirected: bool = None,
@@ -42,12 +44,16 @@ class SubgraphToNode:
         self.path: Path = Path(path)
         self.splits = splits + [len(self.subgraph_data_list)]
 
+        self.target_matrix = target_matrix
         self.edge_aggr = self.parse_edge_aggr(edge_aggr)
 
         self.num_workers = num_workers
         self.undirected = undirected or is_undirected(global_data.edge_index)
         self.node_spl_cutoff = node_spl_cutoff
 
+        assert self.target_matrix in [
+            "adjacent", "adjacent_with_self_loops", "adjacent_no_self_loops", "shortest_path"
+        ]
         assert self.undirected, "Now only support undirected graphs"
         assert len(self.splits) == 3
         self.path.mkdir(exist_ok=True)
@@ -63,11 +69,18 @@ class SubgraphToNode:
 
     @property
     def node_task_name(self):
-        return f"{self.name}-EA-{self.edge_aggr.__name__}"
+        if self.target_matrix.startswith("adjacent"):
+            return f"{self.name}-ADJ-{self.target_matrix}"
+        else:
+            return f"{self.name}-SP-EA-{self.edge_aggr.__name__}"
 
     @property
     def S(self):
         return len(self.subgraph_data_list)
+
+    @property
+    def N(self):
+        return self.global_data.num_nodes
 
     @property
     def global_nxg(self) -> nx.Graph:
@@ -115,15 +128,51 @@ class SubgraphToNode:
             pass
 
         # Node aggregation: x, y, batch, ...
-        node_task_data_precursor = Batch.from_data_list(self.subgraph_data_list)
-        del node_task_data_precursor.edge_index
-        self._node_task_data_precursor = node_task_data_precursor
+        # DataBatch(x=[16236, 1], y=[1591], split=[1591], batch=[16236], ptr=[1592])
+        self._node_task_data_precursor = Batch.from_data_list(self.subgraph_data_list)
+        del self._node_task_data_precursor.edge_index
 
         # Edge aggregation
+        if self.target_matrix.startswith("adjacent"):
+            self._node_task_data_precursor.edge_weight_matrix = self.get_ewmat_by_multiplying_adj()
+        elif self.target_matrix == "shortest_path":
+            self._node_task_data_precursor.edge_weight_matrix = self.get_ewmat_by_aggregating_sub_spl_mat(save)
+
+        if save:
+            torch.save(self._node_task_data_precursor, path)
+            cprint(f"Save: {self._node_task_data_precursor} at {path}", "blue")
+
+        return self._node_task_data_precursor
+
+    def get_ewmat_by_multiplying_adj(self):
+        # Mapping matrix M (sxn) construction
+        # batch = subgraph ids, x = node ids
+        m_index = torch.stack([self._node_task_data_precursor.batch,
+                               self._node_task_data_precursor.x.squeeze(-1)]).long()
+        # Adjacent matrix A (nxn)
+        if self.target_matrix == "adjacent_with_self_loops":
+            a_index, _ = add_remaining_self_loops(self.global_data.edge_index)
+        elif self.target_matrix == "adjacent_no_self_loops":
+            a_index = remove_self_loops(self.global_data.edge_index)
+        else:
+            a_index = self.global_data.edge_index
+
+        m_value = torch.ones(m_index.size(1))
+        a_value = torch.ones(a_index.size(1))
+
+        # unnormalized_ewmat = M * A * M^T
+        unnorm_ewmat_index, unnorm_ewmat_value = spspmm_quad(
+            m_index, m_value, a_index, a_value, self.S, self.N)
+        dense_unnorm_ewmat = to_dense_adj(
+            unnorm_ewmat_index, edge_attr=unnorm_ewmat_value).squeeze()
+        return dense_unnorm_ewmat
+
+    def get_ewmat_by_aggregating_sub_spl_mat(self, save):
         # sub_spl_ij = min { d_uv | u \in S_i, v in S_j }
         node_spl_mat = self.node_spl_mat(save).float()
         sub_spl_mat = torch.full((self.S, self.S), fill_value=-1)
-        for i, sub_data_i in enumerate(tqdm(self.subgraph_data_list, desc="sub_spl_mat")):
+        for i, sub_data_i in enumerate(tqdm(self.subgraph_data_list,
+                                            desc="get_ewmat_by_aggregating_sub_spl_mat")):
             for j, sub_data_j in enumerate(self.subgraph_data_list):
                 if self.undirected and i <= j:
                     x_i = sub_data_i.x.squeeze(-1)
@@ -133,13 +182,7 @@ class SubgraphToNode:
                     sub_spl_mat[j, i] = sub_spl
 
         # edge = 1 / (spl + 1) where 0 <= spl, then 0 < edge <= 1
-        self._node_task_data_precursor.edge_weight_matrix = 1 / (sub_spl_mat + 1)
-
-        if save:
-            torch.save(self._node_task_data_precursor, path)
-            cprint(f"Save: {self._node_task_data_precursor} at {path}", "blue")
-
-        return self._node_task_data_precursor
+        return 1 / (sub_spl_mat + 1)
 
     def node_task_data_splits(self,
                               edge_thres: Union[float, Callable, List[float]],
@@ -255,7 +298,7 @@ if __name__ == '__main__':
             save=True,
         )
         for _d in ntds:
-            print(_d, _d.edge_index.size(1) / (_d.num_nodes ** 2))
+            print(_d, "density", _d.edge_index.size(1) / (_d.num_nodes ** 2))
 
     elif MODE == "TEST":
         _global_data = from_networkx(nx.path_graph(10))
@@ -290,4 +333,4 @@ if __name__ == '__main__':
         print(ntds[-2].eval_mask)
         print(ntds[-1].eval_mask)
         for _d in ntds:
-            print(_d, _d.edge_index.size(1) / (_d.num_nodes ** 2))
+            print(_d, "density", _d.edge_index.size(1) / (_d.num_nodes ** 2))

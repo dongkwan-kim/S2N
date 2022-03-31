@@ -7,6 +7,7 @@ from pprint import pprint
 from typing import Dict, Any, List, Tuple, Optional, Callable, Union
 
 import torch
+import torch_sparse
 from termcolor import cprint
 from torch import Tensor
 import torch.nn.functional as F
@@ -239,6 +240,24 @@ def get_extra_repr(model, important_args):
 
 def count_parameters(model: nn.Module):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def spspmm_quad(m_index, m_value, a_index, a_value, k, n) -> Tuple[Tensor, Tensor]:
+    """
+    :param m_index: sparse matrix indices of (k, n) shape
+    :param m_value: values of M
+    :param a_index: sparse matrix indices of (n, n) shape
+    :param a_value: values of A
+    :param k: the first dimension of M
+    :param n: the second dimension of M
+    :return: indices and values of M * A * M^T, a sparse matrix of (k, k) shape
+    """
+    # (k, n) --> (n, k)
+    m_t, m_t_values = torch_sparse.transpose(m_index, m_value, k, n)
+    # (k, n) * (n * n) --> (k, n)
+    ma_index, ma_values = torch_sparse.spspmm(m_index, m_value, a_index, a_value, k, n, n)
+    # (k, n) * (n, k) --> (k, k)
+    return torch_sparse.spspmm(ma_index, ma_values, m_t, m_t_values, k, n, k)
 
 
 def to_symmetric_matrix(matrix: torch.Tensor, direction="upper2lower"):
