@@ -31,6 +31,7 @@ class SubgraphDataModule(LightningDataModule):
                  embedding_type: str,
                  use_s2n: bool,
                  edge_thres: Union[float, Callable, List[float]],
+                 edge_normalize: Union[str, Callable, None],
                  s2n_edge_aggr: Union[Callable[[Tensor], Tensor], str] = None,
                  batch_size: int = None,
                  eval_batch_size=None,
@@ -100,7 +101,10 @@ class SubgraphDataModule(LightningDataModule):
                 edge_aggr=self.h.s2n_edge_aggr,
                 undirected=True,
             )
-            data_list = s2n.node_task_data_splits(edge_thres=self.h.edge_thres)
+            data_list = s2n.node_task_data_splits(
+                edge_normalize=self.h.edge_normalize,
+                edge_thres=self.h.edge_thres,
+            )
             transform_list = []
             if self.h.pre_add_self_loops:
                 transform_list.append(AddSelfLoopsV2("edge_attr"))
@@ -170,7 +174,8 @@ if __name__ == '__main__':
         dataset_path=PATH,
         embedding_type=E_TYPE,
         use_s2n=USE_S2N,
-        edge_thres=0.5,
+        edge_thres=0.75,
+        edge_normalize="sig_standardize_incl_diag",
         batch_size=32,
         eval_batch_size=5,
         use_sparse_tensor=USE_SPARSE_TENSOR,

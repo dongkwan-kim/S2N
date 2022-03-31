@@ -185,15 +185,19 @@ class SubgraphToNode:
         return 1 / (sub_spl_mat + 1)
 
     def node_task_data_splits(self,
-                              edge_thres: Union[float, Callable, List[float]],
+                              edge_normalize: Union[str, Callable, None] = None,
+                              edge_thres: Union[float, Callable, List[float]] = 1.0,
                               save=True) -> Tuple[Data, Data, Data]:
         """
         :return: Data(x=[N, 1], edge_index=[2, E], edge_attr=[E], y=[C], batch=[N])
             - N is the number of subgraphs = batch.sum()
             - edge_attr >= edge_thres
         """
+        if isinstance(edge_normalize, str):
+            edge_normalize = get_normalize_01(edge_normalize)
+        str_en = edge_normalize.__name__ if isinstance(edge_normalize, Callable) else edge_normalize
         str_et = edge_thres.__name__ if isinstance(edge_thres, Callable) else edge_thres
-        path = self.path / f"{self.node_task_name}_node_task_data_e{str_et}.pth"
+        path = self.path / f"{self.node_task_name}_node_task_data_e{str_et}_n{str_en}.pth"
         try:
             self._node_task_data_list = torch.load(path)
             cprint(f"Load: {self._node_task_data_list} at {path}", "green")
@@ -221,19 +225,17 @@ class SubgraphToNode:
                 eval_mask = torch.zeros(num_nodes, dtype=torch.bool)
                 eval_mask[self.splits[i - 1]:] = True
             else:
-                print(
-                    "Performing node_task_data_splits \n"
-                    f"\tmean +- std = {torch.mean(ew_mat)} +- {torch.std(ew_mat)} \n"
-                    f"\tmin / median / max = {torch.min(ew_mat)} / {torch.median(ew_mat)} / {torch.max(ew_mat)} \n"
-                    f"\tN = {ew_mat.numel()}"
-                )
-                print("\tCounters: ", Counter(ew_mat.flatten().tolist()))
+                self.print_mat_stat(ew_mat, "Summarizing edge_weight_matrix")
 
             ew_mat_s_by_s = ew_mat.clone()[:s, :s]
+            if edge_normalize is not None:
+                ew_mat_s_by_s = edge_normalize(ew_mat_s_by_s)
+            # Remove ew_mat below than edge_thres
             et = et(ew_mat_s_by_s) if isinstance(et, Callable) else et
             ew_mat_s_by_s[ew_mat_s_by_s < et] = 0
-            edge_index, edge_attr = dense_to_sparse(ew_mat_s_by_s)
+            self.print_mat_stat(ew_mat_s_by_s, f"Summarizing processed edge_weight_matrix ({i})")
 
+            edge_index, edge_attr = dense_to_sparse(ew_mat_s_by_s)
             self._node_task_data_list.append(Data(
                 sub_x=sub_x, sub_batch=sub_batch, y=y, eval_mask=eval_mask,
                 edge_index=edge_index, edge_attr=edge_attr.view(-1, 1),
@@ -246,12 +248,26 @@ class SubgraphToNode:
 
         return tuple(self._node_task_data_list)
 
+    @staticmethod
+    def print_mat_stat(matrix, start=None, print_counter=False):
+        if start:
+            cprint(start, "green")
+        print(
+            f"\tmean +- std = {torch.mean(matrix)} +- {torch.std(matrix)} \n"
+            f"\tmin / median / max = {torch.min(matrix)} / {torch.median(matrix)} / {torch.max(matrix)} \n"
+            f"\tN = {matrix.numel()}, N+ = {(matrix > 0).sum().item()}, "
+            f"d = {(matrix > 0).sum().item() / matrix.numel()}"
+        )
+        if print_counter:
+            print("\tCounters: ", Counter(matrix.flatten().tolist()))
+
 
 def get_topk_thres(thres):
     def _func(x):
         k = int(x.numel() * thres)
         topk = torch.topk(x.flatten(), k, sorted=False).values
         return torch.min(topk).item()
+
     _func.__name__ = f"topk_{thres}"
 
     return _func
@@ -264,11 +280,37 @@ def dist_by_shared_nodes(node_spl_mat):
     return -1 + (1 / shared_nodes)
 
 
+def get_normalize_01(normalize_type: str):
+    def _func(matrix: Tensor) -> Tensor:
+        if normalize_type == "max_incl_diag":
+            mx = torch.max(matrix)
+            matrix = matrix / mx
+        elif normalize_type == "max_excl_diag":
+            matrix = matrix - torch.diag(torch.diagonal(matrix))
+            mx = torch.max(matrix)
+            matrix = (matrix / mx)
+            matrix = matrix + torch.eye(matrix.size(0))
+        elif normalize_type == "sig_standardize_incl_diag":
+            matrix = (matrix - torch.mean(matrix)) / torch.std(matrix)
+            matrix = torch.sigmoid(matrix)
+        elif normalize_type == "sig_standardize_excl_diag":
+            matrix = matrix - torch.diag(torch.diagonal(matrix))
+            matrix = (matrix - torch.mean(matrix)) / torch.std(matrix)
+            matrix = torch.sigmoid(matrix) + torch.eye(matrix.size(0))
+        else:
+            raise ValueError(f"Wrong type: {normalize_type}")
+        return matrix
+
+    _func.__name__ = f"normalize_{normalize_type}"
+
+    return _func
+
+
 if __name__ == '__main__':
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, CC, Coreness, CutRatio
 
-    MODE = "PPIBP"
+    MODE = "EMUser"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
 
@@ -293,8 +335,8 @@ if __name__ == '__main__':
         )
         print(s2n)
         ntds = s2n.node_task_data_splits(
-            # 0.5, 1.0
-            edge_thres=1.0,
+            edge_normalize="sig_standardize_incl_diag",
+            edge_thres=0.75,
             save=True,
         )
         for _d in ntds:
