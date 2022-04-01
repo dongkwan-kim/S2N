@@ -267,7 +267,7 @@ def aggregate_csv_metrics(in_path, out_path,
                                  f"N/{metric}": len(values),
                                  "list": str(values)})
                 num_lines += 1
-            print(f"Saved (lines {num_lines}): {out_file}")
+            print(f"Saved (lines {num_lines}): {out_file.absolute()}")
 
 
 if __name__ == '__main__':
