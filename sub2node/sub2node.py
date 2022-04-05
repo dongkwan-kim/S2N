@@ -28,7 +28,7 @@ class SubgraphToNode:
                  subgraph_data_list: List[Data],
                  name: str, path: str,
                  splits: List[int],
-                 target_matrix: str = "adjacent",
+                 target_matrix: str = "adjacent_with_self_loops",
                  edge_aggr: Union[Callable[[Tensor], Tensor], str] = None,
                  num_workers: int = None,
                  undirected: bool = None,
