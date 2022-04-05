@@ -194,7 +194,7 @@ class SubgraphToNode:
             - edge_attr >= edge_thres
         """
         if isinstance(edge_normalize, str):
-            edge_normalize = get_normalize_01(edge_normalize)
+            edge_normalize = func_normalize(edge_normalize)
         str_en = edge_normalize.__name__ if isinstance(edge_normalize, Callable) else edge_normalize
         str_et = edge_thres.__name__ if isinstance(edge_thres, Callable) else edge_thres
         path = self.path / f"{self.node_task_name}_node_task_data_e{str_et}_n{str_en}.pth"
@@ -262,7 +262,7 @@ class SubgraphToNode:
             print("\tCounters: ", Counter(matrix.flatten().tolist()))
 
 
-def get_topk_thres(thres):
+def func_topk_thres(thres):
     def _func(x):
         k = int(x.numel() * thres)
         topk = torch.topk(x.flatten(), k, sorted=False).values
@@ -280,23 +280,27 @@ def dist_by_shared_nodes(node_spl_mat):
     return -1 + (1 / shared_nodes)
 
 
-def get_normalize_01(normalize_type: str):
+def func_normalize(normalize_type: str):
     def _func(matrix: Tensor) -> Tensor:
-        if normalize_type == "max_incl_diag":
-            mx = torch.max(matrix)
-            matrix = matrix / mx
-        elif normalize_type == "max_excl_diag":
+        if normalize_type == "min_max":
+            mn, mx = torch.min(matrix), torch.max(matrix)
+            matrix = (matrix - mn) / (mx - mn)
+        elif normalize_type == "min_max_excl_diag":
             matrix = matrix - torch.diag(torch.diagonal(matrix))
-            mx = torch.max(matrix)
-            matrix = (matrix / mx)
+            mn, mx = torch.min(matrix), torch.max(matrix)
+            matrix = (matrix - mn) / (mx - mn)
             matrix = matrix + torch.eye(matrix.size(0))
-        elif normalize_type == "sig_standardize_incl_diag":
+        elif normalize_type == "sig_standardize":
             matrix = (matrix - torch.mean(matrix)) / torch.std(matrix)
             matrix = torch.sigmoid(matrix)
         elif normalize_type == "sig_standardize_excl_diag":
             matrix = matrix - torch.diag(torch.diagonal(matrix))
             matrix = (matrix - torch.mean(matrix)) / torch.std(matrix)
             matrix = torch.sigmoid(matrix) + torch.eye(matrix.size(0))
+        elif normalize_type == "standardize":
+            matrix = (matrix - torch.mean(matrix)) / torch.std(matrix)
+        elif normalize_type == "standardize_excl_diag":
+            raise NotImplementedError
         else:
             raise ValueError(f"Wrong type: {normalize_type}")
         return matrix
@@ -368,7 +372,7 @@ if __name__ == '__main__':
         )
         ntds = s2n.node_task_data_splits(
             # 0.25,
-            get_topk_thres(0.25),
+            func_topk_thres(0.25),
             save=False,
         )
         pprint(ntds)
