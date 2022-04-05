@@ -22,6 +22,7 @@ class SubgraphToNode:
     _node_spl_mat = None
     _node_task_data_precursor = None
     _node_task_data_list: List[Data] = []
+    inv_sig = [0.000, 0.405, 0.847, 1.386, 2.197]  # math.log(y / (1 - y))
 
     def __init__(self,
                  global_data: Data,
@@ -186,6 +187,7 @@ class SubgraphToNode:
 
     def node_task_data_splits(self,
                               edge_normalize: Union[str, Callable, None] = None,
+                              edge_normalize_args: Union[List, None] = None,
                               edge_thres: Union[float, Callable, List[float]] = 1.0,
                               save=True) -> Tuple[Data, Data, Data]:
         """
@@ -193,10 +195,12 @@ class SubgraphToNode:
             - N is the number of subgraphs = batch.sum()
             - edge_attr >= edge_thres
         """
+        edge_normalize_args = edge_normalize_args or []
         if isinstance(edge_normalize, str):
-            edge_normalize = func_normalize(edge_normalize)
-        str_en = edge_normalize.__name__ if isinstance(edge_normalize, Callable) else edge_normalize
+            edge_normalize = func_normalize(edge_normalize, *edge_normalize_args)
         str_et = edge_thres.__name__ if isinstance(edge_thres, Callable) else edge_thres
+        str_en = '-'.join([edge_normalize.__name__ if isinstance(edge_normalize, Callable) else edge_normalize] +
+                          [str(a) for a in edge_normalize_args])
         path = self.path / f"{self.node_task_name}_node_task_data_e{str_et}_n{str_en}.pth"
         try:
             self._node_task_data_list = torch.load(path)
@@ -252,9 +256,12 @@ class SubgraphToNode:
     def print_mat_stat(matrix, start=None, print_counter=False):
         if start:
             cprint(start, "green")
+        matrix_pos = matrix[matrix > 0]
         print(
-            f"\tmean +- std = {torch.mean(matrix)} +- {torch.std(matrix)} \n"
+            f"\tmean / std = {torch.mean(matrix)} / {torch.std(matrix)} \n"
             f"\tmin / median / max = {torch.min(matrix)} / {torch.median(matrix)} / {torch.max(matrix)} \n"
+            f"\tmean+ / std+ = {torch.mean(matrix_pos)} / {torch.std(matrix_pos)} \n"
+            f"\tmin+ / median+ = {torch.min(matrix_pos)} / {torch.median(matrix_pos)} \n"
             f"\tN = {matrix.numel()}, N+ = {(matrix > 0).sum().item()}, "
             f"d = {(matrix > 0).sum().item() / matrix.numel()}"
         )
@@ -280,7 +287,7 @@ def dist_by_shared_nodes(node_spl_mat):
     return -1 + (1 / shared_nodes)
 
 
-def func_normalize(normalize_type: str):
+def func_normalize(normalize_type: str, *args):
     def _func(matrix: Tensor) -> Tensor:
         if normalize_type == "min_max":
             mn, mx = torch.min(matrix), torch.max(matrix)
@@ -301,6 +308,16 @@ def func_normalize(normalize_type: str):
             matrix = (matrix - torch.mean(matrix)) / torch.std(matrix)
         elif normalize_type == "standardize_excl_diag":
             raise NotImplementedError
+        elif normalize_type == "standardize_then_thres_max_linear":
+            assert len(args) == 1
+            thres = args[0]
+            matrix = (matrix - torch.mean(matrix)) / torch.std(matrix)
+            matrix = (matrix - thres) / (torch.max(matrix) - thres)
+        elif normalize_type == "standardize_then_thres_max_power":
+            assert len(args) == 2
+            thres, p = args[0], args[1]
+            matrix = (matrix - torch.mean(matrix)) / torch.std(matrix)
+            matrix = (matrix.relu_() ** p - thres ** p) / (torch.max(matrix) ** p - thres ** p)
         else:
             raise ValueError(f"Wrong type: {normalize_type}")
         return matrix
@@ -338,9 +355,14 @@ if __name__ == '__main__':
             edge_aggr=dist_by_shared_nodes,
         )
         print(s2n)
+        """ Inverse sigmoid table 0.5 -- 0.9,
+            SubgraphToNode.inv_sig = [0.000, 0.405, 0.847, 1.386, 2.197]
+        """
+        # standardize_then_thres_max_linear, standardize_then_thres_max_power
         ntds = s2n.node_task_data_splits(
-            edge_normalize="sig_standardize_incl_diag",
-            edge_thres=0.75,
+            edge_normalize="standardize_then_thres_max_linear",
+            edge_normalize_args=[SubgraphToNode.inv_sig[4]],
+            edge_thres=0.0,
             save=True,
         )
         for _d in ntds:

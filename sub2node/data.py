@@ -103,6 +103,8 @@ class SubgraphDataModule(LightningDataModule):
             )
             data_list = s2n.node_task_data_splits(
                 edge_normalize=self.h.edge_normalize,
+                edge_normalize_args=[getattr(self.h, f"edge_normalize_arg_{i}") for i in range(2)
+                                     if getattr(self.h, f"edge_normalize_arg_{i}", None) is not None],
                 edge_thres=self.h.edge_thres,
             )
             transform_list = []
