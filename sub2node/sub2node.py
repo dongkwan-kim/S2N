@@ -154,7 +154,7 @@ class SubgraphToNode:
         if self.target_matrix == "adjacent_with_self_loops":
             a_index, _ = add_remaining_self_loops(self.global_data.edge_index)
         elif self.target_matrix == "adjacent_no_self_loops":
-            a_index = remove_self_loops(self.global_data.edge_index)
+            a_index, _ = remove_self_loops(self.global_data.edge_index)
         else:
             a_index = self.global_data.edge_index
 
@@ -331,7 +331,7 @@ if __name__ == '__main__':
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, CC, Coreness, CutRatio
 
-    MODE = "EMUser"
+    MODE = "PPIBP"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
 
@@ -352,6 +352,7 @@ if __name__ == '__main__':
             path=f"{PATH}/{MODE.upper()}/sub2node/",
             undirected=True,
             splits=dts.splits,
+            target_matrix="adjacent_with_self_loops",  # adjacent_with_self_loops, adjacent_no_self_loops
             edge_aggr=dist_by_shared_nodes,
         )
         print(s2n)

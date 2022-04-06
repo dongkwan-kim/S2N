@@ -98,6 +98,7 @@ class SubgraphDataModule(LightningDataModule):
                 name=self.h.dataset_name,
                 path=f"{self.h.dataset_path}/{self.h.dataset_name.upper()}/sub2node/",
                 splits=self.dataset.splits,
+                target_matrix=self.h.s2n_target_matrix,
                 edge_aggr=self.h.s2n_edge_aggr,
                 undirected=True,
             )
