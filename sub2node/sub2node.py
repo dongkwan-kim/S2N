@@ -29,7 +29,7 @@ class SubgraphToNode:
                  subgraph_data_list: List[Data],
                  name: str, path: str,
                  splits: List[int],
-                 target_matrix: str = "adjacent_with_self_loops",
+                 target_matrix: str = "adjacent_no_self_loops",
                  edge_aggr: Union[Callable[[Tensor], Tensor], str] = None,
                  num_workers: int = None,
                  undirected: bool = None,
@@ -352,7 +352,7 @@ if __name__ == '__main__':
             path=f"{PATH}/{MODE.upper()}/sub2node/",
             undirected=True,
             splits=dts.splits,
-            target_matrix="adjacent_with_self_loops",  # adjacent_with_self_loops, adjacent_no_self_loops
+            target_matrix="adjacent_no_self_loops",  # adjacent_with_self_loops, adjacent_no_self_loops
             edge_aggr=dist_by_shared_nodes,
         )
         print(s2n)
