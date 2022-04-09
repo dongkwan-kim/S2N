@@ -46,8 +46,9 @@ def plot_scatter(xs, ys, xlabel, ylabel,
         plt.yticks(yticks)
 
     plot_info = "_".join([k for k in [xlabel, ylabel, hue_name, style_name]])
-    plot_info = plot_info.replace("/", "|").replace("#", "Num")
+    plot_info = plot_info.replace("/", "+").replace("#", "Num")
     path_and_name = "{}/fig_scatter_{}_{}.{}".format(path, key, plot_info, extension)
+    path_and_name = path_and_name.replace(" ", "_").replace("(", "_").replace(")", "_")
 
     plot.savefig(path_and_name, bbox_inches='tight')
     cprint(f"Save at {path_and_name}", "blue")
@@ -243,5 +244,5 @@ if __name__ == '__main__':
     if MODE == "plot_efficiency_scatter":
         plot_efficiency_scatter(
             extension="pdf",
-            dataset="EMUser",
+            dataset="ALL",
         )
