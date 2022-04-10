@@ -14,7 +14,7 @@ from torch_sparse import SparseTensor
 
 from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, SubgraphDataset
 from data_sub import Density, CC, Coreness, CutRatio
-from data_utils import AddSelfLoopsV2
+from data_utils import AddSelfLoopsV2, RemoveAttrs
 from sub2node import SubgraphToNode
 from utils import get_log_func, EternalIter
 
@@ -34,6 +34,7 @@ class SubgraphDataModule(LightningDataModule):
                  edge_normalize: Union[str, Callable, None],
                  s2n_target_matrix: str,
                  s2n_edge_aggr: Union[Callable[[Tensor], Tensor], str] = None,
+                 s2n_is_weighted: bool = True,
                  batch_size: int = None,
                  eval_batch_size=None,
                  use_sparse_tensor=False,
@@ -105,11 +106,13 @@ class SubgraphDataModule(LightningDataModule):
             )
             data_list = s2n.node_task_data_splits(
                 edge_normalize=self.h.edge_normalize,
-                edge_normalize_args=[getattr(self.h, f"edge_normalize_arg_{i}") for i in range(2)
+                edge_normalize_args=[getattr(self.h, f"edge_normalize_arg_{i}") for i in range(1, 3)
                                      if getattr(self.h, f"edge_normalize_arg_{i}", None) is not None],
                 edge_thres=self.h.edge_thres,
             )
             transform_list = []
+            if not self.h.s2n_is_weighted:
+                transform_list.append(RemoveAttrs(["edge_attr"]))
             if self.h.pre_add_self_loops:
                 transform_list.append(AddSelfLoopsV2("edge_attr"))
             if self.h.use_sparse_tensor:
@@ -163,7 +166,7 @@ def _print_data(data):
 
 if __name__ == '__main__':
 
-    NAME = "Density"
+    NAME = "PPIBP"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
 
@@ -180,7 +183,9 @@ if __name__ == '__main__':
         use_s2n=USE_S2N,
         edge_thres=0.0,
         edge_normalize="standardize_then_thres_max_linear",
+        edge_normalize_arg_1=0.0,
         s2n_target_matrix="adjacent_no_self_loops",
+        s2n_is_weighted=False,
         batch_size=32,
         eval_batch_size=5,
         use_sparse_tensor=USE_SPARSE_TENSOR,

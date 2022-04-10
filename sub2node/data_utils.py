@@ -1,10 +1,22 @@
-from typing import Optional, Union
+from typing import Optional, Union, List
 
 import torch
 from torch import Tensor
 from torch_geometric.data import HeteroData, Data
 from torch_geometric.transforms import BaseTransform
 from torch_geometric.utils import add_self_loops
+
+
+class RemoveAttrs(BaseTransform):
+
+    def __init__(self, attr_names: List[str]):
+        self.attr_names = attr_names
+
+    def __call__(self, data):
+        for name in self.attr_names:
+            if hasattr(data, name):
+                setattr(data, name, None)
+        return data
 
 
 class RelabelNodes(BaseTransform):

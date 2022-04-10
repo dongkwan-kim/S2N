@@ -89,8 +89,8 @@ class GraphNeuralModel(LightningModule):
             in_channels = given_datamodule.num_channels_global
             out_channels = self.h.hidden_channels
 
-        # If edge_thres == 1.0, edge_attr is 1.0, no need to use model edges (edge_dim).
-        if given_datamodule.h.edge_thres < 1.0 and encoder_layer_name in ["GATConv"]:
+        # If weighted edges are using, need to use edge_dim for GATConv.
+        if given_datamodule.h.s2n_is_weighted and encoder_layer_name in ["GATConv"]:
             layer_kwargs["edge_dim"] = 1
 
         if self.h.encoder_layer_name == "LINKX":
