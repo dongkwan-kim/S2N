@@ -200,7 +200,7 @@ class SubgraphToNode:
             edge_normalize = func_normalize(edge_normalize, *edge_normalize_args)
         str_et = edge_thres.__name__ if isinstance(edge_thres, Callable) else edge_thres
         str_en = '-'.join([edge_normalize.__name__ if isinstance(edge_normalize, Callable) else edge_normalize] +
-                          [str(a) for a in edge_normalize_args])
+                          [str(round(a, 3)) for a in edge_normalize_args])  # todo: general repr for args
         path = self.path / f"{self.node_task_name}_node_task_data_e{str_et}_n{str_en}.pth"
         try:
             self._node_task_data_list = torch.load(path)
@@ -309,12 +309,12 @@ def func_normalize(normalize_type: str, *args):
         elif normalize_type == "standardize_excl_diag":
             raise NotImplementedError
         elif normalize_type == "standardize_then_thres_max_linear":
-            assert len(args) == 1
+            assert len(args) == 1, f"Wrong args: {args}"
             thres = args[0]
             matrix = (matrix - torch.mean(matrix)) / torch.std(matrix)
             matrix = (matrix - thres) / (torch.max(matrix) - thres)
         elif normalize_type == "standardize_then_thres_max_power":
-            assert len(args) == 2
+            assert len(args) == 2, f"Wrong args: {args}"
             thres, p = args[0], args[1]
             matrix = (matrix - torch.mean(matrix)) / torch.std(matrix)
             matrix = (matrix.relu_() ** p - thres ** p) / (torch.max(matrix) ** p - thres ** p)
