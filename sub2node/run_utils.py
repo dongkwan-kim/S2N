@@ -226,29 +226,28 @@ def aggregate_csv_metrics(in_path, out_path,
         csv_path = Path(csv_path)
         yaml_path = csv_path.parent / "hparams.yaml"
 
-        try:
-            with open(yaml_path, "r") as stream:
-                yaml_data = yaml.safe_load(stream)
-                key_dict = OrderedDict()
-                for h in key_hparams:
+        with open(yaml_path, "r") as stream:
+            yaml_data = yaml.safe_load(stream)
+            key_dict = OrderedDict()
+            for h in key_hparams:
+                try:
                     parsed = h.split("/")
                     yd = yaml_data
                     for p in parsed:
                         yd = yd[p]
                     key_dict[h] = yd
-                experiment_key = "+".join(str(s) for s in key_dict.values())
-                path_key = "+".join(str(v) for k, v in key_dict.items()
-                                    if k in path_hparams)
+                except (KeyError, TypeError) as e:
+                    pass
+            experiment_key = "+".join(str(s) for s in key_dict.values())
+            path_key = "+".join(str(v) for k, v in key_dict.items()
+                                if k in path_hparams)
 
-            csv_data = pd.read_csv(csv_path)
+        csv_data = pd.read_csv(csv_path)
+        try:
             metric_value = csv_data[metric].tail(1)
-
             key_to_values[path_key][experiment_key].append(float(metric_value))
             key_to_ingredients[experiment_key] = key_dict
-
-        except KeyError as e:
-            pass
-        except TypeError as e:
+        except KeyError:
             pass
 
     for path_key, experiment_key_to_values in key_to_values.items():
