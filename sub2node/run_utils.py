@@ -215,6 +215,9 @@ def aggregate_csv_metrics(in_path, out_path,
         "model/weight_decay",
         "model/dropout_channels",
         "model/dropout_edges",
+        "model/use_bn",
+        "model/use_skip",
+        "model/hidden_channels",
         "trainer/gradient_clip_val",
     ]
     path_hparams = path_hparams or key_hparams[:1]
@@ -252,8 +255,10 @@ def aggregate_csv_metrics(in_path, out_path,
         except KeyError:
             pass
 
+    out_path = Path(out_path)
+    out_path.mkdir(exist_ok=True)
     for path_key, experiment_key_to_values in key_to_values.items():
-        out_file = Path(out_path) / f"_log_{path_key}_{datetime.now()}.csv"
+        out_file = out_path / f"_log_{path_key}_{datetime.now()}.csv"
         with open(out_file, "w") as f:
             writer = csv.DictWriter(
                 f, fieldnames=[
@@ -272,8 +277,11 @@ def aggregate_csv_metrics(in_path, out_path,
                                  f"N/{metric}": len(values),
                                  "list": str(values)})
                 num_lines += 1
-            print(f"Saved (lines {num_lines}): {out_file.absolute()}")
+            print(f"Saved (lines {num_lines}): {out_file.resolve()}")
 
 
 if __name__ == '__main__':
-    aggregate_csv_metrics("../logs_multi_csv", "./")
+    aggregate_csv_metrics(
+        "../logs_multi_csv",
+        "../_aggr_logs",
+    )
