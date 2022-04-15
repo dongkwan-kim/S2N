@@ -1,3 +1,4 @@
+import inspect
 from copy import deepcopy
 from typing import Union, Tuple, Optional
 
@@ -53,6 +54,9 @@ class MyGATConv(GATConv):
 
     def forward(self, x, edge_index, edge_attr, size=None, return_attention_weights=None):
         if self.edge_dim is None:
+            if edge_attr is not None or (isinstance(edge_index, SparseTensor) and edge_index.has_value()):
+                cprint(f"Warning: GATConv cannot use edge_weight with edge_dim=None, "
+                       f"but {self.__class__.__name__} overwrites edge_attr to None.", "red")
             edge_attr = None
             if isinstance(edge_index, SparseTensor):
                 edge_index: SparseTensor
@@ -73,13 +77,16 @@ class MyFAConv(FAConv):
             self.out = None
 
     def forward(self, x: Tensor, edge_index: Adj, edge_weight: OptTensor = None,
-                return_attention_weights=None):
+                x_0: Tensor = None, return_attention_weights=None):
         if self.normalize:
+            if edge_weight is not None or (isinstance(edge_index, SparseTensor) and edge_index.has_value()):
+                cprint(f"Warning: FAConv cannot use edge_weight with normalize=True, "
+                       f"but {self.__class__.__name__} overwrites edge_weight to None.", "red")
             edge_weight = None
             if isinstance(edge_index, SparseTensor):
                 edge_index: SparseTensor
                 edge_index.set_value_(None)
-        x = super().forward(x=x, x_0=x, edge_index=edge_index, edge_weight=edge_weight,
+        x = super().forward(x=x, x_0=x_0, edge_index=edge_index, edge_weight=edge_weight,
                             return_attention_weights=return_attention_weights)
         return self.out(x) if self.out is not None else x
 
@@ -246,7 +253,10 @@ def get_gnn_conv_and_kwargs(gnn_name, **kwargs):
         )
     elif gnn_name == "FAConv":
         gnn_cls = MyFAConv
-        gkw = merge_dict_by_keys(gkw, kwargs, ["eps", "add_self_loops", "dropout"])
+        gkw = merge_dict_by_keys(
+            gkw, kwargs,
+            ["eps", "add_self_loops", "dropout", "normalize"],
+        )
     elif gnn_name == "Linear":
         gnn_cls = MyLinear
     else:
@@ -259,7 +269,8 @@ class GraphEncoder(nn.Module):
     def __init__(self, layer_name, num_layers, in_channels, hidden_channels, out_channels,
                  activation="relu", use_bn=False, use_skip=False,
                  dropout_channels=0.0, dropout_edges=0.0,
-                 activate_last=True, **kwargs):
+                 activate_last=True, force_lin_x_0=False,
+                 **kwargs):
         super().__init__()
 
         self.layer_name, self.num_layers = layer_name, num_layers
@@ -270,18 +281,32 @@ class GraphEncoder(nn.Module):
         self.dropout_edges = dropout_edges
         self.activate_last = activate_last
 
-        self._gnn_kwargs = {}
+        self.force_lin_x_0 = force_lin_x_0
+        self.use_x_0, self.lin_x_0 = None, None
+
+        self.gnn_kwargs = {}
         self.convs = torch.nn.ModuleList()
         self.bns = torch.nn.ModuleList() if self.use_bn else []
         self.skips = torch.nn.ModuleList() if self.use_skip else []
         self.build(**kwargs)
+        self.reset_parameters()
 
     def build(self, **kwargs):
-        gnn, self._gnn_kwargs = get_gnn_conv_and_kwargs(self.layer_name, **kwargs)
+        gnn, self.gnn_kwargs = get_gnn_conv_and_kwargs(self.layer_name, **kwargs)
+
+        self.use_x_0 = "x_0" in inspect.getfullargspec(gnn.forward).args
+        if self.use_x_0:
+            if (self.in_channels == self.hidden_channels and self.force_lin_x_0) or \
+                    (self.in_channels != self.hidden_channels):
+                self.lin_x_0 = nn.Linear(self.in_channels, self.hidden_channels)
+            in_conv_channels = self.hidden_channels
+        else:
+            in_conv_channels = self.in_channels
+
         for conv_id in range(self.num_layers):
-            _in_channels = self.in_channels if conv_id == 0 else self.hidden_channels
+            _in_channels = in_conv_channels if conv_id == 0 else self.hidden_channels
             _out_channels = self.hidden_channels if (conv_id != self.num_layers - 1) else self.out_channels
-            self.convs.append(gnn(_in_channels, _out_channels, **self._gnn_kwargs))
+            self.convs.append(gnn(_in_channels, _out_channels, **self.gnn_kwargs))
             if conv_id != self.num_layers - 1 or self.activate_last:
                 if self.use_bn:
                     self.bns.append(nn.BatchNorm1d(self.hidden_channels))
@@ -289,6 +314,8 @@ class GraphEncoder(nn.Module):
                     self.skips.append(nn.Linear(_in_channels, _out_channels))
 
     def reset_parameters(self):
+        if self.lin_x_0 is not None:
+            self.lin_x_0.reset_parameters()
         for conv in self.convs:
             conv.reset_parameters()
         for bn in self.bns:
@@ -299,6 +326,12 @@ class GraphEncoder(nn.Module):
         #  https://d2l.ai/chapter_convolutional-modern/resnet.html#residual-blocks
         #  https://github.com/rusty1s/pytorch_geometric/blob/master/examples/ppi.py#L30-L34
         #  https://github.com/snap-stanford/ogb/blob/master/examples/nodeproppred/arxiv/gnn.py#L69-L76
+        if self.use_x_0:
+            if self.lin_x_0 is not None:
+                x = act(self.lin_x_0(x), self.activation)
+                x = F.dropout(x, p=self.dropout_channels, training=self.training)
+            kwargs["x_0"] = x
+
         for i, conv in enumerate(self.convs):
             x_before_layer = x
             _edge_index, _edge_attr = dropout_adj_st(
@@ -316,10 +349,10 @@ class GraphEncoder(nn.Module):
         return x
 
     def __gnn_kwargs_repr__(self):
-        if len(self._gnn_kwargs) == 0:
+        if len(self.gnn_kwargs) == 0:
             return ""
         else:
-            return ", " + ", ".join([f"{k}={v}" for k, v in self._gnn_kwargs.items()])
+            return ", " + ", ".join([f"{k}={v}" for k, v in self.gnn_kwargs.items()])
 
     def __repr__(self):
         return "{}(conv={}, L={}, I={}, H={}, O={}, act={}, act_last={}, skip={}, bn={}{})".format(
@@ -581,7 +614,7 @@ class GlobalAttentionHalf(GlobalAttention):
 
 if __name__ == '__main__':
 
-    MODE = "MyFAConv"
+    MODE = "GraphEncoder"
 
     from pytorch_lightning import seed_everything
 
@@ -601,14 +634,14 @@ if __name__ == '__main__':
         _x = torch.ones(10 * 64).view(10, 64)
         _batch = torch.zeros(10).long()
         _batch[:4] = 1
-        cprint("-- sum w/ batch", "red")
+        cprint("-- sum w/ batch", "green")
         _z, _ = _ro(_x, _batch)
         print(_ro)
         print("_z", _z.size())  # [2, 64]
 
         _ro = Readout(readout_types="sum", use_in_mlp=True, use_out_linear=True,
                       num_in_layers=2, hidden_channels=64, out_channels=3)
-        cprint("-- sum w/ batch", "red")
+        cprint("-- sum w/ batch", "green")
         _z, _logits = _ro(_x, _batch)
         print(_ro)
         print("_z", _z.size())  # [2, 64]
@@ -616,7 +649,7 @@ if __name__ == '__main__':
 
         _ro = Readout(readout_types="mean-sum", use_in_mlp=True, use_out_linear=True,
                       num_in_layers=2, hidden_channels=64, out_channels=3)
-        cprint("-- mean-sum w/ batch", "red")
+        cprint("-- mean-sum w/ batch", "green")
         _z, _logits = _ro(_x, _batch)
         print(_ro)
         print("_z", _z.size())  # [2, 128]
@@ -636,11 +669,21 @@ if __name__ == '__main__':
 
     elif MODE == "GraphEncoder":
         enc = GraphEncoder(
-            layer_name="SAGEConv", num_layers=3, in_channels=32, hidden_channels=64, out_channels=128,
+            layer_name="FAConv", num_layers=3, in_channels=32, hidden_channels=64, out_channels=128,
             activation="relu", use_bn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
             activate_last=True,
         )
-        cprint(enc, "red")
+        cprint(enc, "green")
+        _x = torch.ones(10 * 32).view(10, -1)
+        _ei = torch.randint(0, 10, [2, 10])
+        print(enc(_x, _ei).size())
+
+        enc = GraphEncoder(
+            layer_name="FAConv", num_layers=3, in_channels=32, hidden_channels=32, out_channels=128,
+            activation="relu", use_bn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
+            activate_last=True,
+        )
+        cprint(enc, "green")
         _x = torch.ones(10 * 32).view(10, -1)
         _ei = torch.randint(0, 10, [2, 10])
         print(enc(_x, _ei).size())
@@ -650,7 +693,7 @@ if __name__ == '__main__':
             activation="elu", use_bn=True, use_skip=True, dropout_channels=0.0,
             activate_last=True, add_self_loops=False, heads=8,
         )
-        cprint(enc, "red")
+        cprint(enc, "green")
         print(enc(_x, _ei).size())
 
     elif MODE == "MyFAConv":
@@ -670,7 +713,7 @@ if __name__ == '__main__':
         _pte = torch.arange(11 * 32).view(11, 32).float()
         de = VersatileEmbedding(embedding_type="Pretrained", num_entities=11, num_channels=32,
                                 pretrained_embedding=_pte, freeze_pretrained=False)
-        cprint(de, "red")
+        cprint(de, "green")
         print("Embedding: {} +- {}".format(
             de.embedding.weight.mean().item(),
             de.embedding.weight.std().item(),

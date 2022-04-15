@@ -89,9 +89,12 @@ class GraphNeuralModel(LightningModule):
             in_channels = given_datamodule.num_channels_global
             out_channels = self.h.hidden_channels
 
-        # If weighted edges are using, need to use edge_dim for GATConv.
-        if given_datamodule.h.s2n_is_weighted and encoder_layer_name in ["GATConv"]:
-            layer_kwargs["edge_dim"] = 1
+        # If weighted edges are using, some models require special kwargs.
+        if given_datamodule.h.s2n_is_weighted:
+            if encoder_layer_name == "GATConv":
+                layer_kwargs["edge_dim"] = 1
+            elif encoder_layer_name == "FAConv":
+                layer_kwargs["normalize"] = False
 
         if self.h.encoder_layer_name == "LINKX":
             self.encoder = InductiveLINKX(
