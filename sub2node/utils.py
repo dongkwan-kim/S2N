@@ -219,7 +219,9 @@ def make_deterministic_everything(seed):
 
 
 def act(tensor, activation_name, **kwargs):
-    if activation_name == "relu":
+    if activation_name is None:
+        return tensor
+    elif activation_name == "relu":
         return F.relu(tensor, **kwargs)
     elif activation_name == "elu":
         return F.elu(tensor, **kwargs)
