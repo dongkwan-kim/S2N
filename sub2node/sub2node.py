@@ -22,7 +22,8 @@ class SubgraphToNode:
     _node_spl_mat = None
     _node_task_data_precursor = None
     _node_task_data_list: List[Data] = []
-    inv_sig = [0.000, 0.405, 0.847, 1.386, 2.197]  # math.log(y / (1 - y))
+    # out of math.log(y / (1 - y)) where y = 0.5 -- 0.95
+    inv_sig = [0.0, 0.201, 0.405, 0.619, 0.847, 1.099, 1.386, 1.735, 2.197, 2.944]
 
     def __init__(self,
                  global_data: Data,
@@ -331,7 +332,7 @@ if __name__ == '__main__':
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, CC, Coreness, CutRatio
 
-    MODE = "PPIBP"
+    MODE = "EMUser"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
 
@@ -356,18 +357,20 @@ if __name__ == '__main__':
             edge_aggr=dist_by_shared_nodes,
         )
         print(s2n)
-        """ Inverse sigmoid table 0.5 -- 0.9,
-            SubgraphToNode.inv_sig = [0.000, 0.405, 0.847, 1.386, 2.197]
+        """ Inverse sigmoid table 0.5 -- 0.95,
+        inv_sig = [0.0, 0.201, 0.405, 0.619, 0.847, 1.099, 1.386, 1.735, 2.197, 2.944]
         """
         # standardize_then_thres_max_linear, standardize_then_thres_max_power
-        ntds = s2n.node_task_data_splits(
-            edge_normalize="standardize_then_thres_max_linear",
-            edge_normalize_args=[SubgraphToNode.inv_sig[4]],
-            edge_thres=0.0,
-            save=True,
-        )
-        for _d in ntds:
-            print(_d, "density", _d.edge_index.size(1) / (_d.num_nodes ** 2))
+        for i in range(len(SubgraphToNode.inv_sig)):
+            ntds = s2n.node_task_data_splits(
+                edge_normalize="standardize_then_thres_max_linear",
+                edge_normalize_args=[SubgraphToNode.inv_sig[i]],
+                edge_thres=0.0,
+                save=True,
+            )
+            for _d in ntds:
+                print(_d, "density", _d.edge_index.size(1) / (_d.num_nodes ** 2))
+            s2n._node_task_data_list = []  # flush
 
     elif MODE == "TEST":
         _global_data = from_networkx(nx.path_graph(10))
