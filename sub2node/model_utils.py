@@ -96,7 +96,13 @@ class MyFAConv(FAConv):
 
 
 class MyGCN2Conv(GCN2Conv):
-
+    """
+    Examples are
+        https://github.com/pyg-team/pytorch_geometric/blob/master/examples/gcn2_cora.py
+        https://github.com/pyg-team/pytorch_geometric/blob/master/examples/gcn2_ppi.py
+    Docs is
+        https://pytorch-geometric.readthedocs.io/en/latest/modules/nn.html#torch_geometric.nn.conv.GCN2Conv
+    """
     def __init__(self, in_channels: int, out_channels: int,
                  alpha: float, theta: float = None,
                  layer: int = None, shared_weights: bool = True,
