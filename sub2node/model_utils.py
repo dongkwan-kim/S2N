@@ -95,6 +95,32 @@ class MyFAConv(FAConv):
                                                self.channels, self.out.out_features, self.eps)
 
 
+class MyGCN2Conv(GCN2Conv):
+
+    def __init__(self, in_channels: int, out_channels: int,
+                 alpha: float, theta: float = None,
+                 layer: int = None, shared_weights: bool = True,
+                 cached: bool = False, add_self_loops: bool = True,
+                 normalize: bool = True, **kwargs):
+        super().__init__(in_channels, alpha, theta, layer, shared_weights, cached,
+                         add_self_loops, normalize, **kwargs)
+        self.out = Linear(in_channels, out_channels, bias=False) if in_channels != out_channels else None
+
+    def forward(self, x: Tensor, edge_index: Adj, edge_weight: OptTensor = None,
+                x_0: OptTensor = None) -> Tensor:
+        if self.normalize:
+            edge_index, edge_weight = clear_edge_attr(self, edge_index, edge_weight, "normalize=True")
+        x = super().forward(x=x, x_0=x_0, edge_index=edge_index, edge_weight=edge_weight)
+        return self.out(x) if self.out is not None else x
+
+    def __repr__(self):
+        if self.out is None:
+            return super().__repr__()
+        else:
+            return '{}({}, {}, alpha={}, beta={})'.format(
+                self.__class__.__name__, self.channels, self.out.out_features, self.alpha, self.beta)
+
+
 class PositionalEncoding(nn.Module):
 
     def __init__(self, max_len, num_channels, dropout=0.0):
@@ -241,6 +267,7 @@ def get_gnn_conv_and_kwargs(gnn_name, **kwargs):
         "SAGEConv": SAGEConv,
         "GATConv": MyGATConv,
         "FAConv": MyFAConv,
+        "GCN2Conv": MyGCN2Conv,
         "Linear": MyLinear,
     }[gnn_name]
     gkw = merge_dict_by_keys({}, kwargs, inspect.getfullargspec(gnn_cls.__init__).args)
@@ -597,7 +624,7 @@ class GlobalAttentionHalf(GlobalAttention):
 
 if __name__ == '__main__':
 
-    MODE = "GraphEncoder"
+    MODE = "MyGCN2Conv"
 
     from pytorch_lightning import seed_everything
 
@@ -686,11 +713,24 @@ if __name__ == '__main__':
 
         _fac = MyFAConv(32, 32)
         print(_fac)
-        print(_fac(_x, _ei).size())
+        print(_fac(_x, _ei, x_0=_x).size())
 
         _fac = MyFAConv(32, 7)
         print(_fac)
-        print(_fac(_x, _ei).size())
+        print(_fac(_x, _ei, x_0=_x).size())
+
+    elif MODE == "MyGCN2Conv":
+
+        _x = torch.ones(10 * 32).view(10, -1)
+        _ei = torch.randint(0, 10, [2, 10])
+
+        _fac = MyGCN2Conv(32, 32, alpha=0.1, theta=0.5, layer=1)
+        print(_fac)
+        print(_fac(_x, _ei, x_0=_x).size())
+
+        _fac = MyGCN2Conv(32, 7, alpha=0.5, theta=1.0, layer=1)
+        print(_fac)
+        print(_fac(_x, _ei, x_0=_x).size())
 
     elif MODE == "VersatileEmbedding":
         _pte = torch.arange(11 * 32).view(11, 32).float()
