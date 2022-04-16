@@ -10,8 +10,9 @@ import math
 
 from termcolor import cprint
 from torch import Tensor
+from torch.nn import Linear
 from torch_geometric.nn.glob import global_mean_pool, global_max_pool, global_add_pool
-from torch_geometric.nn import GlobalAttention, GCNConv, SAGEConv, GATConv, FAConv
+from torch_geometric.nn import GlobalAttention, GCNConv, SAGEConv, GATConv, FAConv, GCN2Conv
 from torch_geometric.typing import OptTensor, Adj
 from torch_scatter import scatter_add
 from torch_sparse import SparseTensor
@@ -29,13 +30,24 @@ class EPSILON(object):
         return self.__add__(other)
 
 
-class MyLinear(nn.Linear):
+class MyLinear(Linear):
 
     def __init__(self, in_features: int, out_features: int):
         super().__init__(in_features, out_features)
 
     def forward(self, x, *args, **kwargs):
         return super(MyLinear, self).forward(x)
+
+
+def clear_edge_attr(self: nn.Module, edge_index, edge_weight, condition_str):
+    if edge_weight is not None or (isinstance(edge_index, SparseTensor) and edge_index.has_value()):
+        cprint(f"Warning: {self.__class__.__base__.__name__} cannot use edge_weight with {condition_str}, "
+               f"but {self.__class__.__name__} overwrites edge_weight to None.", "red")
+    edge_weight = None
+    if isinstance(edge_index, SparseTensor):
+        edge_index: SparseTensor
+        edge_index.set_value_(None)
+    return edge_index, edge_weight
 
 
 class MyGATConv(GATConv):
@@ -54,38 +66,23 @@ class MyGATConv(GATConv):
 
     def forward(self, x, edge_index, edge_attr, size=None, return_attention_weights=None):
         if self.edge_dim is None:
-            if edge_attr is not None or (isinstance(edge_index, SparseTensor) and edge_index.has_value()):
-                cprint(f"Warning: GATConv cannot use edge_weight with edge_dim=None, "
-                       f"but {self.__class__.__name__} overwrites edge_attr to None.", "red")
-            edge_attr = None
-            if isinstance(edge_index, SparseTensor):
-                edge_index: SparseTensor
-                edge_index.set_value_(None)
+            edge_index, edge_attr = clear_edge_attr(self, edge_index, edge_attr, "edge_dim=None")
         return super().forward(x, edge_index, edge_attr, size, return_attention_weights)
 
 
 class MyFAConv(FAConv):
 
-    def __init__(self, in_channels, out_channels,
+    def __init__(self, in_channels: int, out_channels: int,
                  eps: float = 0.1, dropout: float = 0.0,
                  cached: bool = False, add_self_loops: bool = True,
                  normalize: bool = True, **kwargs):
         super().__init__(in_channels, eps, dropout, cached, add_self_loops, normalize, **kwargs)
-        if in_channels != out_channels:
-            self.out: nn.Linear = nn.Linear(in_channels, out_channels, bias=False)
-        else:
-            self.out = None
+        self.out = Linear(in_channels, out_channels, bias=False) if in_channels != out_channels else None
 
     def forward(self, x: Tensor, edge_index: Adj, edge_weight: OptTensor = None,
-                x_0: Tensor = None, return_attention_weights=None):
+                x_0: OptTensor = None, return_attention_weights=None):
         if self.normalize:
-            if edge_weight is not None or (isinstance(edge_index, SparseTensor) and edge_index.has_value()):
-                cprint(f"Warning: FAConv cannot use edge_weight with normalize=True, "
-                       f"but {self.__class__.__name__} overwrites edge_weight to None.", "red")
-            edge_weight = None
-            if isinstance(edge_index, SparseTensor):
-                edge_index: SparseTensor
-                edge_index.set_value_(None)
+            edge_index, edge_weight = clear_edge_attr(self, edge_index, edge_weight, "normalize=True")
         x = super().forward(x=x, x_0=x_0, edge_index=edge_index, edge_weight=edge_weight,
                             return_attention_weights=return_attention_weights)
         return self.out(x) if self.out is not None else x
@@ -165,9 +162,9 @@ class MLP(nn.Module):
 
         for i in range(num_layers - 1):
             if i == 0:
-                layers.append(nn.Linear(in_channels, hidden_channels))
+                layers.append(Linear(in_channels, hidden_channels))
             else:
-                layers.append(nn.Linear(hidden_channels, hidden_channels))
+                layers.append(Linear(hidden_channels, hidden_channels))
             if use_bn:
                 layers.append(nn.BatchNorm1d(hidden_channels))
             layers.append(Activation(activation))
@@ -175,9 +172,9 @@ class MLP(nn.Module):
                 layers.append(nn.Dropout(p=dropout))
 
         if num_layers != 1:
-            layers.append(nn.Linear(hidden_channels, out_channels))
+            layers.append(Linear(hidden_channels, out_channels))
         else:  # single-layer
-            layers.append(nn.Linear(in_channels, out_channels))
+            layers.append(Linear(in_channels, out_channels))
 
         if self.activate_last:
             if use_bn:
@@ -239,28 +236,14 @@ class Activation(nn.Module):
 
 
 def get_gnn_conv_and_kwargs(gnn_name, **kwargs):
-    gkw = {}
-    if gnn_name == "GCNConv":
-        gnn_cls = GCNConv
-        gkw = merge_dict_by_keys(gkw, kwargs, ["add_self_loops"])
-    elif gnn_name == "SAGEConv":
-        gnn_cls = SAGEConv
-    elif gnn_name == "GATConv":
-        gnn_cls = MyGATConv
-        gkw = merge_dict_by_keys(
-            gkw, kwargs,
-            ["add_self_loops", "heads", "dropout", "edge_dim"],
-        )
-    elif gnn_name == "FAConv":
-        gnn_cls = MyFAConv
-        gkw = merge_dict_by_keys(
-            gkw, kwargs,
-            ["eps", "add_self_loops", "dropout", "normalize"],
-        )
-    elif gnn_name == "Linear":
-        gnn_cls = MyLinear
-    else:
-        raise ValueError(f"Wrong gnn conv name: {gnn_name}")
+    gnn_cls = {
+        "GCNConv": GCNConv,
+        "SAGEConv": SAGEConv,
+        "GATConv": MyGATConv,
+        "FAConv": MyFAConv,
+        "Linear": MyLinear,
+    }[gnn_name]
+    gkw = merge_dict_by_keys({}, kwargs, inspect.getfullargspec(gnn_cls.__init__).args)
     return gnn_cls, gkw
 
 
@@ -298,7 +281,7 @@ class GraphEncoder(nn.Module):
         if self.use_x_0:
             if (self.in_channels == self.hidden_channels and self.force_lin_x_0) or \
                     (self.in_channels != self.hidden_channels):
-                self.lin_x_0 = nn.Linear(self.in_channels, self.hidden_channels)
+                self.lin_x_0 = Linear(self.in_channels, self.hidden_channels)
             in_conv_channels = self.hidden_channels
         else:
             in_conv_channels = self.in_channels
@@ -311,7 +294,7 @@ class GraphEncoder(nn.Module):
                 if self.use_bn:
                     self.bns.append(nn.BatchNorm1d(self.hidden_channels))
                 if self.use_skip:
-                    self.skips.append(nn.Linear(_in_channels, _out_channels))
+                    self.skips.append(Linear(_in_channels, _out_channels))
 
     def reset_parameters(self):
         if self.lin_x_0 is not None:
@@ -439,7 +422,7 @@ class Readout(nn.Module):
             assert hidden_channels is not None
             assert out_channels is not None
             num_readout_types = len(self.readout_types.split("-"))
-            self.out_linear = nn.Linear(
+            self.out_linear = Linear(
                 num_readout_types * hidden_channels,
                 out_channels,
             )
@@ -507,7 +490,7 @@ class DeepSets(nn.Module):
         self.aggr = aggr or "sum"  # e.g., mean, max, sum, mean-max, ...,
         self.att = None
         if aggr == "attention":
-            self.att = GlobalAttention(nn.Linear(encoder.out_channels, 1))
+            self.att = GlobalAttention(Linear(encoder.out_channels, 1))
 
     def aggregate(self, x, batch):
         if self.att is None:
@@ -676,7 +659,7 @@ if __name__ == '__main__':
         cprint(enc, "green")
         _x = torch.ones(10 * 32).view(10, -1)
         _ei = torch.randint(0, 10, [2, 10])
-        print(enc(_x, _ei).size())
+        print(enc(_x, _ei, _ei[0].float()).size())
 
         enc = GraphEncoder(
             layer_name="FAConv", num_layers=3, in_channels=32, hidden_channels=32, out_channels=128,
