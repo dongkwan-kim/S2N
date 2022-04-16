@@ -120,6 +120,13 @@ class MyGCN2Conv(GCN2Conv):
             return '{}({}, {}, alpha={}, beta={})'.format(
                 self.__class__.__name__, self.channels, self.out.out_features, self.alpha, self.beta)
 
+    @classmethod
+    def __construct_init_kwargs__(cls, **kwargs):
+        kwargs = merge_dict_by_keys({}, kwargs, inspect.getfullargspec(cls.__init__).args)
+        if "theta" not in kwargs and "layer" in kwargs:
+            del kwargs["layer"]
+        return kwargs
+
 
 class PositionalEncoding(nn.Module):
 
@@ -316,7 +323,12 @@ class GraphEncoder(nn.Module):
         for conv_id in range(self.num_layers):
             _in_channels = in_conv_channels if conv_id == 0 else self.hidden_channels
             _out_channels = self.hidden_channels if (conv_id != self.num_layers - 1) else self.out_channels
-            self.convs.append(gnn(_in_channels, _out_channels, **self.gnn_kwargs))
+
+            layer_kwargs = self.gnn_kwargs
+            if hasattr(gnn, "__construct_init_kwargs__"):
+                layer_kwargs = gnn.__construct_init_kwargs__(**self.gnn_kwargs, layer=conv_id + 1)
+
+            self.convs.append(gnn(_in_channels, _out_channels, **layer_kwargs))
             if conv_id != self.num_layers - 1 or self.activate_last:
                 if self.use_bn:
                     self.bns.append(nn.BatchNorm1d(self.hidden_channels))
@@ -624,7 +636,7 @@ class GlobalAttentionHalf(GlobalAttention):
 
 if __name__ == '__main__':
 
-    MODE = "MyGCN2Conv"
+    MODE = "GraphEncoder"
 
     from pytorch_lightning import seed_everything
 
@@ -679,14 +691,32 @@ if __name__ == '__main__':
 
     elif MODE == "GraphEncoder":
         enc = GraphEncoder(
-            layer_name="FAConv", num_layers=3, in_channels=32, hidden_channels=64, out_channels=128,
+            layer_name="GCN2Conv", num_layers=3, in_channels=32, hidden_channels=64, out_channels=128,
             activation="relu", use_bn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
             activate_last=True,
+            alpha=0.5, theta=1.0, shared_weights=False,
         )
         cprint(enc, "green")
         _x = torch.ones(10 * 32).view(10, -1)
         _ei = torch.randint(0, 10, [2, 10])
         print(enc(_x, _ei, _ei[0].float()).size())
+
+        enc = GraphEncoder(
+            layer_name="GCN2Conv", num_layers=3, in_channels=32, hidden_channels=64, out_channels=128,
+            activation="relu", use_bn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
+            activate_last=True,
+            alpha=0.5, shared_weights=True,
+        )
+        cprint(enc, "green")
+        print(enc(_x, _ei).size())
+
+        enc = GraphEncoder(
+            layer_name="FAConv", num_layers=3, in_channels=32, hidden_channels=64, out_channels=128,
+            activation="relu", use_bn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
+            activate_last=True,
+        )
+        cprint(enc, "green")
+        print(enc(_x, _ei).size())
 
         enc = GraphEncoder(
             layer_name="FAConv", num_layers=3, in_channels=32, hidden_channels=32, out_channels=128,
