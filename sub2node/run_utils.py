@@ -215,9 +215,8 @@ def aggregate_csv_metrics(in_path, out_path,
         "model/weight_decay",
         "model/dropout_channels",
         "model/dropout_edges",
-        "model/use_bn",
+        "model/layer_kwargs",
         "model/use_skip",
-        "model/hidden_channels",
         "trainer/gradient_clip_val",
     ]
     path_hparams = path_hparams or key_hparams[:1]
