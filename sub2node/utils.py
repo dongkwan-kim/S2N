@@ -244,7 +244,7 @@ def count_parameters(model: nn.Module):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-def spspmm_quad(m_index, m_value, a_index, a_value, k, n) -> Tuple[Tensor, Tensor]:
+def spspmm_quad(m_index, m_value, a_index, a_value, k, n, coalesced=False) -> Tuple[Tensor, Tensor]:
     """
     :param m_index: sparse matrix indices of (k, n) shape
     :param m_value: values of M
@@ -252,14 +252,15 @@ def spspmm_quad(m_index, m_value, a_index, a_value, k, n) -> Tuple[Tensor, Tenso
     :param a_value: values of A
     :param k: the first dimension of M
     :param n: the second dimension of M
+    :param coalesced: If set to :obj:`True`, will coalesce both input sparse matrices.
     :return: indices and values of M * A * M^T, a sparse matrix of (k, k) shape
     """
     # (k, n) --> (n, k)
     m_t, m_t_values = torch_sparse.transpose(m_index, m_value, k, n)
     # (k, n) * (n * n) --> (k, n)
-    ma_index, ma_values = torch_sparse.spspmm(m_index, m_value, a_index, a_value, k, n, n)
+    ma_index, ma_values = torch_sparse.spspmm(m_index, m_value, a_index, a_value, k, n, n, coalesced=coalesced)
     # (k, n) * (n, k) --> (k, k)
-    return torch_sparse.spspmm(ma_index, ma_values, m_t, m_t_values, k, n, k)
+    return torch_sparse.spspmm(ma_index, ma_values, m_t, m_t_values, k, n, k, coalesced=coalesced)
 
 
 def to_symmetric_matrix(matrix: torch.Tensor, direction="upper2lower"):

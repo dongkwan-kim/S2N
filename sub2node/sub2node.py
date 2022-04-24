@@ -164,7 +164,7 @@ class SubgraphToNode:
 
         # unnormalized_ewmat = M * A * M^T
         unnorm_ewmat_index, unnorm_ewmat_value = spspmm_quad(
-            m_index, m_value, a_index, a_value, self.S, self.N)
+            m_index, m_value, a_index, a_value, self.S, self.N, coalesced=True)
         dense_unnorm_ewmat = to_dense_adj(
             unnorm_ewmat_index, edge_attr=unnorm_ewmat_value).squeeze()
         return dense_unnorm_ewmat
@@ -332,9 +332,11 @@ if __name__ == '__main__':
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, CC, Coreness, CutRatio
 
-    MODE = "EMUser"
+    MODE = "HPOMetab"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
+    PURPOSE = "ONCE"
+    # INV_SIG, ONCE
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
     E_TYPE = "graphsaint_gcn"
@@ -353,24 +355,36 @@ if __name__ == '__main__':
             path=f"{PATH}/{MODE.upper()}/sub2node/",
             undirected=True,
             splits=dts.splits,
-            target_matrix="adjacent_no_self_loops",  # adjacent_with_self_loops, adjacent_no_self_loops
+            target_matrix="adjacent_with_self_loops",  # adjacent_with_self_loops, adjacent_no_self_loops
             edge_aggr=dist_by_shared_nodes,
         )
         print(s2n)
         """ Inverse sigmoid table 0.5 -- 0.95,
         inv_sig = [0.0, 0.201, 0.405, 0.619, 0.847, 1.099, 1.386, 1.735, 2.197, 2.944]
         """
-        # standardize_then_thres_max_linear, standardize_then_thres_max_power
-        for i in range(len(SubgraphToNode.inv_sig)):
+        if PURPOSE == "INV_SIG":
+            # standardize_then_thres_max_linear, standardize_then_thres_max_power
+            for i in range(len(SubgraphToNode.inv_sig)):
+                ntds = s2n.node_task_data_splits(
+                    edge_normalize="standardize_then_thres_max_linear",
+                    edge_normalize_args=[SubgraphToNode.inv_sig[i]],
+                    edge_thres=0.0,
+                    save=True,
+                )
+                for _d in ntds:
+                    print(_d, "density", _d.edge_index.size(1) / (_d.num_nodes ** 2))
+                s2n._node_task_data_list = []  # flush
+        elif PURPOSE == "ONCE":
             ntds = s2n.node_task_data_splits(
                 edge_normalize="standardize_then_thres_max_linear",
-                edge_normalize_args=[SubgraphToNode.inv_sig[i]],
+                edge_normalize_args=[0.314],
                 edge_thres=0.0,
                 save=True,
             )
             for _d in ntds:
                 print(_d, "density", _d.edge_index.size(1) / (_d.num_nodes ** 2))
-            s2n._node_task_data_list = []  # flush
+        else:
+            raise ValueError(f"Wrong purpose: {PURPOSE}")
 
     elif MODE == "TEST":
         _global_data = from_networkx(nx.path_graph(10))
