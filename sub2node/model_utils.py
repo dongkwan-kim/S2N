@@ -11,6 +11,7 @@ import math
 from termcolor import cprint
 from torch import Tensor
 from torch.nn import Linear
+from torch_geometric.nn.conv.gcn_conv import gcn_norm
 from torch_geometric.nn.glob import global_mean_pool, global_max_pool, global_add_pool
 from torch_geometric.nn import GlobalAttention, GCNConv, SAGEConv, GATConv, FAConv, GCN2Conv
 from torch_geometric.typing import OptTensor, Adj
@@ -114,8 +115,6 @@ class MyGCN2Conv(GCN2Conv):
 
     def forward(self, x: Tensor, edge_index: Adj, edge_weight: OptTensor = None,
                 x_0: OptTensor = None) -> Tensor:
-        if self.normalize:
-            edge_index, edge_weight = clear_edge_attr(self, edge_index, edge_weight, "normalize=True")
         x = super().forward(x=x, x_0=x_0, edge_index=edge_index, edge_weight=edge_weight)
         return self.out(x) if self.out is not None else x
 
