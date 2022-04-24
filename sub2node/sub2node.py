@@ -22,8 +22,6 @@ class SubgraphToNode:
     _node_spl_mat = None
     _node_task_data_precursor = None
     _node_task_data_list: List[Data] = []
-    # out of math.log(y / (1 - y)) where y = 0.5 -- 0.95
-    inv_sig = [0.0, 0.201, 0.405, 0.619, 0.847, 1.099, 1.386, 1.735, 2.197, 2.944]
 
     def __init__(self,
                  global_data: Data,
@@ -332,11 +330,13 @@ if __name__ == '__main__':
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, CC, Coreness, CutRatio
 
-    MODE = "HPOMetab"
+    MODE = "EMUser"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
-    PURPOSE = "ONCE"
-    # INV_SIG, ONCE
+    PURPOSE = "MANY"
+    # MANY, ONCE
+    TARGET_MATRIX = "adjacent_with_self_loops"
+    # adjacent_with_self_loops, adjacent_no_self_loops
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
     E_TYPE = "graphsaint_gcn"
@@ -355,19 +355,20 @@ if __name__ == '__main__':
             path=f"{PATH}/{MODE.upper()}/sub2node/",
             undirected=True,
             splits=dts.splits,
-            target_matrix="adjacent_with_self_loops",  # adjacent_with_self_loops, adjacent_no_self_loops
+            target_matrix=TARGET_MATRIX,
             edge_aggr=dist_by_shared_nodes,
         )
         print(s2n)
         """ Inverse sigmoid table 0.5 -- 0.95,
         inv_sig = [0.0, 0.201, 0.405, 0.619, 0.847, 1.099, 1.386, 1.735, 2.197, 2.944]
         """
-        if PURPOSE == "INV_SIG":
+        if PURPOSE == "MANY":
             # standardize_then_thres_max_linear, standardize_then_thres_max_power
-            for i in range(len(SubgraphToNode.inv_sig)):
+            for i in [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75,
+                      2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
                 ntds = s2n.node_task_data_splits(
                     edge_normalize="standardize_then_thres_max_linear",
-                    edge_normalize_args=[SubgraphToNode.inv_sig[i]],
+                    edge_normalize_args=[i],
                     edge_thres=0.0,
                     save=True,
                 )
