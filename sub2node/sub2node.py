@@ -3,7 +3,7 @@ import multiprocessing as mp
 from collections import Counter
 from pathlib import Path
 from pprint import pprint
-from typing import List, Callable, Union, Tuple
+from typing import List, Callable, Union, Tuple, Dict
 
 from termcolor import cprint
 import networkx as nx
@@ -188,6 +188,7 @@ class SubgraphToNode:
                               edge_normalize: Union[str, Callable, None] = None,
                               edge_normalize_args: Union[List, None] = None,
                               edge_thres: Union[float, Callable, List[float]] = 1.0,
+                              use_consistent_processing=False,
                               save=True) -> Tuple[Data, Data, Data]:
         """
         :return: Data(x=[N, 1], edge_index=[2, E], edge_attr=[E], y=[C], batch=[N])
@@ -200,7 +201,8 @@ class SubgraphToNode:
         str_et = edge_thres.__name__ if isinstance(edge_thres, Callable) else edge_thres
         str_en = '-'.join([edge_normalize.__name__ if isinstance(edge_normalize, Callable) else edge_normalize] +
                           [str(round(a, 3)) for a in edge_normalize_args])  # todo: general repr for args
-        path = self.path / f"{self.node_task_name}_node_task_data_e{str_et}_n{str_en}.pth"
+        path = self.path / (f"{self.node_task_name}_node_task_data"
+                            f"_et={str_et}_en={str_en}_ucp={use_consistent_processing}.pth")
         try:
             self._node_task_data_list = torch.load(path)
             cprint(f"Load: {self._node_task_data_list} at {path}", "green")
@@ -215,6 +217,7 @@ class SubgraphToNode:
         node_task_data_precursor = self.node_task_data_precursor(save)
         ew_mat = node_task_data_precursor.edge_weight_matrix
 
+        edge_norm_kws = {}
         for i, (s, et) in enumerate(zip(self.splits, edge_thres)):
             x, y, batch, ptr = try_getattr(node_task_data_precursor,
                                            ["x", "y", "batch", "ptr"], as_dict=False)
@@ -232,7 +235,10 @@ class SubgraphToNode:
 
             ew_mat_s_by_s = ew_mat.clone()[:s, :s]
             if edge_normalize is not None:
-                ew_mat_s_by_s = edge_normalize(ew_mat_s_by_s)
+                if use_consistent_processing:
+                    ew_mat_s_by_s, edge_norm_kws = edge_normalize(ew_mat_s_by_s, **edge_norm_kws)
+                else:
+                    ew_mat_s_by_s, edge_norm_kws = edge_normalize(ew_mat_s_by_s)
             # Remove ew_mat below than edge_thres
             et = et(ew_mat_s_by_s) if isinstance(et, Callable) else et
             ew_mat_s_by_s[ew_mat_s_by_s < et] = 0
@@ -287,39 +293,28 @@ def dist_by_shared_nodes(node_spl_mat):
 
 
 def func_normalize(normalize_type: str, *args):
-    def _func(matrix: Tensor) -> Tensor:
-        if normalize_type == "min_max":
-            mn, mx = torch.min(matrix), torch.max(matrix)
-            matrix = (matrix - mn) / (mx - mn)
-        elif normalize_type == "min_max_excl_diag":
-            matrix = matrix - torch.diag(torch.diagonal(matrix))
-            mn, mx = torch.min(matrix), torch.max(matrix)
-            matrix = (matrix - mn) / (mx - mn)
-            matrix = matrix + torch.eye(matrix.size(0))
-        elif normalize_type == "sig_standardize":
-            matrix = (matrix - torch.mean(matrix)) / torch.std(matrix)
-            matrix = torch.sigmoid(matrix)
-        elif normalize_type == "sig_standardize_excl_diag":
-            matrix = matrix - torch.diag(torch.diagonal(matrix))
-            matrix = (matrix - torch.mean(matrix)) / torch.std(matrix)
-            matrix = torch.sigmoid(matrix) + torch.eye(matrix.size(0))
-        elif normalize_type == "standardize":
-            matrix = (matrix - torch.mean(matrix)) / torch.std(matrix)
-        elif normalize_type == "standardize_excl_diag":
-            raise NotImplementedError
-        elif normalize_type == "standardize_then_thres_max_linear":
+    def _func(matrix: Tensor, **kws) -> (Tensor, Dict):
+        if normalize_type == "standardize_then_thres_max_linear":
             assert len(args) == 1, f"Wrong args: {args}"
+            if len(kws) == 0:
+                kws = {"mean": torch.mean(matrix),
+                       "std": torch.std(matrix),
+                       "max": torch.max(matrix)}
             thres = args[0]
-            matrix = (matrix - torch.mean(matrix)) / torch.std(matrix)
-            matrix = (matrix - thres) / (torch.max(matrix) - thres)
+            matrix = (matrix - kws["mean"]) / kws["std"]
+            matrix = (matrix - thres) / (kws["max"] - thres)
         elif normalize_type == "standardize_then_thres_max_power":
             assert len(args) == 2, f"Wrong args: {args}"
+            if len(kws) == 0:
+                kws = {"mean": torch.mean(matrix),
+                       "std": torch.std(matrix),
+                       "max": torch.max(matrix)}
             thres, p = args[0], args[1]
-            matrix = (matrix - torch.mean(matrix)) / torch.std(matrix)
-            matrix = (matrix.relu_() ** p - thres ** p) / (torch.max(matrix) ** p - thres ** p)
+            matrix = (matrix - kws["mean"]) / kws["std"]
+            matrix = (matrix.relu_() ** p - thres ** p) / (kws["max"] ** p - thres ** p)
         else:
             raise ValueError(f"Wrong type: {normalize_type}")
-        return matrix
+        return matrix, kws
 
     _func.__name__ = f"normalize_{normalize_type}"
 
@@ -330,12 +325,12 @@ if __name__ == '__main__':
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, CC, Coreness, CutRatio
 
-    MODE = "EMUser"
+    MODE = "HPONeuro"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
     PURPOSE = "MANY"
     # MANY, ONCE
-    TARGET_MATRIX = "adjacent_with_self_loops"
+    TARGET_MATRIX = "adjacent_no_self_loops"
     # adjacent_with_self_loops, adjacent_no_self_loops
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
@@ -370,6 +365,7 @@ if __name__ == '__main__':
                     edge_normalize="standardize_then_thres_max_linear",
                     edge_normalize_args=[i],
                     edge_thres=0.0,
+                    use_consistent_processing=True,
                     save=True,
                 )
                 for _d in ntds:
@@ -380,6 +376,7 @@ if __name__ == '__main__':
                 edge_normalize="standardize_then_thres_max_linear",
                 edge_normalize_args=[0.314],
                 edge_thres=0.0,
+                use_consistent_processing=False,
                 save=True,
             )
             for _d in ntds:
@@ -388,6 +385,7 @@ if __name__ == '__main__':
             raise ValueError(f"Wrong purpose: {PURPOSE}")
 
     elif MODE == "TEST":
+        # Probably deprecated snippets
         _global_data = from_networkx(nx.path_graph(10))
         _subgraph_data_list = [
             Data(x=torch.Tensor([0, 1]).long().view(-1, 1),

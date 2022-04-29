@@ -109,6 +109,7 @@ class SubgraphDataModule(LightningDataModule):
                 edge_normalize_args=[getattr(self.h, f"edge_normalize_arg_{i}") for i in range(1, 3)
                                      if getattr(self.h, f"edge_normalize_arg_{i}", None) is not None],
                 edge_thres=self.h.edge_thres,
+                use_consistent_processing=self.h.use_consistent_processing,
             )
             transform_list = []
             if not self.h.s2n_is_weighted:
