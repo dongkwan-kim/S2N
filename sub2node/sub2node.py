@@ -5,6 +5,7 @@ from pathlib import Path
 from pprint import pprint
 from typing import List, Callable, Union, Tuple, Dict
 
+import numpy as np
 from termcolor import cprint
 import networkx as nx
 import torch
@@ -259,14 +260,24 @@ class SubgraphToNode:
 
     @staticmethod
     def print_mat_stat(matrix, start=None, print_counter=False):
+        _decimal = 5
+        _mean = lambda t: round(torch.mean(t).item(), _decimal)
+        _std = lambda t: round(torch.std(t).item(), _decimal)
+        _min = lambda t: round(torch.min(t).item(), _decimal)
+        _median = lambda t: round(torch.median(t).item(), _decimal)
+        _1q = lambda t: round(torch.quantile(t, 0.25).item(), _decimal)
+        _3q = lambda t: round(torch.quantile(t, 0.75).item(), _decimal)
+        _max = lambda t: round(torch.max(t).item(), _decimal)
         if start:
             cprint(start, "green")
         matrix_pos = matrix[matrix > 0]
         print(
-            f"\tmean / std = {torch.mean(matrix)} / {torch.std(matrix)} \n"
-            f"\tmin / median / max = {torch.min(matrix)} / {torch.median(matrix)} / {torch.max(matrix)} \n"
-            f"\tmean+ / std+ = {torch.mean(matrix_pos)} / {torch.std(matrix_pos)} \n"
-            f"\tmin+ / median+ = {torch.min(matrix_pos)} / {torch.median(matrix_pos)} \n"
+            f"\tmean / std = {_mean(matrix)} / {_std(matrix)} \n"
+            f"\tmin / 1q / median / 3q / max = {_min(matrix)} / {_1q(matrix)} / {_median(matrix)}"
+            f" / {_3q(matrix)} / {_max(matrix)} \n"
+            f"\tmean+ / std+ = {_mean(matrix_pos)} / {_std(matrix_pos)} \n"
+            f"\tmin+ / 1q+ / median+ / 3q+ / max+ = {_min(matrix_pos)} / {_1q(matrix_pos)} / {_median(matrix_pos)}"
+            f" / {_3q(matrix_pos)} / {_max(matrix_pos)} \n"
             f"\tN = {matrix.numel()}, N+ = {(matrix > 0).sum().item()}, "
             f"d = {(matrix > 0).sum().item() / matrix.numel()}"
         )
@@ -294,21 +305,25 @@ def dist_by_shared_nodes(node_spl_mat):
 
 def func_normalize(normalize_type: str, *args):
     def _func(matrix: Tensor, **kws) -> (Tensor, Dict):
+        if len(kws) == 0:
+            kws = {"mean": torch.mean(matrix),
+                   "std": torch.std(matrix),
+                   "max": torch.max(matrix)}
         if normalize_type == "standardize_then_thres_max_linear":
             assert len(args) == 1, f"Wrong args: {args}"
-            if len(kws) == 0:
-                kws = {"mean": torch.mean(matrix),
-                       "std": torch.std(matrix),
-                       "max": torch.max(matrix)}
             thres = args[0]
             matrix = (matrix - kws["mean"]) / kws["std"]
             matrix = (matrix - thres) / (kws["max"] - thres)
+        elif normalize_type == "standardize_then_trunc_thres_max_linear":
+            assert len(args) == 2, f"Wrong args: {args}"
+            assert args[1] > 0
+            thres, trunc_diff = args[0], args[1]
+            trunc_val = thres + trunc_diff
+            matrix = (matrix - kws["mean"]) / kws["std"]
+            matrix[matrix >= trunc_val] = trunc_val
+            matrix = (matrix - thres) / (trunc_val - thres)
         elif normalize_type == "standardize_then_thres_max_power":
             assert len(args) == 2, f"Wrong args: {args}"
-            if len(kws) == 0:
-                kws = {"mean": torch.mean(matrix),
-                       "std": torch.std(matrix),
-                       "max": torch.max(matrix)}
             thres, p = args[0], args[1]
             matrix = (matrix - kws["mean"]) / kws["std"]
             matrix = (matrix.relu_() ** p - thres ** p) / (kws["max"] ** p - thres ** p)
@@ -325,12 +340,12 @@ if __name__ == '__main__':
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, CC, Coreness, CutRatio
 
-    MODE = "HPONeuro"
+    MODE = "EMUser"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
-    PURPOSE = "MANY"
+    PURPOSE = "MANY_2"
     # MANY, ONCE
-    TARGET_MATRIX = "adjacent_no_self_loops"
+    TARGET_MATRIX = "adjacent_with_self_loops"
     # adjacent_with_self_loops, adjacent_no_self_loops
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
@@ -357,8 +372,8 @@ if __name__ == '__main__':
         """ Inverse sigmoid table 0.5 -- 0.95,
         inv_sig = [0.0, 0.201, 0.405, 0.619, 0.847, 1.099, 1.386, 1.735, 2.197, 2.944]
         """
-        if PURPOSE == "MANY":
-            # standardize_then_thres_max_linear, standardize_then_thres_max_power
+        if PURPOSE == "MANY_1":
+            # standardize_then_thres_max_linear
             for i in [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75,
                       2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
                 ntds = s2n.node_task_data_splits(
@@ -371,6 +386,21 @@ if __name__ == '__main__':
                 for _d in ntds:
                     print(_d, "density", _d.edge_index.size(1) / (_d.num_nodes ** 2))
                 s2n._node_task_data_list = []  # flush
+        elif PURPOSE == "MANY_2":
+            # standardize_then_trunc_thres_max_linear, standardize_then_thres_max_power
+            for i in [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75,
+                      2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
+                for j in [0.5, 1.0, 1.5, 2.0]:
+                    ntds = s2n.node_task_data_splits(
+                        edge_normalize="standardize_then_trunc_thres_max_linear",
+                        edge_normalize_args=[i, j],
+                        edge_thres=0.0,
+                        use_consistent_processing=True,
+                        save=True,
+                    )
+                    for _d in ntds:
+                        print(_d, "density", _d.edge_index.size(1) / (_d.num_nodes ** 2))
+                    s2n._node_task_data_list = []  # flush
         elif PURPOSE == "ONCE":
             ntds = s2n.node_task_data_splits(
                 edge_normalize="standardize_then_thres_max_linear",
