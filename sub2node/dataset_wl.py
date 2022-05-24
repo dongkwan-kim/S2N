@@ -1,8 +1,10 @@
+from itertools import zip_longest
+
 import matplotlib.pyplot as plt
 import networkx as nx
-import sklearn.preprocessing as skp
 import torch
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.preprocessing import StandardScaler, Normalizer
 from sklearn.cluster import KMeans
 from torch import Tensor
 from torch_geometric.data import Data
@@ -46,7 +48,7 @@ class WL4PatternConv(WLConv):
 
         return torch.tensor(out, device=x.device)
 
-    def color_pattern(self, color: Tensor, outtype="bow") -> Tensor:
+    def color_pattern(self, color: Tensor, outtype="bow", preprocessor=None) -> Tensor:
         color_to_pattern = {v: k for k, v in self.hashmap.items()}
         assert len(self.hashmap) == len(color_to_pattern)
 
@@ -62,17 +64,22 @@ class WL4PatternConv(WLConv):
             # print(vectorizer.get_feature_names_out())
             N = color.size(0)
             pattern_vec = pattern_transformed.toarray()
-            sp_vec = torch.from_numpy(skp.normalize(pattern_vec[:N, :]))
-            np_vec = torch.from_numpy(skp.normalize(pattern_vec[N:, :]))
-            return torch.cat([sp_vec, np_vec], dim=-1)
+            sp_vec, np_vec = pattern_vec[:N, :], pattern_vec[N:, :]
+            if preprocessor is not None:
+                sp_vec = eval(preprocessor)().fit_transform(sp_vec)
+                np_vec = eval(preprocessor)().fit_transform(np_vec)
+
+            return torch.cat([torch.from_numpy(sp_vec),
+                              torch.from_numpy(np_vec)], dim=-1)
 
         else:
             raise NotImplementedError
 
     def color_pattern_cluster(self, color: Tensor,
                               pattern_outtype="bow",
+                              pattern_preprocessor=None,
                               clustering_name="KMeans", **kwargs) -> Tensor:
-        pattern_x = self.color_pattern(color, pattern_outtype)
+        pattern_x = self.color_pattern(color, pattern_outtype, pattern_preprocessor)
         assert clustering_name in ["KMeans"]
         clustering = eval(clustering_name)(**kwargs).fit(pattern_x)
         return torch.from_numpy(clustering.labels_).long()
@@ -82,27 +89,24 @@ class WL4PatternNet(torch.nn.Module):
 
     def __init__(self, num_layers, clustering_name="KMeans"):
         super().__init__()
-        num_layers += 1  # todo: for the last layer's color_pattern analysis
         self.convs = torch.nn.ModuleList([WL4PatternConv() for _ in range(num_layers)])
 
         self.clustering_name = clustering_name
         self.cluster_kwargs = {
-            "KMeans": {"n_clusters": 2},
+            "KMeans": {"n_clusters": 3, "pattern_preprocessor": None},
         }[self.clustering_name]
 
-    def forward(self, x, edge_index, batch=None):
+    def forward(self, x, edge_index, batch=None, hist_norm=True):
 
         colors, hists, clusters = [], [], []
 
         for i, conv in enumerate(self.convs):
             x = conv(x, edge_index)
 
-            if (i + 1) != len(self.convs):  # todo: not last layer
-                colors.append(x)
-                hists.append(conv.histogram(x, batch, norm=False))
+            colors.append(x)
+            hists.append(conv.histogram(x, batch, norm=hist_norm))
 
-            if i != 0:  # todo: not first layer
-                clusters.append(conv.color_pattern_cluster(x, **self.cluster_kwargs))
+            clusters.append(conv.color_pattern_cluster(x, **self.cluster_kwargs))
 
         return colors, hists, clusters
 
@@ -137,16 +141,21 @@ def draw_examples(edge_index, num_layers):
     wl = WL4PatternNet(num_layers=num_layers)
     colors, hists, clusters = wl(data.x, data.edge_index, data.batch)
 
-    for i, (co, cl) in enumerate(zip(colors, clusters)):
-        draw_graph_with_coloring(data, co, title=f"WL color: {i + 1} steps")
-        draw_graph_with_coloring(data, cl, title=f"WL pattern-cluster: {i + 1} steps")
+    for i, (co, cl) in enumerate(zip_longest(colors, clusters)):
+
+        if cl is not None:
+            draw_graph_with_coloring(data, cl, title=f"WL pattern-cluster: {i + 1} steps")
+
+        if co is not None:
+            draw_graph_with_coloring(data, co, title=f"WL color: {i + 1} steps")
 
 
 if __name__ == '__main__':
     # _g = nx.dorogovtsev_goltsev_mendes_graph(3)
-    # _g = nx.random_partition_graph([5, 5, 5], 0.6, 0.1, seed=10)
-    _g = nx.random_partition_graph([7, 7, 7, 7], 0.64, 0.1, seed=10)
+    # _g = nx.random_partition_graph([7, 7, 7, 7], 0.64, 0.1, seed=10)
+    # _g = nx.lollipop_graph(3, 5)
+    _g = nx.barabasi_albert_graph(50, 3)
     draw_examples(
         edge_index=from_networkx(_g).edge_index,
-        num_layers=3,
+        num_layers=4,
     )
