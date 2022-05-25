@@ -1,5 +1,5 @@
 from itertools import zip_longest
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -82,9 +82,7 @@ class WL4PatternConv(WLConv):
                               pattern_preprocessor=None,
                               clustering_name="KMeans", **kwargs) -> Tensor:
         pattern_x = self.color_pattern(color, pattern_outtype, pattern_preprocessor)
-        assert clustering_name in ["KMeans"]
-        clustering = eval(clustering_name)(**kwargs).fit(pattern_x)
-        return torch.from_numpy(clustering.labels_).long()
+        return self.to_cluster(pattern_x, clustering_name, **kwargs)
 
     def histogram(self, x: Tensor, batch: Optional[Tensor] = None,
                   norm: bool = False, num_colors=None) -> Tensor:
@@ -119,20 +117,24 @@ class WL4PatternConv(WLConv):
         sub_hist = self.histogram(sub_x, batch, norm=norm, num_colors=num_colors)
         return sub_hist
 
-    def hist_to_cluster(self):
-        raise NotImplementedError
+    @staticmethod
+    def to_cluster(x: Tensor, clustering_name="KMeans", **kwargs) -> Tensor:
+        assert clustering_name in ["KMeans"]
+        clustering = eval(clustering_name)(**kwargs).fit(x.numpy())
+        return torch.from_numpy(clustering.labels_).long()
 
 
 class WL4PatternNet(torch.nn.Module):
 
-    def __init__(self, num_layers, clustering_name="KMeans", x_for_hists="cluster"):
+    def __init__(self, num_layers, clustering_name="KMeans", x_for_hists="color", **kwargs):
         super().__init__()
         self.convs = torch.nn.ModuleList([WL4PatternConv() for _ in range(num_layers)])
 
         self.clustering_name = clustering_name
-        self.cluster_kwargs = {
+        self.cluster_kwargs: Dict[str, Any] = {
             "KMeans": {"n_clusters": 3, "pattern_preprocessor": None},
-        }[self.clustering_name]
+        }[clustering_name]
+        self.cluster_kwargs.update(kwargs)
 
         self.x_for_hists = x_for_hists
 
@@ -202,16 +204,30 @@ def draw_graph_with_coloring(data: Data,
     plt.show()
 
 
-def draw_examples(edge_index, num_layers):
+def run_and_draw_examples(edge_index, num_layers):
     edge_index = to_undirected(edge_index.long())
     data = Data(x=torch.ones(maybe_num_nodes(edge_index)).long(),
                 edge_index=edge_index)
 
-    # todo
-    sub_x = generate_random_subgraph(data, num_subgraph=20, subgraph_size=3)
+    sub_x = generate_random_subgraph(data, num_subgraph=20, subgraph_size=5)
 
-    wl = WL4PatternNet(num_layers=num_layers)
+    wl = WL4PatternNet(
+        num_layers=num_layers, x_for_hists="color",
+        clustering_name="KMeans", n_clusters=3,  # clustering & kwargs
+    )
     colors, hists, clusters = wl(sub_x, data.x, data.edge_index)
+
+    for i, (co, cl, hi) in enumerate(zip(colors, clusters, hists)):
+        hist_cluster = WL4PatternConv.to_cluster(
+            hi, clustering_name="KMeans", n_clusters=3)
+        hist_cluster, indices = torch.sort(hist_cluster)
+
+        print(f"{i + 1} steps", "-" * 10)
+        if wl.x_for_hists == "color":
+            print(co[sub_x[indices, :]])
+        else:
+            print(cl[sub_x[indices, :]])
+        print(hist_cluster)
 
     for i, (co, cl) in enumerate(zip_longest(colors, clusters)):
 
@@ -231,8 +247,7 @@ if __name__ == '__main__':
     # _g = nx.lollipop_graph(3, 5)
     _g = nx.barabasi_albert_graph(50, 3)
     if MODE == "draw_examples":
-        draw_examples(
+        run_and_draw_examples(
             edge_index=from_networkx(_g).edge_index,
             num_layers=4,
         )
-
