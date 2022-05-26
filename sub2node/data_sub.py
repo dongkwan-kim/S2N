@@ -5,12 +5,15 @@ import torch
 from sklearn.preprocessing import MultiLabelBinarizer
 from termcolor import cprint
 from torch_geometric.data import Data
-from torch_geometric.utils import subgraph, sort_edge_index
+from torch_geometric.utils import subgraph, sort_edge_index, to_undirected, from_networkx
 import networkx as nx
+from torch_geometric.utils.num_nodes import maybe_num_nodes
 
 from tqdm import tqdm
 
 from data_base import DatasetBase
+from data_sub_utils import save_subgraphs
+from dataset_wl import generate_random_subgraph, WL4PatternNet, WL4PatternConv
 from utils import from_networkx_customized_ordering, to_directed
 
 
@@ -35,9 +38,13 @@ def read_subgnn_data(edge_list_path, subgraph_path, embedding_path, save_directe
         train_sub_ys, val_sub_ys, test_sub_ys = _train_ys, _val_ys, _test_ys
 
     # Initialize pretrained node embeddings
-    xs = torch.load(embedding_path)  # feature matrix should be initialized to the node embeddings
-    # xs_with_zp = torch.cat([torch.zeros(1, xs.shape[1]), xs], 0)  # there's a zeros in the first index for padding
-    cprint("Loaded embeddings at {}".format(embedding_path), "green")
+    try:
+        xs = torch.load(embedding_path)  # feature matrix should be initialized to the node embeddings
+        # xs_with_zp = torch.cat([torch.zeros(1, xs.shape[1]), xs], 0)  # there's a zeros in the first index for padding
+        cprint("Loaded embeddings at {}".format(embedding_path), "green")
+    except FileNotFoundError:
+        xs = None
+        cprint("No embeddings at {}".format(embedding_path), "red")
 
     # read networkx graph from edge list
     global_nxg: nx.Graph = nx.read_edgelist(edge_list_path)
@@ -117,13 +124,21 @@ def read_subgraphs(subgraph_path):
             if len(nodes) != 0:
                 if len(nodes) == 1:
                     print("G with one node: ", nodes)
-                l = line.split("\t")[1].split("-")
-                if len(l) > 1:
-                    multilabel = True
-                for lab in l:
-                    if lab not in labels.keys():
-                        labels[lab] = label_idx
-                        label_idx += 1
+
+                label_cell = line.split("\t")[1]
+                if "+" in label_cell:  # just many labels, not multi-labels
+                    l = label_cell.split("+")
+                    for lab in l:  # use original 'integer' labels
+                        labels[lab] = int(lab)
+                else:
+                    l = label_cell.split("-")
+                    if len(l) > 1:
+                        multilabel = True
+                    for lab in l:
+                        if lab not in labels.keys():
+                            labels[lab] = label_idx
+                            label_idx += 1
+
                 if line.split("\t")[2].strip() == "train":
                     train_sub_g.append(nodes)
                     train_sub_y.append([labels[lab] for lab in l])
@@ -156,7 +171,7 @@ class SubgraphDataset(DatasetBase):
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
-        assert embedding_type in ["gin", "graphsaint_gcn"]
+        assert embedding_type in ["gin", "graphsaint_gcn", "no_embedding"]
         self.embedding_type = embedding_type
         self.save_directed_edges = save_directed_edges
         super().__init__(
@@ -218,6 +233,79 @@ class SubgraphDataset(DatasetBase):
         torch.save(torch.as_tensor([self.num_train, self.num_val]).long(), self.processed_paths[2])
 
         self._logging_args()
+
+
+class WLHistSubgraph(SubgraphDataset):
+
+    def __init__(self, root, name, embedding_type,
+                 network_generator, network_args: list,
+                 num_subgraphs: int, subgraph_size: int,
+                 wl_max_hop: int, wl_x_type_for_hists: str = "color",
+                 wl_num_color_clusters: int = None, wl_num_hist_clusters: int = 2,
+                 val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
+                 transform=None, pre_transform=None, **kwargs):
+        self.network_generator = network_generator
+        self.network_args = network_args
+
+        self.num_subgraphs = num_subgraphs
+        self.subgraph_size = subgraph_size
+
+        self.wl_max_hop = wl_max_hop
+        self.wl_x_type_for_hists = wl_x_type_for_hists
+        self.wl_num_color_clusters = wl_num_color_clusters or self.wl_max_hop
+        self.wl_num_hist_clusters = wl_num_hist_clusters
+
+        assert network_generator.startswith("nx.")
+        super().__init__(root, name, embedding_type, val_ratio, test_ratio,
+                         save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
+
+    def _get_important_elements(self):
+        ie = super()._get_important_elements()
+        ie.update({
+            "network_generator": self.network_generator,
+            "network_args": self.network_args,
+            "num_subgraphs": self.num_subgraphs,
+            "subgraph_size": self.subgraph_size,
+            "wl_max_hop": self.wl_max_hop,
+            "wl_x_type_for_hists": self.wl_x_type_for_hists,
+            "wl_num_hist_clusters": self.wl_num_hist_clusters,
+        })
+        if self.wl_x_type_for_hists == "cluster":
+            ie["wl_num_color_clusters"] = self.wl_num_color_clusters
+        return ie
+
+    def download(self):  # generate
+        g: nx.Graph = eval(self.network_generator)(*self.network_args)
+        edge_index = to_undirected(from_networkx(g).edge_index.long())
+        data = Data(x=torch.ones(maybe_num_nodes(edge_index)).long(),
+                    edge_index=edge_index)
+
+        # dump to edge_list_path = raw_paths[0]
+        nx.write_edgelist(g, self.raw_paths[0], data=False)
+
+        # dump to subgraph_path = raw_paths[1]
+        sub_x = generate_random_subgraph(data, num_subgraphs=self.num_subgraphs, subgraph_size=self.subgraph_size)
+        wl = WL4PatternNet(
+            num_layers=self.wl_max_hop, x_type_for_hists=self.wl_x_type_for_hists,
+            clustering_name="KMeans", n_clusters=self.wl_num_color_clusters,  # clustering & kwargs
+        )
+        colors, hists, clusters = wl(sub_x, data.x, data.edge_index)
+        hist_cluster_list = []
+        for wl_step, (co, hi, cl) in enumerate(zip(colors, hists, clusters)):
+            _hist_cluster = WL4PatternConv.to_cluster(
+                hi, clustering_name="KMeans", n_clusters=self.wl_num_hist_clusters)
+            hist_cluster_list.append(_hist_cluster.view(-1, 1))
+        hist_cluster = torch.cat(hist_cluster_list, dim=-1)
+
+        save_subgraphs(
+            path=self.raw_paths[1],
+            nodes_in_subgraphs=sub_x.tolist(),
+            labels=["+".join(str(v) for v in hc)
+                    for hc in hist_cluster.tolist()],
+        )
+
+    def process(self):
+        super().process()
 
 
 class HPONeuro(SubgraphDataset):
@@ -346,19 +434,31 @@ class CC(SubgraphDataset):
 
 if __name__ == '__main__':
 
-    TYPE = "CutRatio"
+    TYPE = "WLHistSubgraph"
+    # WLHistSubgraph
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
-    E_TYPE = "graphsaint_gcn"  # gin, graphsaint_gcn
+    E_TYPE = "no_embedding"  # gin, graphsaint_gcn, no_embedding
     DEBUG = False
+    if TYPE == "WLHistSubgraph":
+        KWARGS = {
+            "network_generator": "nx.barabasi_albert_graph",
+            "network_args": [50, 3],
+            "num_subgraphs": 20,
+            "subgraph_size": 5,
+            "wl_max_hop": 3,
+        }
+    else:
+        KWARGS = {}
 
     dts = eval(TYPE)(
         root=PATH,
         name=TYPE,
         embedding_type=E_TYPE,
         debug=DEBUG,
+        **KWARGS,
     )
 
     train_dts, val_dts, test_dts = dts.get_train_val_test()
@@ -377,5 +477,6 @@ if __name__ == '__main__':
         if i >= 5:
             break
 
+    cprint("global_data samples", "yellow")
     print(dts.global_data)
 

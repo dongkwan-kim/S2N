@@ -126,7 +126,7 @@ class WL4PatternConv(WLConv):
 
 class WL4PatternNet(torch.nn.Module):
 
-    def __init__(self, num_layers, clustering_name="KMeans", x_for_hists="color", **kwargs):
+    def __init__(self, num_layers, clustering_name="KMeans", x_type_for_hists="color", **kwargs):
         super().__init__()
         self.convs = torch.nn.ModuleList([WL4PatternConv() for _ in range(num_layers)])
 
@@ -136,7 +136,8 @@ class WL4PatternNet(torch.nn.Module):
         }[clustering_name]
         self.cluster_kwargs.update(kwargs)
 
-        self.x_for_hists = x_for_hists
+        self.x_type_for_hists = x_type_for_hists
+        assert x_type_for_hists in ["color", "cluster"]
 
     def forward(self, sub_x, x, edge_index, hist_norm=True):
         colors, hists, clusters = [], [], []
@@ -147,7 +148,7 @@ class WL4PatternNet(torch.nn.Module):
 
             colors.append(x)
             clusters.append(conv.color_pattern_cluster(x, **self.cluster_kwargs))
-            if self.x_for_hists == "color":
+            if self.x_type_for_hists == "color":
                 hists.append(conv.subgraph_histogram(list(sub_x), colors[-1], norm=hist_norm,
                                                      num_colors=len(conv.hashmap)))
             else:  # cluster
@@ -157,7 +158,7 @@ class WL4PatternNet(torch.nn.Module):
         return colors, hists, clusters
 
 
-def generate_random_subgraph(data: Data, num_subgraph, subgraph_size):
+def generate_random_subgraph(data: Data, num_subgraphs, subgraph_size):
     N = data.num_nodes
     E = data.num_edges
 
@@ -167,18 +168,18 @@ def generate_random_subgraph(data: Data, num_subgraph, subgraph_size):
         sparse_sizes=(N, N))
 
     nodes_in_subgraphs = []
-    start = torch.randint(0, N, (num_subgraph * 2,), dtype=torch.long).flatten()
+    start = torch.randint(0, N, (num_subgraphs * 2,), dtype=torch.long).flatten()
     for nodes in adj.random_walk(start, walk_length=(2 * subgraph_size - 1)):
         for size in range(subgraph_size, 2 * subgraph_size):
             unique_nodes = torch.unique(nodes[:size])
             if unique_nodes.size(0) == subgraph_size:
                 nodes_in_subgraphs.append(unique_nodes)
                 break
-        if len(nodes_in_subgraphs) == num_subgraph:
+        if len(nodes_in_subgraphs) == num_subgraphs:
             break
     nodes_in_subgraphs = torch.stack(nodes_in_subgraphs)
 
-    assert list(nodes_in_subgraphs.size()) == [num_subgraph, subgraph_size]
+    assert list(nodes_in_subgraphs.size()) == [num_subgraphs, subgraph_size]
     return nodes_in_subgraphs
 
 
@@ -209,10 +210,10 @@ def run_and_draw_examples(edge_index, num_layers):
     data = Data(x=torch.ones(maybe_num_nodes(edge_index)).long(),
                 edge_index=edge_index)
 
-    sub_x = generate_random_subgraph(data, num_subgraph=20, subgraph_size=5)
+    sub_x = generate_random_subgraph(data, num_subgraphs=20, subgraph_size=5)
 
     wl = WL4PatternNet(
-        num_layers=num_layers, x_for_hists="color",
+        num_layers=num_layers, x_type_for_hists="color",
         clustering_name="KMeans", n_clusters=3,  # clustering & kwargs
     )
     colors, hists, clusters = wl(sub_x, data.x, data.edge_index)
@@ -223,7 +224,7 @@ def run_and_draw_examples(edge_index, num_layers):
         hist_cluster, indices = torch.sort(hist_cluster)
 
         print(f"{i + 1} steps", "-" * 10)
-        if wl.x_for_hists == "color":
+        if wl.x_type_for_hists == "color":
             print(co[sub_x[indices, :]])
         else:
             print(cl[sub_x[indices, :]])
