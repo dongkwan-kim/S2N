@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from data_base import DatasetBase
 from data_sub_utils import save_subgraphs
-from dataset_wl import generate_random_subgraph, WL4PatternNet, WL4PatternConv
+from dataset_wl import generate_random_subgraph_by_walk, WL4PatternNet, WL4PatternConv
 from utils import from_networkx_customized_ordering, to_directed
 
 
@@ -238,12 +238,24 @@ class SubgraphDataset(DatasetBase):
 class WLHistSubgraph(SubgraphDataset):
 
     def __init__(self, root, name, embedding_type,
-                 network_generator, network_args: list,
+                 network_generator: str, network_args: list,
                  num_subgraphs: int, subgraph_size: int,
                  wl_max_hop: int, wl_x_type_for_hists: str = "color",
                  wl_num_color_clusters: int = None, wl_num_hist_clusters: int = 2,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
+        """Params specific for WLHistSubgraph
+        :param network_generator: String form of graph generators in networkx.
+            e.g., nx.barabasi_albert_graph, nx.grid_2d_graph,
+                See https://networkx.org/documentation/stable/reference/generators.html
+        :param network_args: Arguments for network_generator.
+        :param num_subgraphs: Number of subgraphs to generate.
+        :param subgraph_size: Size of subgraphs to generate.
+        :param wl_max_hop: Number of hops to run WL algorithm.
+        :param wl_x_type_for_hists: Whether to use clustering for colors: cluster or color
+        :param wl_num_color_clusters: If wl_x_type_for_hists == cluster, number of clusters to use.
+        :param wl_num_hist_clusters: Number of clusters by histograms, i.e., number of classes.
+        """
         self.network_generator = network_generator
         self.network_args = network_args
 
@@ -254,6 +266,7 @@ class WLHistSubgraph(SubgraphDataset):
         self.wl_x_type_for_hists = wl_x_type_for_hists
         self.wl_num_color_clusters = wl_num_color_clusters or self.wl_max_hop
         self.wl_num_hist_clusters = wl_num_hist_clusters
+        assert self.wl_x_type_for_hists in ["cluster", "color"]
 
         assert network_generator.startswith("nx.")
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
@@ -284,7 +297,8 @@ class WLHistSubgraph(SubgraphDataset):
         nx.write_edgelist(g, self.raw_paths[0], data=False)
 
         # dump to subgraph_path = raw_paths[1]
-        sub_x = generate_random_subgraph(data, num_subgraphs=self.num_subgraphs, subgraph_size=self.subgraph_size)
+        sub_x = generate_random_subgraph_by_walk(
+            data, num_subgraphs=self.num_subgraphs, subgraph_size=self.subgraph_size)
         wl = WL4PatternNet(
             num_layers=self.wl_max_hop, x_type_for_hists=self.wl_x_type_for_hists,
             clustering_name="KMeans", n_clusters=self.wl_num_color_clusters,  # clustering & kwargs

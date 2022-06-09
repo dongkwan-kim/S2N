@@ -158,13 +158,13 @@ class WL4PatternNet(torch.nn.Module):
         return colors, hists, clusters
 
 
-def generate_random_subgraph(data: Data, num_subgraphs, subgraph_size):
-    N = data.num_nodes
-    E = data.num_edges
+def generate_random_subgraph_by_walk(global_data: Data, num_subgraphs, subgraph_size):
+    N = global_data.num_nodes
+    E = global_data.num_edges
 
     adj = SparseTensor(
-        row=data.edge_index[0], col=data.edge_index[1],
-        value=torch.arange(E, device=data.edge_index.device),
+        row=global_data.edge_index[0], col=global_data.edge_index[1],
+        value=torch.arange(E, device=global_data.edge_index.device),
         sparse_sizes=(N, N))
 
     nodes_in_subgraphs = []
@@ -210,7 +210,7 @@ def run_and_draw_examples(edge_index, num_layers):
     data = Data(x=torch.ones(maybe_num_nodes(edge_index)).long(),
                 edge_index=edge_index)
 
-    sub_x = generate_random_subgraph(data, num_subgraphs=20, subgraph_size=5)
+    sub_x = generate_random_subgraph_by_walk(data, num_subgraphs=20, subgraph_size=5)
 
     wl = WL4PatternNet(
         num_layers=num_layers, x_type_for_hists="color",
