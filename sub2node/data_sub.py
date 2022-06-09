@@ -1,5 +1,6 @@
 from pprint import pprint
 from typing import List, Dict, Tuple
+import os
 
 import torch
 from sklearn.preprocessing import MultiLabelBinarizer
@@ -166,7 +167,6 @@ def read_subgraphs(subgraph_path):
 
 
 class SubgraphDataset(DatasetBase):
-
     url = "https://github.com/mims-harvard/SubGNN"
 
     def __init__(self, root, name, embedding_type,
@@ -272,6 +272,16 @@ class WLHistSubgraph(SubgraphDataset):
         assert network_generator.startswith("nx.")
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
                          save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
+
+    @property
+    def raw_dir(self):
+        return os.path.join(self.root, self.__class__.__name__.upper(),
+                            "_".join([str(e) for e in self._get_important_elements().values()]), "raw")
+
+    @property
+    def processed_dir(self):
+        return os.path.join(self.root, self.__class__.__name__.upper(),
+                            "_".join([str(e) for e in self._get_important_elements().values()]), "processed")
 
     @property
     def raw_file_names(self):
@@ -499,3 +509,9 @@ if __name__ == '__main__':
     cprint("global_data samples", "yellow")
     print(dts.global_data)
 
+    cprint("All subgraph samples", "yellow")
+    print(dts.data)
+    if dts.data.y.dim() == 2:
+        for y_idx in range(dts.data.y.size(-1)):
+            _y = dts.data.y[:, y_idx]
+            print(_y)
