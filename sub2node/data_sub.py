@@ -17,7 +17,8 @@ from dataset_wl import generate_random_subgraph_by_walk, WL4PatternNet, WL4Patte
 from utils import from_networkx_customized_ordering, to_directed
 
 
-def read_subgnn_data(edge_list_path, subgraph_path, embedding_path, save_directed_edges, debug=False):
+def read_subgnn_data(edge_list_path, subgraph_path,
+                     embedding_path=None, save_directed_edges=False, debug=False):
     """
     Read in the subgraphs & their associated labels
     Reference: https://github.com/mims-harvard/SubGNN/blob/main/SubGNN/SubGNN.py#L519
@@ -42,7 +43,7 @@ def read_subgnn_data(edge_list_path, subgraph_path, embedding_path, save_directe
         xs = torch.load(embedding_path)  # feature matrix should be initialized to the node embeddings
         # xs_with_zp = torch.cat([torch.zeros(1, xs.shape[1]), xs], 0)  # there's a zeros in the first index for padding
         cprint("Loaded embeddings at {}".format(embedding_path), "green")
-    except FileNotFoundError:
+    except (FileNotFoundError, AttributeError):
         xs = None
         cprint("No embeddings at {}".format(embedding_path), "red")
 
@@ -271,6 +272,10 @@ class WLHistSubgraph(SubgraphDataset):
         assert network_generator.startswith("nx.")
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
                          save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
+
+    @property
+    def raw_file_names(self):
+        return ["edge_list.txt", "subgraphs.pth"]
 
     def _get_important_elements(self):
         ie = super()._get_important_elements()
