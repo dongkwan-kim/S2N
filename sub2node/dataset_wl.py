@@ -11,10 +11,13 @@ from torch import Tensor
 from torch_geometric.data import Data
 from torch_geometric.nn import WLConv
 from torch_geometric.typing import Adj
-from torch_geometric.utils import to_undirected, to_networkx, from_networkx
+from torch_geometric.utils import to_undirected, to_networkx, from_networkx, k_hop_subgraph
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 from torch_sparse import SparseTensor
 from torch_scatter import scatter_add
+from tqdm import tqdm
+
+from utils import torch_choice
 
 torch.manual_seed(42)
 
@@ -159,9 +162,7 @@ class WL4PatternNet(torch.nn.Module):
 
 
 def generate_random_subgraph_by_walk(global_data: Data, num_subgraphs, subgraph_size):
-    N = global_data.num_nodes
-    E = global_data.num_edges
-
+    N, E = global_data.num_nodes, global_data.num_edges
     adj = SparseTensor(
         row=global_data.edge_index[0], col=global_data.edge_index[1],
         value=torch.arange(E, device=global_data.edge_index.device),
@@ -177,8 +178,35 @@ def generate_random_subgraph_by_walk(global_data: Data, num_subgraphs, subgraph_
                 break
         if len(nodes_in_subgraphs) == num_subgraphs:
             break
-    nodes_in_subgraphs = torch.stack(nodes_in_subgraphs)
 
+    nodes_in_subgraphs = torch.stack(nodes_in_subgraphs)
+    assert list(nodes_in_subgraphs.size()) == [num_subgraphs, subgraph_size]
+    return nodes_in_subgraphs
+
+
+def generate_random_subgraph_by_k_hop(global_data: Data, num_subgraphs, subgraph_size, k=1):
+    N, E = global_data.num_nodes, global_data.num_edges
+    nodes_in_subgraphs = []
+    start = torch.randint(0, N, (num_subgraphs * 2,), dtype=torch.long).flatten()
+    for n_idx in tqdm(start, desc="generate_random_subgraph_by_k_hop", total=num_subgraphs):
+        subset, _, idx_of_start_in_subset, _ = k_hop_subgraph([n_idx], k, global_data.edge_index, num_nodes=N)
+        _S = subset.size(0)
+        if _S < subgraph_size:
+            continue
+        elif _S > subgraph_size:
+            # Sample nodes of subgraph_size from subset:
+            mask = torch.ones(subset.size(0), dtype=torch.bool)
+            mask[idx_of_start_in_subset] = False
+            sub_subset = torch_choice(subset[mask], subgraph_size - 1)  # -1 for start
+            sub_subset = torch.cat([sub_subset, torch.tensor([n_idx], dtype=torch.long)])
+            nodes_in_subgraphs.append(sub_subset)
+        else:
+            nodes_in_subgraphs.append(subset)
+
+        if len(nodes_in_subgraphs) == num_subgraphs:
+            break
+
+    nodes_in_subgraphs = torch.stack(nodes_in_subgraphs)
     assert list(nodes_in_subgraphs.size()) == [num_subgraphs, subgraph_size]
     return nodes_in_subgraphs
 
@@ -210,7 +238,7 @@ def run_and_draw_examples(edge_index, num_layers):
     data = Data(x=torch.ones(maybe_num_nodes(edge_index)).long(),
                 edge_index=edge_index)
 
-    sub_x = generate_random_subgraph_by_walk(data, num_subgraphs=20, subgraph_size=5)
+    sub_x = generate_random_subgraph_by_k_hop(data, num_subgraphs=20, subgraph_size=5)
 
     wl = WL4PatternNet(
         num_layers=num_layers, x_type_for_hists="color",

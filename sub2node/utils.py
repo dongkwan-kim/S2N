@@ -383,6 +383,14 @@ def dropout_adj_st(edge_index: Union[Tensor, SparseTensor],
         return edge_index, edge_attr
 
 
+def torch_choice(tensor_1d: Tensor, sample_size_or_ratio: int or float):
+    tensor_size = tensor_1d.size(0)
+    if isinstance(sample_size_or_ratio, float):
+        sample_size_or_ratio = int(sample_size_or_ratio * tensor_size)
+    perm = torch.randperm(tensor_size)
+    return tensor_1d[perm[:sample_size_or_ratio]]
+
+
 def multi_label_homophily(edge_index, y, batch=None, method="edge") -> float:
     # y: [N, C]
     if isinstance(edge_index, SparseTensor):
