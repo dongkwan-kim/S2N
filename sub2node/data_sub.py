@@ -395,25 +395,29 @@ class WLHistSubgraph(SubgraphDataset):
         self.wl_x_type_for_hists = wl_x_type_for_hists
         self.wl_num_color_clusters = wl_num_color_clusters or self.wl_max_hop
         self.wl_num_hist_clusters = wl_num_hist_clusters
-        assert 0 < wl_hop_to_use <= wl_max_hop
         assert self.wl_x_type_for_hists in ["cluster", "color"]
         assert network_generator.startswith("nx.")
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
                          save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
 
-        # Use one wl step of y & cache the original ys in _y.
-        self.data._y = self.data.y.clone()
-        self.data.y = self.data._y[:, wl_hop_to_use - 1]
+        if wl_hop_to_use is not None:
+            # Use one wl step of y & cache the original ys in _y.
+            assert 0 < wl_hop_to_use <= wl_max_hop
+            self.data._y = self.data.y.clone()
+            self.data.y = self.data._y[:, wl_hop_to_use - 1]
+
+    @property
+    def key_dir(self):
+        return os.path.join(self.root, self.__class__.__name__.upper(),
+                            "_".join([str(e) for e in self._get_important_elements().values()]))
 
     @property
     def raw_dir(self):
-        return os.path.join(self.root, self.__class__.__name__.upper(),
-                            "_".join([str(e) for e in self._get_important_elements().values()]), "raw")
+        return os.path.join(self.key_dir, "raw")
 
     @property
     def processed_dir(self):
-        return os.path.join(self.root, self.__class__.__name__.upper(),
-                            "_".join([str(e) for e in self._get_important_elements().values()]), "processed")
+        return os.path.join(self.key_dir, "processed")
 
     @property
     def raw_file_names(self):
@@ -522,8 +526,8 @@ if __name__ == '__main__':
     E_TYPE = "no_embedding"  # gin, graphsaint_gcn, no_embedding
     DEBUG = False
     WL_HIST_KWARGS = {
-        "num_subgraphs": 200,
-        "subgraph_size": 20,
+        "num_subgraphs": 1500,
+        "subgraph_size": 10,
         "wl_hop_to_use": 1,
         "wl_max_hop": 4,
         "wl_x_type_for_hists": "cluster",  # color, cluster
@@ -532,12 +536,14 @@ if __name__ == '__main__':
     }
     if TYPE == "WLHistSubgraphBA":
         KWARGS = {
-            "ba_n": 3000, "ba_m": 15, "ba_seed": 42,
+            "ba_n": 10000, "ba_m": 10,  # 10, 15, 20
+            "ba_seed": 42,
             **WL_HIST_KWARGS,
         }
     elif TYPE == "WLHistSubgraphER":
         KWARGS = {
-            "er_n": 3000, "er_p": 0.01, "er_seed": 42,
+            "er_n": 10000, "er_p": 0.003,  # 0.002, 0.003, 0.004
+            "er_seed": 42,
             **WL_HIST_KWARGS,
         }
     else:

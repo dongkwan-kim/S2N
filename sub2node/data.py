@@ -3,6 +3,7 @@ from argparse import Namespace
 from typing import Type, Any, Optional, Union, Dict, Tuple, List, Callable
 from pprint import pprint
 
+import os
 import torch
 from termcolor import cprint
 
@@ -17,6 +18,7 @@ from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, SubgraphDataset
 from data_sub import WLHistSubgraphBA, WLHistSubgraphER
 from data_sub import Density, CC, Coreness, CutRatio
 from data_utils import AddSelfLoopsV2, RemoveAttrs
+from dataset_wl import SliceYByIndex
 from sub2node import SubgraphToNode
 from utils import get_log_func, EternalIter, merge_dict_by_keys
 
@@ -37,6 +39,7 @@ class SubgraphDataModule(LightningDataModule):
                  s2n_target_matrix: str,
                  s2n_edge_aggr: Union[Callable[[Tensor], Tensor], str] = None,
                  s2n_is_weighted: bool = True,
+                 s2n_transform=None,
                  batch_size: int = None,
                  eval_batch_size=None,
                  use_sparse_tensor=False,
@@ -98,6 +101,13 @@ class SubgraphDataModule(LightningDataModule):
     def prepare_data(self) -> None:
         self.load_dataset()
 
+    @property
+    def s2n_path(self) -> str:
+        if self.h.dataset_name in ["WLHistSubgraphER", "WLHistSubgraphBA"]:
+            return os.path.join(self.dataset.key_dir, "sub2node")
+        else:  # backward compatibility
+            return f"{self.h.dataset_path}/{self.h.dataset_name.upper()}/sub2node/"
+
     def setup(self, stage: Optional[str] = None) -> None:
 
         self.dataset: SubgraphDataset = self.load_dataset()
@@ -107,7 +117,7 @@ class SubgraphDataModule(LightningDataModule):
                 global_data=self.dataset.global_data,
                 subgraph_data_list=self.dataset.get_data_list_with_split_attr(),
                 name=self.h.dataset_name,
-                path=f"{self.h.dataset_path}/{self.h.dataset_name.upper()}/sub2node/",
+                path=self.s2n_path,
                 splits=self.dataset.splits,
                 target_matrix=self.h.s2n_target_matrix,
                 edge_aggr=self.h.s2n_edge_aggr,
@@ -127,6 +137,11 @@ class SubgraphDataModule(LightningDataModule):
                 transform_list.append(AddSelfLoopsV2("edge_attr"))
             if self.h.use_sparse_tensor:
                 transform_list.append(T.ToSparseTensor("edge_attr"))
+            if self.h.s2n_transform is not None:
+                s2n_transform = self.h.s2n_transform
+                if isinstance(self.h.s2n_transform, str):
+                    s2n_transform = eval(s2n_transform)
+                transform_list.append(s2n_transform)
             transform = T.Compose(transform_list) if len(transform_list) > 0 else None
             if transform is not None:
                 data_list = [transform(d) for d in data_list]
@@ -163,7 +178,7 @@ class SubgraphDataModule(LightningDataModule):
 
 
 def _print_data(data):
-    pprint(_b)
+    pprint(data)
     if data.edge_index is not None:
         print("\t- edge (Tensor)", f"{data.edge_index.min()} -- {data.edge_index.max()}")
     else:
@@ -207,9 +222,9 @@ if __name__ == '__main__':
     else:
         E_TYPE = "no_embedding"  # override
         if NAME == "WLHistSubgraphBA":
-            _more_kwargs = {"ba_n": 3000, "ba_m": 15, "ba_seed": 42}
+            _more_kwargs = {"ba_n": 10000, "ba_m": 10, "ba_seed": 42}
         elif NAME == "WLHistSubgraphER":
-            _more_kwargs = {"er_n": 3000, "er_p": 0.01, "er_seed": 42}
+            _more_kwargs = {"er_n": 10000, "er_p": 0.002, "er_seed": 42}
         else:
             _more_kwargs = {}
 
@@ -229,8 +244,8 @@ if __name__ == '__main__':
             use_sparse_tensor=USE_SPARSE_TENSOR,
             pre_add_self_loops=False,
             **{
-                "num_subgraphs": 200,
-                "subgraph_size": 20,
+                "num_subgraphs": 1500,
+                "subgraph_size": 10,
                 "wl_hop_to_use": 1,
                 "wl_max_hop": 4,
                 "wl_x_type_for_hists": "cluster",  # color, cluster
