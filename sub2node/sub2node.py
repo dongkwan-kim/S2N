@@ -22,7 +22,6 @@ class SubgraphToNode:
     _global_nxg = None
     _node_spl_mat = None
     _node_task_data_precursor = None
-    _node_task_data_list: List[Data] = []
 
     def __init__(self,
                  global_data: Data,
@@ -58,6 +57,7 @@ class SubgraphToNode:
         assert self.undirected, "Now only support undirected graphs"
         assert len(self.splits) == 3
         self.path.mkdir(exist_ok=True)
+        self._node_task_data_list: List[Data] = []
 
     def __repr__(self):
         return f"{self.__class__.__name__}(name='{self.node_task_name}', path='{self.path}')"
