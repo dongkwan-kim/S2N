@@ -15,6 +15,6 @@ weight_decay: 0.0000000201984775115112
 _gradient_clip_val: 0.3
 
 sub_node_num_layers: 1
-sub_node_encoder_aggr: "max"
+sub_node_encoder_aggr: "sum"
 
 subname: MLP

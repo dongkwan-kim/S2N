@@ -19,6 +19,6 @@ weight_decay: 9.7147e-9
 _gradient_clip_val: 0.0
 
 sub_node_num_layers: 1
-sub_node_encoder_aggr: "max"
+sub_node_encoder_aggr: "sum"
 
 subname: GAT
