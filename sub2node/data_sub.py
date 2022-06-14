@@ -1,3 +1,4 @@
+from collections import Counter
 from pprint import pprint
 from typing import List, Dict, Tuple
 import os
@@ -14,7 +15,8 @@ from tqdm import tqdm
 
 from data_base import DatasetBase
 from data_sub_utils import save_subgraphs
-from dataset_wl import generate_random_subgraph_by_walk, WL4PatternNet, WL4PatternConv
+from dataset_wl import generate_random_subgraph_by_walk, WL4PatternNet, WL4PatternConv, \
+    generate_random_subgraph_by_k_hop
 from utils import from_networkx_customized_ordering, to_directed
 
 
@@ -236,107 +238,6 @@ class SubgraphDataset(DatasetBase):
         self._logging_args()
 
 
-class WLHistSubgraph(SubgraphDataset):
-
-    def __init__(self, root, name, embedding_type,
-                 network_generator: str, network_args: list,
-                 num_subgraphs: int, subgraph_size: int,
-                 wl_max_hop: int, wl_x_type_for_hists: str = "color",
-                 wl_num_color_clusters: int = None, wl_num_hist_clusters: int = 2,
-                 val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 transform=None, pre_transform=None, **kwargs):
-        """Params specific for WLHistSubgraph
-        :param network_generator: String form of graph generators in networkx.
-            e.g., nx.barabasi_albert_graph, nx.grid_2d_graph,
-                See https://networkx.org/documentation/stable/reference/generators.html
-        :param network_args: Arguments for network_generator.
-        :param num_subgraphs: Number of subgraphs to generate.
-        :param subgraph_size: Size of subgraphs to generate.
-        :param wl_max_hop: Number of hops to run WL algorithm.
-        :param wl_x_type_for_hists: Whether to use clustering for colors: cluster or color
-        :param wl_num_color_clusters: If wl_x_type_for_hists == cluster, number of clusters to use.
-        :param wl_num_hist_clusters: Number of clusters by histograms, i.e., number of classes.
-        """
-        self.network_generator = network_generator
-        self.network_args = network_args
-
-        self.num_subgraphs = num_subgraphs
-        self.subgraph_size = subgraph_size
-
-        self.wl_max_hop = wl_max_hop
-        self.wl_x_type_for_hists = wl_x_type_for_hists
-        self.wl_num_color_clusters = wl_num_color_clusters or self.wl_max_hop
-        self.wl_num_hist_clusters = wl_num_hist_clusters
-        assert self.wl_x_type_for_hists in ["cluster", "color"]
-
-        assert network_generator.startswith("nx.")
-        super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
-
-    @property
-    def raw_dir(self):
-        return os.path.join(self.root, self.__class__.__name__.upper(),
-                            "_".join([str(e) for e in self._get_important_elements().values()]), "raw")
-
-    @property
-    def processed_dir(self):
-        return os.path.join(self.root, self.__class__.__name__.upper(),
-                            "_".join([str(e) for e in self._get_important_elements().values()]), "processed")
-
-    @property
-    def raw_file_names(self):
-        return ["edge_list.txt", "subgraphs.pth"]
-
-    def _get_important_elements(self):
-        ie = super()._get_important_elements()
-        ie.update({
-            "network_generator": self.network_generator,
-            "network_args": self.network_args,
-            "num_subgraphs": self.num_subgraphs,
-            "subgraph_size": self.subgraph_size,
-            "wl_max_hop": self.wl_max_hop,
-            "wl_x_type_for_hists": self.wl_x_type_for_hists,
-            "wl_num_hist_clusters": self.wl_num_hist_clusters,
-        })
-        if self.wl_x_type_for_hists == "cluster":
-            ie["wl_num_color_clusters"] = self.wl_num_color_clusters
-        return ie
-
-    def download(self):  # generate
-        g: nx.Graph = eval(self.network_generator)(*self.network_args)
-        edge_index = to_undirected(from_networkx(g).edge_index.long())
-        data = Data(x=torch.ones(maybe_num_nodes(edge_index)).long(),
-                    edge_index=edge_index)
-
-        # dump to edge_list_path = raw_paths[0]
-        nx.write_edgelist(g, self.raw_paths[0], data=False)
-
-        # dump to subgraph_path = raw_paths[1]
-        sub_x = generate_random_subgraph_by_walk(
-            data, num_subgraphs=self.num_subgraphs, subgraph_size=self.subgraph_size)
-        wl = WL4PatternNet(
-            num_layers=self.wl_max_hop, x_type_for_hists=self.wl_x_type_for_hists,
-            clustering_name="KMeans", n_clusters=self.wl_num_color_clusters,  # clustering & kwargs
-        )
-        colors, hists, clusters = wl(sub_x, data.x, data.edge_index)
-        hist_cluster_list = []
-        for wl_step, (co, hi, cl) in enumerate(zip(colors, hists, clusters)):
-            _hist_cluster = WL4PatternConv.to_cluster(
-                hi, clustering_name="KMeans", n_clusters=self.wl_num_hist_clusters)
-            hist_cluster_list.append(_hist_cluster.view(-1, 1))
-        hist_cluster = torch.cat(hist_cluster_list, dim=-1)
-
-        save_subgraphs(
-            path=self.raw_paths[1],
-            nodes_in_subgraphs=sub_x.tolist(),
-            labels=["+".join(str(v) for v in hc)
-                    for hc in hist_cluster.tolist()],
-        )
-
-    def process(self):
-        super().process()
-
-
 class HPONeuro(SubgraphDataset):
 
     def __init__(self, root, name, embedding_type,
@@ -461,23 +362,183 @@ class CC(SubgraphDataset):
         super().process()
 
 
+class WLHistSubgraph(SubgraphDataset):
+
+    def __init__(self, root, name, embedding_type,
+                 network_generator: str, network_args: list,
+                 num_subgraphs: int, subgraph_size: int,
+                 wl_hop_to_use: int, wl_max_hop: int, wl_x_type_for_hists: str = "color",
+                 wl_num_color_clusters: int = None, wl_num_hist_clusters: int = 2,
+                 val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
+                 transform=None, pre_transform=None, **kwargs):
+        """Params specific for WLHistSubgraph
+        :param network_generator: String form of graph generators in networkx.
+            e.g., nx.barabasi_albert_graph, nx.grid_2d_graph,
+                See https://networkx.org/documentation/stable/reference/generators.html
+        :param network_args: Arguments for network_generator.
+        :param num_subgraphs: Number of subgraphs to generate.
+        :param subgraph_size: Size of subgraphs to generate.
+        :param wl_hop_to_use: The hop to use in training and testing.
+        :param wl_max_hop: Number of hops to run WL algorithm.
+        :param wl_x_type_for_hists: Whether to use clustering for colors: cluster or color
+        :param wl_num_color_clusters: If wl_x_type_for_hists == cluster, number of clusters to use.
+        :param wl_num_hist_clusters: Number of clusters by histograms, i.e., number of classes.
+        """
+        self.network_generator = network_generator
+        self.network_args = network_args
+
+        self.num_subgraphs = num_subgraphs
+        self.subgraph_size = subgraph_size
+
+        self.wl_hop_to_use = wl_hop_to_use
+        self.wl_max_hop = wl_max_hop
+        self.wl_x_type_for_hists = wl_x_type_for_hists
+        self.wl_num_color_clusters = wl_num_color_clusters or self.wl_max_hop
+        self.wl_num_hist_clusters = wl_num_hist_clusters
+        assert 0 < wl_hop_to_use <= wl_max_hop
+        assert self.wl_x_type_for_hists in ["cluster", "color"]
+        assert network_generator.startswith("nx.")
+        super().__init__(root, name, embedding_type, val_ratio, test_ratio,
+                         save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
+
+        # Use one wl step of y & cache the original ys in _y.
+        self.data._y = self.data.y.clone()
+        self.data.y = self.data._y[:, wl_hop_to_use - 1]
+
+    @property
+    def raw_dir(self):
+        return os.path.join(self.root, self.__class__.__name__.upper(),
+                            "_".join([str(e) for e in self._get_important_elements().values()]), "raw")
+
+    @property
+    def processed_dir(self):
+        return os.path.join(self.root, self.__class__.__name__.upper(),
+                            "_".join([str(e) for e in self._get_important_elements().values()]), "processed")
+
+    @property
+    def raw_file_names(self):
+        return ["edge_list.txt", "subgraphs.pth"]
+
+    def _get_important_elements(self):
+        ie = super()._get_important_elements()
+        ie.update({
+            "network_generator": self.network_generator,
+            "network_args": self.network_args,
+            "num_subgraphs": self.num_subgraphs,
+            "subgraph_size": self.subgraph_size,
+            "wl_max_hop": self.wl_max_hop,
+            "wl_x_type_for_hists": self.wl_x_type_for_hists,
+            "wl_num_hist_clusters": self.wl_num_hist_clusters,
+        })
+        if self.wl_x_type_for_hists == "cluster":
+            ie["wl_num_color_clusters"] = self.wl_num_color_clusters
+        return ie
+
+    def download(self):  # generate
+        g: nx.Graph = eval(self.network_generator)(*self.network_args)
+        edge_index = to_undirected(from_networkx(g).edge_index.long())
+        data = Data(x=torch.ones(maybe_num_nodes(edge_index)).long(),
+                    edge_index=edge_index)
+
+        # dump to edge_list_path = raw_paths[0]
+        nx.write_edgelist(g, self.raw_paths[0], data=False)
+
+        # dump to subgraph_path = raw_paths[1]
+        sub_x = generate_random_subgraph_by_k_hop(
+            data, num_subgraphs=self.num_subgraphs, subgraph_size=self.subgraph_size, k=1)
+        wl = WL4PatternNet(
+            num_layers=self.wl_max_hop, x_type_for_hists=self.wl_x_type_for_hists,
+            clustering_name="KMeans", n_clusters=self.wl_num_color_clusters,  # clustering & kwargs
+        )
+        colors, hists, clusters = wl(sub_x, data.x, data.edge_index)
+        hist_cluster_list = []
+        for wl_step, (co, hi, cl) in enumerate(zip(colors, hists, clusters)):
+            _hist_cluster = WL4PatternConv.to_cluster(
+                hi, clustering_name="KMeans", n_clusters=self.wl_num_hist_clusters)
+            hist_cluster_list.append(_hist_cluster.view(-1, 1))
+        hist_cluster = torch.cat(hist_cluster_list, dim=-1)
+
+        save_subgraphs(
+            path=self.raw_paths[1],
+            nodes_in_subgraphs=sub_x.tolist(),
+            labels=["+".join(str(v) for v in hc)
+                    for hc in hist_cluster.tolist()],
+        )
+
+    def process(self):
+        super().process()
+
+
+class WLHistSubgraphBA(WLHistSubgraph):
+
+    def __init__(self, root, name, embedding_type, ba_n, ba_m, ba_seed,
+                 num_subgraphs: int, subgraph_size: int, wl_hop_to_use: int, wl_max_hop: int,
+                 wl_x_type_for_hists: str = "color", wl_num_color_clusters: int = None, wl_num_hist_clusters: int = 2,
+                 val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
+                 transform=None, pre_transform=None, **kwargs):
+
+        network_generator = "nx.barabasi_albert_graph"
+        network_args = [ba_n, ba_m, ba_seed]
+        super().__init__(root, name, embedding_type, network_generator, network_args, num_subgraphs, subgraph_size,
+                         wl_hop_to_use, wl_max_hop, wl_x_type_for_hists, wl_num_color_clusters, wl_num_hist_clusters,
+                         val_ratio, test_ratio, save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
+
+    def download(self):
+        super().download()
+
+    def process(self):
+        super().process()
+
+
+class WLHistSubgraphER(WLHistSubgraph):
+
+    def __init__(self, root, name, embedding_type, er_n, er_p, er_seed,
+                 num_subgraphs: int, subgraph_size: int, wl_hop_to_use: int, wl_max_hop: int,
+                 wl_x_type_for_hists: str = "color", wl_num_color_clusters: int = None, wl_num_hist_clusters: int = 2,
+                 val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
+                 transform=None, pre_transform=None, **kwargs):
+
+        network_generator = "nx.erdos_renyi_graph"
+        network_args = [er_n, er_p, er_seed]
+        super().__init__(root, name, embedding_type, network_generator, network_args, num_subgraphs, subgraph_size,
+                         wl_hop_to_use, wl_max_hop, wl_x_type_for_hists, wl_num_color_clusters, wl_num_hist_clusters,
+                         val_ratio, test_ratio, save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
+
+    def download(self):
+        super().download()
+
+    def process(self):
+        super().process()
+
+
 if __name__ == '__main__':
 
-    TYPE = "WLHistSubgraph"
-    # WLHistSubgraph
+    TYPE = "WLHistSubgraphER"
+    # WLHistSubgraphBA, WLHistSubgraphER
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
     E_TYPE = "no_embedding"  # gin, graphsaint_gcn, no_embedding
     DEBUG = False
-    if TYPE == "WLHistSubgraph":
+    WL_HIST_KWARGS = {
+        "num_subgraphs": 200,
+        "subgraph_size": 20,
+        "wl_hop_to_use": 1,
+        "wl_max_hop": 4,
+        "wl_x_type_for_hists": "cluster",  # color, cluster
+        "wl_num_color_clusters": None,
+        "wl_num_hist_clusters": 2,
+    }
+    if TYPE == "WLHistSubgraphBA":
         KWARGS = {
-            "network_generator": "nx.barabasi_albert_graph",
-            "network_args": [50, 3],
-            "num_subgraphs": 20,
-            "subgraph_size": 5,
-            "wl_max_hop": 3,
+            "ba_n": 3000, "ba_m": 15, "ba_seed": 42,
+            **WL_HIST_KWARGS,
+        }
+    elif TYPE == "WLHistSubgraphER":
+        KWARGS = {
+            "er_n": 3000, "er_p": 0.01, "er_seed": 42,
+            **WL_HIST_KWARGS,
         }
     else:
         KWARGS = {}
@@ -508,10 +569,18 @@ if __name__ == '__main__':
 
     cprint("global_data samples", "yellow")
     print(dts.global_data)
+    print("Avg. degree: ", dts.global_data.edge_index.size(1) / dts.global_data.num_nodes)
 
-    cprint("All subgraph samples", "yellow")
+    cprint("All subgraph samples", "magenta")
     print(dts.data)
-    if dts.data.y.dim() == 2:
-        for y_idx in range(dts.data.y.size(-1)):
-            _y = dts.data.y[:, y_idx]
-            print(_y)
+    if dts.data._y.dim() == 2:
+        _y_before = None
+        for y_idx in range(dts.data._y.size(-1)):
+            cprint(f"classes of {y_idx + 1} WL step " + "-" * 7, "magenta")
+            _y = dts.data._y[:, y_idx].long()
+            print(Counter(_y.tolist()))
+
+            if _y_before is not None:
+                print("Diff ratio w/ the previous WL: ",
+                      (_y_before != _y).sum().item() / _y.size(0))
+            _y_before = _y

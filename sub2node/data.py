@@ -1,3 +1,4 @@
+import inspect
 from argparse import Namespace
 from typing import Type, Any, Optional, Union, Dict, Tuple, List, Callable
 from pprint import pprint
@@ -13,10 +14,11 @@ from torch_geometric.loader import DataLoader
 from torch_sparse import SparseTensor
 
 from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, SubgraphDataset
+from data_sub import WLHistSubgraphBA, WLHistSubgraphER
 from data_sub import Density, CC, Coreness, CutRatio
 from data_utils import AddSelfLoopsV2, RemoveAttrs
 from sub2node import SubgraphToNode
-from utils import get_log_func, EternalIter
+from utils import get_log_func, EternalIter, merge_dict_by_keys
 
 
 class SubgraphDataModule(LightningDataModule):
@@ -81,18 +83,25 @@ class SubgraphDataModule(LightningDataModule):
     @property
     def dataset_class(self):
         assert self.h.dataset_name in ["HPOMetab", "PPIBP", "HPONeuro", "EMUser",
-                                       "Density", "CC", "Coreness", "CutRatio"]
+                                       "Density", "CC", "Coreness", "CutRatio",
+                                       "WLHistSubgraphER", "WLHistSubgraphBA"]
         return eval(self.h.dataset_name)
 
+    def load_dataset(self):
+        init_kwargs = merge_dict_by_keys(
+            {}, dict(self.h.items()),
+            inspect.getfullargspec(self.dataset_class.__init__).args
+        )
+        return self.dataset_class(root=self.h.dataset_path, name=self.h.dataset_name,
+                                  **init_kwargs)
+
     def prepare_data(self) -> None:
-        self.dataset_class(root=self.h.dataset_path, name=self.h.dataset_name,
-                           embedding_type=self.h.embedding_type)
+        self.load_dataset()
 
     def setup(self, stage: Optional[str] = None) -> None:
-        self.dataset: SubgraphDataset = self.dataset_class(
-            root=self.h.dataset_path, name=self.h.dataset_name,
-            embedding_type=self.h.embedding_type,
-        )
+
+        self.dataset: SubgraphDataset = self.load_dataset()
+
         if self.h.use_s2n:
             s2n = SubgraphToNode(
                 global_data=self.dataset.global_data,
@@ -167,7 +176,8 @@ def _print_data(data):
 
 if __name__ == '__main__':
 
-    NAME = "PPIBP"
+    NAME = "WLHistSubgraphER"
+    # WLHistSubgraphBA, WLHistSubgraphER
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
 
@@ -175,23 +185,61 @@ if __name__ == '__main__':
     E_TYPE = "graphsaint_gcn"  # gin, graphsaint_gcn
 
     USE_S2N = True
-    USE_SPARSE_TENSOR = True
+    USE_SPARSE_TENSOR = False
 
-    _sdm = SubgraphDataModule(
-        dataset_name=NAME,
-        dataset_path=PATH,
-        embedding_type=E_TYPE,
-        use_s2n=USE_S2N,
-        edge_thres=0.0,
-        edge_normalize="standardize_then_thres_max_linear",
-        edge_normalize_arg_1=0.0,
-        s2n_target_matrix="adjacent_no_self_loops",
-        s2n_is_weighted=False,
-        batch_size=32,
-        eval_batch_size=5,
-        use_sparse_tensor=USE_SPARSE_TENSOR,
-        pre_add_self_loops=True,
-    )
+    if not NAME.startswith("WL"):
+        _sdm = SubgraphDataModule(
+            dataset_name=NAME,
+            dataset_path=PATH,
+            embedding_type=E_TYPE,
+            use_s2n=USE_S2N,
+            edge_thres=0.0,
+            use_consistent_processing=True,
+            edge_normalize="standardize_then_thres_max_linear",
+            edge_normalize_arg_1=0.0,
+            s2n_target_matrix="adjacent_no_self_loops",
+            s2n_is_weighted=False,
+            batch_size=32,
+            eval_batch_size=5,
+            use_sparse_tensor=USE_SPARSE_TENSOR,
+            pre_add_self_loops=False,
+        )
+    else:
+        E_TYPE = "no_embedding"  # override
+        if NAME == "WLHistSubgraphBA":
+            _more_kwargs = {"ba_n": 3000, "ba_m": 15, "ba_seed": 42}
+        elif NAME == "WLHistSubgraphER":
+            _more_kwargs = {"er_n": 3000, "er_p": 0.01, "er_seed": 42}
+        else:
+            _more_kwargs = {}
+
+        _sdm = SubgraphDataModule(
+            dataset_name=NAME,
+            dataset_path=PATH,
+            embedding_type=E_TYPE,
+            use_s2n=USE_S2N,
+            edge_thres=0.0,
+            use_consistent_processing=True,
+            edge_normalize="standardize_then_thres_max_linear",
+            edge_normalize_arg_1=0.0,
+            s2n_target_matrix="adjacent_no_self_loops",
+            s2n_is_weighted=False,
+            batch_size=32,
+            eval_batch_size=5,
+            use_sparse_tensor=USE_SPARSE_TENSOR,
+            pre_add_self_loops=False,
+            **{
+                "num_subgraphs": 200,
+                "subgraph_size": 20,
+                "wl_hop_to_use": 1,
+                "wl_max_hop": 4,
+                "wl_x_type_for_hists": "cluster",  # color, cluster
+                "wl_num_color_clusters": None,
+                "wl_num_hist_clusters": 2,
+                **_more_kwargs,
+            }
+        )
+
     print(_sdm)
     cprint("Train ----", "green")
     for _i, _b in enumerate(_sdm.train_dataloader()):
