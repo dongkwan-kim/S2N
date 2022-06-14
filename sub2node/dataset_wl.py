@@ -10,6 +10,7 @@ from sklearn.cluster import KMeans
 from torch import Tensor
 from torch_geometric.data import Data
 from torch_geometric.nn import WLConv
+from torch_geometric.transforms import BaseTransform
 from torch_geometric.typing import Adj
 from torch_geometric.utils import to_undirected, to_networkx, from_networkx, k_hop_subgraph
 from torch_geometric.utils.num_nodes import maybe_num_nodes
@@ -20,6 +21,19 @@ from tqdm import tqdm
 from utils import torch_choice
 
 torch.manual_seed(42)
+
+
+class SliceYByIndex(BaseTransform):
+
+    def __init__(self, y_idx):
+        self.y_idx = y_idx
+
+    def __call__(self, data: Data):
+        data.y = data.y[:, self.y_idx]
+        return data
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}({self.y_idx})'
 
 
 class WL4PatternConv(WLConv):
