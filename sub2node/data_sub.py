@@ -119,6 +119,7 @@ def read_subgraphs(subgraph_path):
     train_mask, val_mask, test_mask = [], [], []
 
     multilabel = False
+    manylabel = False
 
     # Parse data
     with open(subgraph_path) as fin:
@@ -131,6 +132,7 @@ def read_subgraphs(subgraph_path):
 
                 label_cell = line.split("\t")[1]
                 if "+" in label_cell:  # just many labels, not multi-labels
+                    manylabel = True
                     l = label_cell.split("+")
                     for lab in l:  # use original 'integer' labels
                         labels[lab] = int(lab)
@@ -161,6 +163,8 @@ def read_subgraphs(subgraph_path):
         train_sub_y = torch.tensor(train_sub_y).long().squeeze()
         val_sub_y = torch.tensor(val_sub_y).long().squeeze()
         test_sub_y = torch.tensor(test_sub_y).long().squeeze()
+    if manylabel:
+        train_sub_y, val_sub_y, test_sub_y = train_sub_y.long(), val_sub_y.long(), test_sub_y.long()
 
     if len(val_mask) < len(test_mask):
         return train_sub_g, train_sub_y, test_sub_g, test_sub_y, val_sub_g, val_sub_y
@@ -406,6 +410,26 @@ class WLHistSubgraph(SubgraphDataset):
             self.data._y = self.data.y.clone()
             self.data.y = self.data._y[:, wl_hop_to_use - 1]
 
+    def y_stat_dict(self):
+        try:
+            y_2d = self.data._y
+        except:
+            y_2d = self.data.y
+        assert y_2d.dim() == 2
+        y_before = None
+        major_class_ratio, prev_diff_ratio = [], []
+        for y_idx in range(y_2d.size(-1)):
+            y_curr = y_2d[:, y_idx].long()
+            class_counter = Counter(y_curr.tolist())
+            major_class_ratio.append(max(class_counter.values()) / sum(class_counter.values()))
+            if y_before is not None:
+                prev_diff_ratio.append((y_before != y_curr).sum().item() / y_curr.size(0))
+            y_before = y_curr
+        return {
+            "major_class_ratio": major_class_ratio,
+            "prev_diff_ratio": prev_diff_ratio,
+        }
+
     @property
     def key_dir(self):
         return os.path.join(self.root, self.__class__.__name__.upper(),
@@ -517,7 +541,7 @@ class WLHistSubgraphER(WLHistSubgraph):
 
 if __name__ == '__main__':
 
-    TYPE = "WLHistSubgraphER"
+    TYPE = "WLHistSubgraphBA"
     # WLHistSubgraphBA, WLHistSubgraphER
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
@@ -528,7 +552,7 @@ if __name__ == '__main__':
     WL_HIST_KWARGS = {
         "num_subgraphs": 1500,
         "subgraph_size": 10,
-        "wl_hop_to_use": 1,
+        "wl_hop_to_use": None,
         "wl_max_hop": 4,
         "wl_x_type_for_hists": "cluster",  # color, cluster
         "wl_num_color_clusters": None,
@@ -579,14 +603,5 @@ if __name__ == '__main__':
 
     cprint("All subgraph samples", "magenta")
     print(dts.data)
-    if dts.data._y.dim() == 2:
-        _y_before = None
-        for y_idx in range(dts.data._y.size(-1)):
-            cprint(f"classes of {y_idx + 1} WL step " + "-" * 7, "magenta")
-            _y = dts.data._y[:, y_idx].long()
-            print(Counter(_y.tolist()))
-
-            if _y_before is not None:
-                print("Diff ratio w/ the previous WL: ",
-                      (_y_before != _y).sum().item() / _y.size(0))
-            _y_before = _y
+    for k, vs in dts.y_stat_dict().items():
+        print(k, [round(v, 3) for v in vs])
