@@ -167,14 +167,15 @@ class DatasetBase(InMemoryDataset):
         data_test = [rn_transform(d) for d in data_test]
         return data_train, data_val, data_test
 
-    def print_summary(self):
+    def print_summary(self, **kwargs):
 
         def out(v):
             return str(float(v)) if isinstance(v, torch.Tensor) else str(v)
 
         print("---------------------------------------------------------------")
         for k, v in chain(self._get_important_elements().items(),
-                          self._get_stats().items()):
+                          self._get_stats().items(),
+                          kwargs.items()):
             print("{:>20}{:>43}".format(k, out(v)))
         print("---------------------------------------------------------------")
 
