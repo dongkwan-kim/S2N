@@ -78,7 +78,7 @@ def get_data_list_from_subgraphs(global_edge_index, sub_nodes: List[List[int]], 
         if len(y.size()) == 0:
             y = torch.Tensor([y]).long()
         else:
-            y = y.view(1, -1).float()
+            y = y.view(1, -1).long()
         edge_index, _ = subgraph(x_index, global_edge_index, relabel_nodes=False)
         if edge_index.size(1) <= 0:
             cprint("No edge graph: size of X is {}".format(x_index.size()), "red")
