@@ -44,6 +44,7 @@ class SubgraphDataModule(LightningDataModule):
                  eval_batch_size=None,
                  use_sparse_tensor=False,
                  pre_add_self_loops=False,
+                 num_channels_global: int = None,
                  num_workers=0,
                  verbose=2,
                  prepare_data=False,
@@ -69,7 +70,10 @@ class SubgraphDataModule(LightningDataModule):
 
     @property
     def num_channels_global(self):
-        return self.dataset.global_data.x.size(1)
+        try:
+            return self.dataset.global_data.x.size(1)
+        except AttributeError:  # If x is not given.
+            return self.h.num_channels_global
 
     @property
     def num_classes(self):
@@ -140,7 +144,7 @@ class SubgraphDataModule(LightningDataModule):
             if self.h.s2n_transform is not None:
                 s2n_transform = self.h.s2n_transform
                 if isinstance(self.h.s2n_transform, str):
-                    s2n_transform = eval(s2n_transform)
+                    s2n_transform = eval(s2n_transform)(*self.h.s2n_transform_args)
                 transform_list.append(s2n_transform)
             transform = T.Compose(transform_list) if len(transform_list) > 0 else None
             if transform is not None:
@@ -191,7 +195,7 @@ def _print_data(data):
 
 if __name__ == '__main__':
 
-    NAME = "WLHistSubgraphER"
+    NAME = "WLHistSubgraphBA"
     # WLHistSubgraphBA, WLHistSubgraphER
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio

@@ -56,7 +56,7 @@ class GraphNeuralModel(LightningModule):
         self.given_datamodule = given_datamodule
 
         self.node_emb = VersatileEmbedding(
-            embedding_type="Pretrained",
+            embedding_type=("Pretrained" if given_datamodule.embedding is not None else "Embedding"),
             num_entities=given_datamodule.num_nodes_global,
             num_channels=given_datamodule.num_channels_global,
             pretrained_embedding=given_datamodule.embedding,
