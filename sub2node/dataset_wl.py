@@ -29,6 +29,7 @@ class SliceYByIndex(BaseTransform):
         self.y_idx = y_idx
 
     def __call__(self, data: Data):
+        data._y = data.y.clone()
         data.y = data.y[:, self.y_idx]
         return data
 
