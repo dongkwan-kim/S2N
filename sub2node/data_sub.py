@@ -416,17 +416,25 @@ class WLHistSubgraph(SubgraphDataset):
         except:
             y_2d = self.data.y
         assert y_2d.dim() == 2
+
+        from torch_geometric.data import Batch
+        _, _, test_data = self.get_train_val_test()
+        test_y_2d = Batch.from_data_list(test_data).y
+
         y_before = None
-        major_class_ratio, prev_diff_ratio = [], []
+        major_class_ratio_all, major_class_ratio_test, prev_diff_ratio = [], [], []
         for y_idx in range(y_2d.size(-1)):
             y_curr = y_2d[:, y_idx].long()
-            class_counter = Counter(y_curr.tolist())
-            major_class_ratio.append(max(class_counter.values()) / sum(class_counter.values()))
+            class_counter_all = Counter(y_curr.tolist())
+            class_counter_test = Counter(test_y_2d[:, y_idx].long().tolist())
+            major_class_ratio_all.append(max(class_counter_all.values()) / sum(class_counter_all.values()))
+            major_class_ratio_test.append(max(class_counter_test.values()) / sum(class_counter_test.values()))
             if y_before is not None:
                 prev_diff_ratio.append((y_before != y_curr).sum().item() / y_curr.size(0))
             y_before = y_curr
         return {
-            "major_class_ratio": major_class_ratio,
+            "major_class_ratio_all": major_class_ratio_all,
+            "major_class_ratio_test": major_class_ratio_test,
             "prev_diff_ratio": prev_diff_ratio,
         }
 
