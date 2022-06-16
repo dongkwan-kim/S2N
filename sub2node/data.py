@@ -183,6 +183,8 @@ class SubgraphDataModule(LightningDataModule):
 
 def _print_data(data):
     pprint(data)
+    if data.x is not None:
+        print("\t- x (Tensor)", f"{data.x.min()} -- {data.x.max()}")
     if data.edge_index is not None:
         print("\t- edge (Tensor)", f"{data.edge_index.min()} -- {data.edge_index.max()}")
     else:
@@ -250,7 +252,7 @@ if __name__ == '__main__':
             **{
                 "num_subgraphs": 1500,
                 "subgraph_size": 10,
-                "wl_hop_to_use": 1,
+                "wl_hop_to_use": None,
                 "wl_max_hop": 4,
                 "wl_x_type_for_hists": "cluster",  # color, cluster
                 "wl_num_color_clusters": None,
