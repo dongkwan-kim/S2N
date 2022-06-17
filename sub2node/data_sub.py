@@ -555,7 +555,10 @@ if __name__ == '__main__':
     # Density, CC, Coreness, CutRatio
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
-    E_TYPE = "no_embedding"  # gin, graphsaint_gcn, no_embedding
+    if TYPE.startswith("WL"):
+        E_TYPE = "no_embedding"
+    else:
+        E_TYPE = "gin"  # gin, graphsaint_gcn
     DEBUG = False
     WL_HIST_KWARGS = {
         "num_subgraphs": 1500,
@@ -611,5 +614,8 @@ if __name__ == '__main__':
 
     cprint("All subgraph samples", "magenta")
     print(dts.data)
-    for k, vs in dts.y_stat_dict().items():
-        print(k, [round(v, 3) for v in vs])
+    try:
+        for k, vs in dts.y_stat_dict().items():
+            print(k, [round(v, 3) for v in vs])
+    except AttributeError:
+        pass
