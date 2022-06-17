@@ -1,12 +1,12 @@
 from collections import OrderedDict, Counter
 from itertools import chain
 from pprint import pprint
-from typing import List, Dict, Tuple, Union
+from typing import List, Dict, Tuple, Union, Optional
 import os.path as osp
 
 import torch
 from termcolor import cprint
-from torch_geometric.data import InMemoryDataset, Data
+from torch_geometric.data import InMemoryDataset, Data, Batch
 import numpy as np
 import numpy_indexed as npi
 from sklearn.model_selection import StratifiedKFold, KFold, train_test_split
@@ -29,7 +29,7 @@ class DatasetBase(InMemoryDataset):
 
         self.num_train = -1
         self.num_val = -1
-        self.global_data = None
+        self.global_data: Optional[Data] = None
         self._num_nodes_global = None
         super(DatasetBase, self).__init__(root, transform, pre_transform)
 
@@ -145,6 +145,7 @@ class DatasetBase(InMemoryDataset):
         return list(self)
 
     def get_train_val_test(self) -> Tuple[List[Data], List[Data], List[Data]]:
+        # Data example: Data(x=[10, 1], edge_index=[2, 18], y=[1, 4])
         data_list = self.tolist()
         num_train_and_val = self.num_train + self.num_val
         data_train = data_list[:self.num_train]
@@ -153,19 +154,39 @@ class DatasetBase(InMemoryDataset):
         return data_train, data_val, data_test
 
     def get_data_list_with_split_attr(self) -> List[Data]:
+        # For S2N graphs
         data_train, data_val, data_test = self.get_train_val_test()
         for i, d_set in enumerate([data_train, data_val, data_test]):
             for d in d_set:
                 setattr(d, "split", torch.Tensor([i]).long())
         return data_train + data_val + data_test
 
-    def get_train_val_test_with_relabeling(self):
+    def get_train_val_test_with_individual_relabeling(self) -> Tuple[List[Data], List[Data], List[Data]]:
+        # For individual, and separated subgraphs
         rn_transform = RelabelNodes()
         data_train, data_val, data_test = self.get_train_val_test()
         data_train = [rn_transform(d) for d in data_train]
         data_val = [rn_transform(d) for d in data_val]
         data_test = [rn_transform(d) for d in data_test]
         return data_train, data_val, data_test
+
+    def get_train_val_test_connected_on_global_data(self) -> Tuple[Data, Data, Data]:
+        # For individual, but all connected in the global data
+        data_train, data_val, data_test = self.get_train_val_test()
+        global_edge_index = self.global_data.edge_index
+
+        rets: List[Data] = []
+        for data_list in [data_train, data_val, data_test]:
+
+            aggr_data = Batch.from_data_list(data_list)
+
+            aggr_data.x_to_xs = aggr_data.x.squeeze()
+            aggr_data.x = torch.arange(self.global_data.num_nodes, dtype=torch.long).view(-1, 1)
+            aggr_data.edge_index = global_edge_index
+
+            rets.append(aggr_data)
+
+        return rets[0], rets[1], rets[2]
 
     def print_summary(self, **kwargs):
 

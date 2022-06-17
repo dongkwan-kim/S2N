@@ -9,7 +9,7 @@ from termcolor import cprint
 
 import torch_geometric.transforms as T
 from torch import Tensor
-from torch_geometric.data import Data
+from torch_geometric.data import Data, Batch
 from pytorch_lightning import LightningDataModule
 from torch_geometric.loader import DataLoader
 from torch_sparse import SparseTensor
@@ -40,6 +40,7 @@ class SubgraphDataModule(LightningDataModule):
                  s2n_edge_aggr: Union[Callable[[Tensor], Tensor], str] = None,
                  s2n_is_weighted: bool = True,
                  s2n_transform=None,
+                 subgraph_batching: str = None,
                  batch_size: int = None,
                  eval_batch_size=None,
                  use_sparse_tensor=False,
@@ -151,21 +152,30 @@ class SubgraphDataModule(LightningDataModule):
                 data_list = [transform(d) for d in data_list]
             self.train_data, self.val_data, self.test_data = data_list
         else:
-            self.train_data, self.val_data, self.test_data = self.dataset.get_train_val_test_with_relabeling()
+            if self.h.subgraph_batching == "separated":
+                self.train_data, self.val_data, self.test_data \
+                    = self.dataset.get_train_val_test_with_individual_relabeling()
+            elif self.h.subgraph_batching == "connected":
+                self.train_data, self.val_data, self.test_data \
+                    = self.dataset.get_train_val_test_connected_on_global_data()
+            else:
+                raise ValueError(f"Wrong subgraph_batching: {self.h.subgraph_batching}")
 
     def train_dataloader(self):
-        if self.h.use_s2n:
+        if isinstance(self.train_data, (Data, Batch)):  # s2n, connected
             return EternalIter([self.train_data])
         else:
+            assert isinstance(self.train_data, list)
             return DataLoader(
                 self.train_data, batch_size=self.h.batch_size,
                 shuffle=True, num_workers=self.h.num_workers,
             )
 
     def _eval_loader(self, eval_data: Union[Data, List[Data]], stage=None):
-        if self.h.use_s2n:
+        if isinstance(eval_data, (Data, Batch)):  # s2n, connected
             return EternalIter([eval_data])
         else:
+            assert isinstance(eval_data, list)
             return DataLoader(
                 eval_data, batch_size=(self.h.eval_batch_size or self.h.batch_size),
                 shuffle=False, num_workers=self.h.num_workers,
@@ -185,6 +195,8 @@ def _print_data(data):
     pprint(data)
     if data.x is not None:
         print("\t- x (Tensor)", f"{data.x.min()} -- {data.x.max()}")
+    if hasattr(data, "sub_x") and data.sub_x is not None:
+        print("\t- sub_x (Tensor)", f"{data.sub_x.min()} -- {data.sub_x.max()}")
     if data.edge_index is not None:
         print("\t- edge (Tensor)", f"{data.edge_index.min()} -- {data.edge_index.max()}")
     else:
@@ -205,8 +217,9 @@ if __name__ == '__main__':
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
     E_TYPE = "graphsaint_gcn"  # gin, graphsaint_gcn
 
-    USE_S2N = True
+    USE_S2N = False
     USE_SPARSE_TENSOR = False
+    SUBGRAPH_BATCHING = None if USE_S2N else "connected"  # separated, connected
 
     if not NAME.startswith("WL"):
         _sdm = SubgraphDataModule(
@@ -216,10 +229,12 @@ if __name__ == '__main__':
             use_s2n=USE_S2N,
             edge_thres=0.0,
             use_consistent_processing=True,
-            edge_normalize="standardize_then_thres_max_linear",
+            edge_normalize="standardize_then_trunc_thres_max_linear",
             edge_normalize_arg_1=0.0,
+            edge_normalize_arg_2=2.0,
             s2n_target_matrix="adjacent_no_self_loops",
             s2n_is_weighted=False,
+            subgraph_batching=SUBGRAPH_BATCHING,
             batch_size=32,
             eval_batch_size=5,
             use_sparse_tensor=USE_SPARSE_TENSOR,
@@ -241,10 +256,12 @@ if __name__ == '__main__':
             use_s2n=USE_S2N,
             edge_thres=0.0,
             use_consistent_processing=True,
-            edge_normalize="standardize_then_thres_max_linear",
+            edge_normalize="standardize_then_trunc_thres_max_linear",
             edge_normalize_arg_1=0.0,
+            edge_normalize_arg_2=2.0,
             s2n_target_matrix="adjacent_no_self_loops",
             s2n_is_weighted=False,
+            subgraph_batching=SUBGRAPH_BATCHING,
             batch_size=32,
             eval_batch_size=5,
             use_sparse_tensor=USE_SPARSE_TENSOR,

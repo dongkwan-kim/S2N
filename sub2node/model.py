@@ -136,7 +136,7 @@ class GraphNeuralModel(LightningModule):
         self.evaluator = Evaluator(self.h.metrics, self.h.is_multi_labels)
 
     def forward(self, x=None, batch=None, sub_x=None, sub_batch=None,
-                edge_index=None, edge_attr=None, adj_t=None):
+                edge_index=None, edge_attr=None, adj_t=None, x_to_xs=None):
         if sub_x is not None:
             sub_x = self.node_emb(sub_x)
             x = self.sub_node_encoder(sub_x, sub_batch)
@@ -145,12 +145,14 @@ class GraphNeuralModel(LightningModule):
         edge_index = adj_t if adj_t is not None else edge_index
         x = self.encoder(x, edge_index, edge_attr)
         if not self.h.use_s2n:
+            if x_to_xs is not None:  # for connected subgraphs
+                x = x[x_to_xs]
             _, x = self.readout(x, batch)
         return x
 
     def step(self, batch: Data, batch_idx: int):
         step_kws = try_getattr(
-            batch, ["x", "batch", "sub_x", "sub_batch", "edge_index", "edge_attr", "adj_t"])
+            batch, ["x", "batch", "sub_x", "sub_batch", "edge_index", "edge_attr", "adj_t", "x_to_xs"])
         logits = self.forward(**step_kws)
 
         eval_mask = getattr(batch, "eval_mask", None)
@@ -221,6 +223,7 @@ if __name__ == '__main__':
     USE_S2N = False
     USE_SPARSE_TENSOR = False
     PRE_ADD_SELF_LOOPS = False
+    SUBGRAPH_BATCHING = None if USE_S2N else "connected"  # separated, connected
 
     ENCODER_NAME = "FAConv"  # GATConv, LINKX, FAConv
     if ENCODER_NAME == "GATConv":
@@ -247,12 +250,17 @@ if __name__ == '__main__':
         embedding_type=E_TYPE,
         use_s2n=USE_S2N,
         edge_thres=0.0,
-        edge_normalize="standardize_then_thres_max_linear",
+        use_consistent_processing=True,
+        edge_normalize="standardize_then_trunc_thres_max_linear",
+        edge_normalize_arg_1=0.0,
+        edge_normalize_arg_2=2.0,
         s2n_target_matrix="adjacent_no_self_loops",
+        s2n_is_weighted=False,
+        subgraph_batching=SUBGRAPH_BATCHING,
         batch_size=32,
         eval_batch_size=5,
         use_sparse_tensor=USE_SPARSE_TENSOR,
-        pre_add_self_loops=PRE_ADD_SELF_LOOPS,
+        pre_add_self_loops=False,
     )
     _gnm = GraphNeuralModel(
         encoder_layer_name=ENCODER_NAME,
