@@ -34,9 +34,9 @@ class SubgraphDataModule(LightningDataModule):
                  dataset_path: str,
                  embedding_type: str,
                  use_s2n: bool,
-                 edge_thres: Union[float, Callable, List[float]],
-                 edge_normalize: Union[str, Callable, None],
-                 s2n_target_matrix: str,
+                 edge_thres: Union[float, Callable, List[float]] = None,
+                 edge_normalize: Union[str, Callable, None] = None,
+                 s2n_target_matrix: str = None,
                  s2n_edge_aggr: Union[Callable[[Tensor], Tensor], str] = None,
                  s2n_is_weighted: bool = True,
                  s2n_transform=None,
@@ -100,6 +100,9 @@ class SubgraphDataModule(LightningDataModule):
             {}, dict(self.h.items()),
             inspect.getfullargspec(self.dataset_class.__init__).args
         )
+        for k, v in init_kwargs.items():
+            if k.endswith("transform"):
+                init_kwargs[k] = eval(init_kwargs[k])(*getattr(self.h, f"{k}_args", []))
         return self.dataset_class(root=self.h.dataset_path, name=self.h.dataset_name,
                                   **init_kwargs)
 
