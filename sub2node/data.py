@@ -167,7 +167,7 @@ class SubgraphDataModule(LightningDataModule):
         else:
             assert isinstance(self.train_data, list)
             return DataLoader(
-                self.train_data, batch_size=self.h.batch_size,
+                self.train_data, batch_size=(self.h.batch_size or len(self.train_data)),
                 shuffle=True, num_workers=self.h.num_workers,
             )
 
@@ -177,7 +177,7 @@ class SubgraphDataModule(LightningDataModule):
         else:
             assert isinstance(eval_data, list)
             return DataLoader(
-                eval_data, batch_size=(self.h.eval_batch_size or self.h.batch_size),
+                eval_data, batch_size=(self.h.eval_batch_size or self.h.batch_size or len(eval_data)),
                 shuffle=False, num_workers=self.h.num_workers,
             )
 
