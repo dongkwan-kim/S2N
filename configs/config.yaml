@@ -3,11 +3,12 @@
 # specify here default training configuration
 defaults:
   - config_sub.yaml  # args that can be overridden by below yamls
-  - datamodule: em_user.yaml
-    # ppi_bp, hpo_metab, hpo_neuro, em_user
+  - datamodule: wl_ba.yaml
+    # ppi_bp, hpo_metab, hpo_neuro, em_user, wl_ba, wl_er
     # density, cc, coreness, cut_ratio
-  - model: linkx_s2n-em_user.yaml
-    # gat_s2n, gcn_s2n, linkx_s2n
+  - model: gcn/s2n/for-wl_ba.yaml
+    # gcn, gat, fa, gcn2, linkx, mlp
+    # s2n, separated, connected
   - callbacks: checkpoint.yaml # set this to null if you don't want to use callbacks
     # checkpoint, timer
   - logger: many_loggers.yaml
