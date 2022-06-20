@@ -3,9 +3,9 @@
 # specify here default training configuration
 defaults:
   - config_sub.yaml  # args that can be overridden by below yamls
-  - datamodule: wl_ba.yaml
-    # ppi_bp, hpo_metab, hpo_neuro, em_user, wl_ba, wl_er
-    # density, cc, coreness, cut_ratio
+  - datamodule: s2n/wl_ba.yaml
+    # s2n, separated, connected
+    # ppi_bp, hpo_metab, hpo_neuro, em_user, wl_ba, wl_er, density, cc, coreness, cut_ratio
   - model: gcn/s2n/for-wl_ba.yaml
     # gcn, gat, fa, gcn2, linkx, mlp
     # s2n, separated, connected
@@ -30,7 +30,7 @@ defaults:
 # learn more here: https://hydra.cc/docs/next/tutorials/basic/running_your_app/working_directory
 work_dir: ${hydra:runtime.cwd}
 project_dir: ${work_dir}/..
-experiment_name: ${datamodule.dataset_name}/${model.subname}
+experiment_name: ${datamodule.dataset_subname}/${model.subname}
 
 # path to folder with data
 dataset_path: /mnt/nas2/GNN-DATA/SUBGRAPH/

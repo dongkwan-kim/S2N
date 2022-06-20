@@ -1,0 +1,14 @@
+_target_: data.SubgraphDataModule
+
+defaults:
+  - common_datamodule.yaml
+
+dataset_name: "EMUser"
+embedding_type: "gin"  # gin, graphsaint_gcn
+
+subgraph_batching: "connected"
+use_s2n: False
+
+# Will be inherited to the trainer, model
+_max_epochs: 1200
+_is_multi_labels: False

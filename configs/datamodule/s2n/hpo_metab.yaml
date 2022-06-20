@@ -1,0 +1,16 @@
+_target_: data.SubgraphDataModule
+
+defaults:
+  - common_datamodule.yaml
+
+dataset_name: "HPOMetab"
+embedding_type: "gin"  # gin, graphsaint_gcn
+
+use_s2n: True
+edge_normalize: "standardize_then_trunc_thres_max_linear"
+edge_normalize_arg_1: 0.000
+edge_normalize_arg_2: null
+
+# Will be inherited to the trainer, model
+_max_epochs: 2500
+_is_multi_labels: False

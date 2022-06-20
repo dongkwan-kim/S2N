@@ -1,0 +1,17 @@
+_target_: data.SubgraphDataModule
+
+defaults:
+  - common_datamodule.yaml
+  - common_wl_ba.yaml
+
+dataset_name: "WLHistSubgraphBA"
+embedding_type: "no_embedding"
+
+subgraph_batching: "separated"
+use_s2n: False
+transform: "SliceYByIndex"
+transform_args: [null]  # args for SliceYByIndex. NOTE: very important
+
+# Will be inherited to the trainer, model
+_max_epochs: 500
+_is_multi_labels: False
