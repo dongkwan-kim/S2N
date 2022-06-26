@@ -3,8 +3,8 @@ _target_: model.GraphNeuralModel
 defaults:
   - common_model.yaml
 
-encoder_layer_name: GCNConv
-num_layers: 2
+encoder_layer_name: ["Linear", "GCNConv"]
+num_layers: [2, 2]
 use_bn: True
 use_skip: False
 dropout_channels: 0.1

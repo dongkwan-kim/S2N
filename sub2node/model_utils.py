@@ -1,6 +1,6 @@
 import inspect
 from copy import deepcopy
-from typing import Union, Tuple, Optional
+from typing import Union, Tuple, Optional, List
 
 import torch
 import torch.nn as nn
@@ -104,6 +104,7 @@ class MyGCN2Conv(GCN2Conv):
     Docs is
         https://pytorch-geometric.readthedocs.io/en/latest/modules/nn.html#torch_geometric.nn.conv.GCN2Conv
     """
+
     def __init__(self, in_channels: int, out_channels: int,
                  alpha: float, theta: float = None,
                  layer: int = None, shared_weights: bool = True,
@@ -284,6 +285,43 @@ def get_gnn_conv_and_kwargs(gnn_name, **kwargs):
     }[gnn_name]
     gkw = merge_dict_by_keys({}, kwargs, inspect.getfullargspec(gnn_cls.__init__).args)
     return gnn_cls, gkw
+
+
+class GraphEncoderSequential(nn.Module):
+
+    def __init__(self, layer_name_list: List[str], num_layers_list: List[int],
+                 in_channels, hidden_channels, out_channels,
+                 activation="relu", use_bn=False, use_skip=False,
+                 dropout_channels=0.0, dropout_edges=0.0,
+                 activate_last=True, force_lin_x_0=False,
+                 **kwargs):
+        assert len(layer_name_list) == len(num_layers_list)
+        self.num_encoders = len(layer_name_list)
+        super().__init__()
+
+        for i, (layer_name, num_layers) in enumerate(zip(layer_name_list, num_layers_list)):
+            if i == 0:
+                _in_channels, _out_channels, _activate_last = in_channels, hidden_channels, True
+            else:  # i < self.num_encoders - 1:
+                _in_channels, _out_channels, _activate_last = hidden_channels, hidden_channels, True
+
+            if i == self.num_encoders - 1:
+                _out_channels, _activate_last = out_channels, activate_last
+
+            self.add_module(
+                f"enc_{i}",
+                GraphEncoder(layer_name, num_layers, _in_channels, hidden_channels, _out_channels,
+                             activation, use_bn, use_skip, dropout_channels, dropout_edges,
+                             _activate_last, force_lin_x_0, **kwargs))
+
+    def encoders(self):
+        for i in range(self.num_encoders):
+            yield getattr(self, f"enc_{i}")
+
+    def forward(self, x, edge_index, edge_attr=None, **kwargs):
+        for encoder in self.encoders():
+            x = encoder(x, edge_index, edge_attr, **kwargs)
+        return x
 
 
 class GraphEncoder(nn.Module):
@@ -641,7 +679,7 @@ class GlobalAttentionHalf(GlobalAttention):
 
 if __name__ == '__main__':
 
-    MODE = "GraphEncoder"
+    MODE = "GraphEncoderSequential"
 
     from pytorch_lightning import seed_everything
 
@@ -740,6 +778,28 @@ if __name__ == '__main__':
         )
         cprint(enc, "green")
         print(enc(_x, _ei).size())
+
+    elif MODE == "GraphEncoderSequential":
+
+        _ges = GraphEncoderSequential(
+            ["Linear", "GCN2Conv"], [2, 4], in_channels=32, hidden_channels=64, out_channels=7,
+            activation="relu", use_bn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
+            activate_last=False,
+            alpha=0.5, theta=1.0, shared_weights=False,
+        )
+        cprint(_ges, "green")
+        _x = torch.ones(10 * 32).view(10, -1)
+        _ei = torch.randint(0, 10, [2, 10])
+        print(_ges(_x, _ei, _ei[0].float()).size())
+
+        _ges = GraphEncoderSequential(
+            ["GCN2Conv"], [2], in_channels=32, hidden_channels=64, out_channels=7,
+            activation="relu", use_bn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
+            activate_last=True,
+            alpha=0.5, theta=1.0, shared_weights=False,
+        )
+        cprint(_ges, "green")
+        print(_ges(_x, _ei, _ei[0].float()).size())
 
     elif MODE == "MyFAConv":
 

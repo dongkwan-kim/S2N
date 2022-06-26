@@ -1,20 +1,18 @@
-from pprint import pprint
-from typing import Dict, Union, Optional, Tuple, Any, List
+from typing import Dict, Union, Any, List
 
 import torch
 import torch.nn as nn
+from omegaconf import ListConfig
 from pytorch_lightning import (LightningModule, seed_everything)
 from pytorch_lightning.utilities.types import EPOCH_OUTPUT
-
-from torch import Tensor
-from torch_geometric.data import Batch, Data
+from torch_geometric.data import Data
 
 from data import SubgraphDataModule
 from evaluator import Evaluator
 from model_linkx import InductiveLINKX
-from model_utils import GraphEncoder, VersatileEmbedding, MLP, DeepSets, Readout
-from utils import try_getattr, ld_to_dl, try_get_from_dict
+from model_utils import GraphEncoder, VersatileEmbedding, MLP, DeepSets, Readout, GraphEncoderSequential
 from run_utils import get_logger
+from utils import try_getattr, ld_to_dl, try_get_from_dict
 
 log = get_logger(__name__)
 
@@ -30,8 +28,8 @@ class GraphNeuralModel(LightningModule):
         return self.given_datamodule.hparams
 
     def __init__(self,
-                 encoder_layer_name: str,
-                 num_layers: int,
+                 encoder_layer_name: Union[str, List[str]],
+                 num_layers: Union[int, List[int]],
                  hidden_channels: int,
                  activation: str,
                  learning_rate: float,
@@ -91,9 +89,9 @@ class GraphNeuralModel(LightningModule):
 
         # If weighted edges are using, some models require special kwargs.
         if given_datamodule.h.s2n_is_weighted:
-            if encoder_layer_name == "GATConv":
+            if self.h.encoder_layer_name == "GATConv":
                 layer_kwargs["edge_dim"] = 1
-            elif encoder_layer_name == "FAConv":
+            elif self.h.encoder_layer_name == "FAConv":
                 layer_kwargs["normalize"] = False
 
         if self.h.encoder_layer_name == "LINKX":
@@ -108,9 +106,17 @@ class GraphNeuralModel(LightningModule):
                 **self.h.layer_kwargs,  # num_edge_layers, num_node_layers
             )
         else:
-            self.encoder = GraphEncoder(
-                layer_name=self.h.encoder_layer_name,
-                num_layers=self.h.num_layers,
+
+            if isinstance(self.h.encoder_layer_name, (ListConfig, list)):
+                if isinstance(self.h.num_layers, int):  # TODO: Remove HARD-CODED PARTS.
+                    self.h.num_layers = [2 for _ in range(len(self.h.encoder_layer_name) - 1)] + [self.h.num_layers]
+                __encoder_cls__ = GraphEncoderSequential
+            else:
+                __encoder_cls__ = GraphEncoder
+
+            self.encoder = __encoder_cls__(
+                self.h.encoder_layer_name,
+                self.h.num_layers,
                 in_channels=in_channels,
                 hidden_channels=self.h.hidden_channels,
                 out_channels=out_channels,
@@ -213,6 +219,7 @@ if __name__ == '__main__':
                 _kv_dict[k] = v
         print(_kv_dict)
 
+
     NAME = "PPIBP"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
@@ -225,7 +232,8 @@ if __name__ == '__main__':
     PRE_ADD_SELF_LOOPS = False
     SUBGRAPH_BATCHING = None if USE_S2N else "connected"  # separated, connected
 
-    ENCODER_NAME = "FAConv"  # GATConv, LINKX, FAConv
+    ENCODER_NAME = ["Linear", "GCNConv"]  # GATConv, LINKX, FAConv, ["Linear", "GCNConv"]
+    NUM_LAYERS = 2
     if ENCODER_NAME == "GATConv":
         LAYER_KWARGS = {
             "edge_dim": 1,
@@ -242,6 +250,9 @@ if __name__ == '__main__':
         }
     else:
         LAYER_KWARGS = {}
+
+    if isinstance(ENCODER_NAME, list):
+        NUM_LAYERS = [2, 3]
 
     seed_everything(42)
     _sdm = SubgraphDataModule(
@@ -264,7 +275,7 @@ if __name__ == '__main__':
     )
     _gnm = GraphNeuralModel(
         encoder_layer_name=ENCODER_NAME,
-        num_layers=2,
+        num_layers=NUM_LAYERS,
         hidden_channels=64,
         activation="relu",
         learning_rate=0.001,

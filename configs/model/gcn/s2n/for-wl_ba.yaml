@@ -17,4 +17,4 @@ _gradient_clip_val: 0.0
 sub_node_num_layers: 1
 sub_node_encoder_aggr: "sum"
 
-subname: "GCN-${datamodule.s2n_transform_args[0]}"
+subname: "GCN-S2N-${datamodule.s2n_transform_args[0]}"
