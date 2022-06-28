@@ -410,6 +410,11 @@ class WLHistSubgraph(SubgraphDataset):
             self.data._y = self.data.y.clone()
             self.data.y = self.data._y[:, wl_hop_to_use - 1]
 
+    @property
+    def num_classes(self) -> int:
+        # NOTE: If we use original num_classes, it will be self.wl_hop_to_use.
+        return self.wl_num_hist_clusters
+
     def y_stat_dict(self):
         try:
             y_2d = self.data._y
