@@ -191,7 +191,8 @@ def finish(
 def aggregate_csv_metrics(in_path, out_path,
                           key_hparams=None,
                           path_hparams=None,
-                          metric=None):
+                          metric=None,
+                          model_key="model/subname"):
     import yaml
     import pandas as pd
     import numpy as np
@@ -199,17 +200,17 @@ def aggregate_csv_metrics(in_path, out_path,
     metric = metric or "test/micro_f1"
     assert metric.startswith("test"), f"Wrong metric format: {metric}"
     key_hparams = key_hparams or [
-        "datamodule/dataset_name",
+        "datamodule/dataset_subname",
         "datamodule/embedding_type",
         "model/subname",
+        "datamodule/subgraph_batching",
+        "datamodule/use_s2n",
         "datamodule/s2n_is_weighted",
         "datamodule/s2n_target_matrix",
         "datamodule/use_consistent_processing",
         "datamodule/edge_normalize",
         "datamodule/edge_normalize_arg_1",
         "datamodule/edge_normalize_arg_2",
-        "datamodule/edge_thres",
-        "model/learning_rate",
         "model/num_layers",
         "model/sub_node_num_layers",
         "model/sub_node_encoder_aggr",
@@ -266,22 +267,34 @@ def aggregate_csv_metrics(in_path, out_path,
                     f"mean/{metric}", f"std/{metric}", f"N/{metric}",
                     *key_hparams[2:],
                     "list",
+                    "best_of_model",
                 ])
             writer.writeheader()
+
+            model_to_bom_metric = defaultdict(float)
+            for experiment_key, values in experiment_key_to_values.items():
+                model_subname = key_to_ingredients[experiment_key][model_key]
+                model_to_bom_metric[model_subname] = max(float(np.mean(values)),
+                                                         model_to_bom_metric[model_subname])
+
             num_lines = 0
             for experiment_key, values in experiment_key_to_values.items():
                 key_dict = key_to_ingredients[experiment_key]
-                writer.writerow({**key_dict,
-                                 f"mean/{metric}": float(np.mean(values)),
-                                 f"std/{metric}": float(np.std(values)),
-                                 f"N/{metric}": len(values),
-                                 "list": str(values)})
+                mean_metric = float(np.mean(values))
+                writer.writerow({
+                    **key_dict,
+                    f"mean/{metric}": mean_metric,
+                    f"std/{metric}": float(np.std(values)),
+                    f"N/{metric}": len(values),
+                    "list": str(values),
+                    "best_of_model": True if (mean_metric == model_to_bom_metric[key_dict[model_key]]) else "",
+                })
                 num_lines += 1
             print(f"Saved (lines {num_lines}): {out_file.resolve()}")
 
 
 if __name__ == '__main__':
     aggregate_csv_metrics(
-        "../logs_multi_csv",
+        "../logs_multi_csv",  # e.g., ../logs_multi_csv/WLHistSubgraphBA_5
         "../_aggr_logs",
     )
