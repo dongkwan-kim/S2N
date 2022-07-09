@@ -10,7 +10,7 @@ from torch_geometric.data import Data
 from data import SubgraphDataModule
 from evaluator import Evaluator
 from model_linkx import InductiveLINKX
-from model_utils import GraphEncoder, VersatileEmbedding, MLP, DeepSets, Readout, GraphEncoderSequential
+from model_utils import GraphEncoder, VersatileEmbedding, MLP, DeepSets, Readout, GraphEncoderSequential, WL4Subgraph
 from run_utils import get_logger
 from utils import try_getattr, ld_to_dl, try_get_from_dict
 
@@ -53,8 +53,13 @@ class GraphNeuralModel(LightningModule):
         assert given_datamodule is not None
         self.given_datamodule = given_datamodule
 
+        embedding_type = "Embedding"
+        if self.h.encoder_layer_name == "WL":
+            embedding_type = "UseRawFeature"
+        elif given_datamodule.embedding is not None:
+            embedding_type = "Pretrained"
         self.node_emb = VersatileEmbedding(
-            embedding_type=("Pretrained" if given_datamodule.embedding is not None else "Embedding"),
+            embedding_type=embedding_type,
             num_entities=given_datamodule.num_nodes_global,
             num_channels=given_datamodule.num_channels_global,
             pretrained_embedding=given_datamodule.embedding,
@@ -105,6 +110,13 @@ class GraphNeuralModel(LightningModule):
                 num_train_nodes=num_train_nodes,
                 **self.h.layer_kwargs,  # num_edge_layers, num_node_layers
             )
+        elif self.h.encoder_layer_name == "WL":
+            self.encoder = WL4Subgraph(
+                num_layers=self.h.num_layers,
+                out_channels=given_datamodule.num_classes,
+                concat=False,
+                cache=True,
+            )
         else:
 
             if isinstance(self.h.encoder_layer_name, (ListConfig, list)):
@@ -129,7 +141,7 @@ class GraphNeuralModel(LightningModule):
                 **self.h.layer_kwargs,
             )
 
-        if self.h.use_s2n:
+        if self.h.use_s2n or self.h.encoder_layer_name == "WL":
             self.readout = None
         else:
             self.readout = Readout("sum", use_in_mlp=False, use_out_linear=True,
@@ -143,13 +155,19 @@ class GraphNeuralModel(LightningModule):
 
     def forward(self, x=None, batch=None, sub_x=None, sub_batch=None,
                 edge_index=None, edge_attr=None, adj_t=None, x_to_xs=None):
+
+        if self.h.encoder_layer_name == "WL":
+            return self.encoder(x, edge_index, batch, x_to_xs)
+
         if sub_x is not None:
             sub_x = self.node_emb(sub_x)
             x = self.sub_node_encoder(sub_x, sub_batch)
         else:
             x = self.node_emb(x)
+
         edge_index = adj_t if adj_t is not None else edge_index
         x = self.encoder(x, edge_index, edge_attr)
+
         if not self.h.use_s2n:
             if x_to_xs is not None:  # for connected subgraphs
                 x = x[x_to_xs]
@@ -232,8 +250,11 @@ if __name__ == '__main__':
     PRE_ADD_SELF_LOOPS = False
     SUBGRAPH_BATCHING = None if USE_S2N else "connected"  # separated, connected
 
-    ENCODER_NAME = ["Linear", "GCNConv"]  # GATConv, LINKX, FAConv, ["Linear", "GCNConv"]
+    ENCODER_NAME = "WL"  # ["Linear", "GCNConv"]  # GATConv, LINKX, FAConv
     NUM_LAYERS = 2
+    if isinstance(ENCODER_NAME, list):
+        NUM_LAYERS = [2, 3]
+
     if ENCODER_NAME == "GATConv":
         LAYER_KWARGS = {
             "edge_dim": 1,
@@ -250,9 +271,6 @@ if __name__ == '__main__':
         }
     else:
         LAYER_KWARGS = {}
-
-    if isinstance(ENCODER_NAME, list):
-        NUM_LAYERS = [2, 3]
 
     seed_everything(42)
     _sdm = SubgraphDataModule(

@@ -13,7 +13,7 @@ from torch import Tensor
 from torch.nn import Linear
 from torch_geometric.nn.conv.gcn_conv import gcn_norm
 from torch_geometric.nn.glob import global_mean_pool, global_max_pool, global_add_pool
-from torch_geometric.nn import GlobalAttention, GCNConv, SAGEConv, GATConv, FAConv, GCN2Conv
+from torch_geometric.nn import GlobalAttention, GCNConv, SAGEConv, GATConv, FAConv, GCN2Conv, WLConv
 from torch_geometric.typing import OptTensor, Adj
 from torch_scatter import scatter_add
 from torch_sparse import SparseTensor
@@ -428,6 +428,54 @@ class GraphEncoder(nn.Module):
         )
 
 
+class WL4Subgraph(nn.Module):
+
+    def __init__(self, num_layers, out_channels, concat=False, cache=False):
+        self._hists_cache = {}
+        super().__init__()
+        self.num_layers = num_layers
+        self.out_channels = out_channels
+        self.concat = concat
+        self.cache = cache
+        self.wl_convs = torch.nn.ModuleList([WLConv() for _ in range(num_layers)])
+        # NOTE: Lazy modules are a new feature under heavy development so changes to the API
+        #  or functionality can happen at any moment.
+        self.lin = nn.LazyLinear(out_channels)
+
+    def forward_wl(self, x, edge_index, batch=None, x_to_xs=None):
+
+        if x.dim() > 1 and x.size(-1) == 1:
+            x = x.flatten()
+
+        hists = []
+        for conv in self.wl_convs:
+            x = conv(x, edge_index)
+            if x_to_xs is not None:  # for connected subgraphs
+                hists.append(conv.histogram(x[x_to_xs], batch, norm=True))
+            else:
+                hists.append(conv.histogram(x, batch, norm=True))
+        return hists
+
+    def forward(self, x=None, edge_index=None, batch=None, x_to_xs=None, **kwargs):
+
+        if self.cache:
+            cache_key = (x.size(0), edge_index.size(1), batch.size(0) if batch is not None else None)
+            if cache_key not in self._hists_cache:
+                self._hists_cache[cache_key] = self.forward_wl(x, edge_index, batch, x_to_xs)
+            hists = self._hists_cache[cache_key]
+        else:
+            hists = self.forward_wl(x, edge_index, batch, x_to_xs)
+
+        if self.concat:
+            hist_x = torch.cat(hists, dim=1)  # [num_subgraphs, \sum colors_i]
+        else:
+            hist_x = hists[-1]  # [num_subgraphs, colors_last]
+        return self.lin(hist_x)  # [num_subgraphs, out_channels]
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(L={self.num_layers}, O={self.out_channels}, concat={self.concat})"
+
+
 class EdgePredictor(nn.Module):
 
     def __init__(self, predictor_type, num_layers, hidden_channels, out_channels,
@@ -625,12 +673,15 @@ class VersatileEmbedding(nn.Module):
             return indices_or_features
 
     def __repr__(self):
-        return '{}({}, {}, type={})'.format(
-            self.__class__.__name__,
-            self.num_entities,
-            self.num_channels,
-            self.embedding_type,
-        )
+        if self.embedding is not None:
+            return "{}({}, {}, type={})".format(
+                self.__class__.__name__,
+                self.num_entities,
+                self.num_channels,
+                self.embedding_type,
+            )
+        else:
+            return "{}(type={})".format(self.__class__.__name__, self.embedding_type)
 
 
 class BiConv(nn.Module):
@@ -679,7 +730,7 @@ class GlobalAttentionHalf(GlobalAttention):
 
 if __name__ == '__main__':
 
-    MODE = "GraphEncoderSequential"
+    MODE = "WL4Subgraph"
 
     from pytorch_lightning import seed_everything
 
@@ -800,6 +851,23 @@ if __name__ == '__main__':
         )
         cprint(_ges, "green")
         print(_ges(_x, _ei, _ei[0].float()).size())
+
+    elif MODE == "WL4Subgraph":
+        _x = torch.ones(10).view(10, -1).long()
+        _ei = torch.cat([
+            torch.randint(0, 5, [2, 7]),
+            torch.randint(5, 10, [2, 9]),
+        ], dim=1)
+        _batch = torch.zeros(10).long()
+        _batch[5:] = 1
+        _x_to_xs = torch.Tensor([0, 1, 2, 3, 4, 0, 1, 2, 3, 4]).long()
+
+        wl4s = WL4Subgraph(num_layers=4, out_channels=2, concat=True, cache=True)
+        print(wl4s)
+        print(wl4s(_x, _ei, _batch))
+        print(wl4s(_x, _ei, _batch))
+        wl4s = WL4Subgraph(num_layers=3, out_channels=3, concat=False)
+        print(wl4s(_x, _ei, _batch, _x_to_xs))
 
     elif MODE == "MyFAConv":
 

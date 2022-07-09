@@ -1,0 +1,17 @@
+_target_: model.GraphNeuralModel
+
+defaults:
+  - common_model.yaml
+
+encoder_layer_name: "WL"
+num_layers: 2
+use_bn: null
+use_skip: null
+dropout_channels: null
+dropout_edges: null
+
+learning_rate: 0.001
+weight_decay: 0.00001
+_gradient_clip_val: 0.0
+
+subname: "WL-${datamodule.subgraph_batching}-${datamodule.transform_args[0]}"
