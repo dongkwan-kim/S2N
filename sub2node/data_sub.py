@@ -1,11 +1,13 @@
+import shutil
 from collections import Counter
 from pprint import pprint
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Union
 import os
 
 import torch
 from sklearn.preprocessing import MultiLabelBinarizer
 from termcolor import cprint
+from torch import Tensor
 from torch_geometric.data import Data
 from torch_geometric.utils import subgraph, sort_edge_index, to_undirected, from_networkx
 import networkx as nx
@@ -485,13 +487,13 @@ class WLHistSubgraph(SubgraphDataset):
         nx.write_edgelist(g, self.raw_paths[0], data=False)
 
         # dump to subgraph_path = raw_paths[1]
-        sub_x = generate_random_subgraph_by_k_hop(
+        sub_x: Union[Tensor, List[Tensor]] = generate_random_subgraph_by_k_hop(
             data, num_subgraphs=self.num_subgraphs, subgraph_size=self.subgraph_size, k=1)
         wl = WL4PatternNet(
             num_layers=self.wl_max_hop, x_type_for_hists=self.wl_x_type_for_hists,
             clustering_name="KMeans", n_clusters=self.wl_num_color_clusters,  # clustering & kwargs
         )
-        colors, hists, clusters = wl(sub_x, data.x, data.edge_index)
+        colors, hists, clusters = wl(sub_x, data.x, data.edge_index, use_tqdm=True)
         hist_cluster_list = []
         for wl_step, (co, hi, cl) in enumerate(zip(colors, hists, clusters)):
             _hist_cluster = WL4PatternConv.to_cluster(
@@ -499,9 +501,14 @@ class WLHistSubgraph(SubgraphDataset):
             hist_cluster_list.append(_hist_cluster.view(-1, 1))
         hist_cluster = torch.cat(hist_cluster_list, dim=-1)
 
+        if isinstance(sub_x, list):
+            nodes_in_subgraphs = [nodes.tolist() for nodes in sub_x]
+        else:
+            nodes_in_subgraphs = sub_x.tolist()
+
         save_subgraphs(
             path=self.raw_paths[1],
-            nodes_in_subgraphs=sub_x.tolist(),
+            nodes_in_subgraphs=nodes_in_subgraphs,
             labels=["+".join(str(v) for v in hc)
                     for hc in hist_cluster.tolist()],
         )
@@ -519,12 +526,29 @@ class WLHistSubgraphBA(WLHistSubgraph):
                  transform=None, pre_transform=None, **kwargs):
 
         network_generator = "nx.barabasi_albert_graph"
-        network_args = [ba_n, ba_m, ba_seed]
+        network_args = [ba_n, ba_m, self.ba_seed_that_makes_balanced_datasets(ba_n, ba_m, ba_seed)]
         super().__init__(root, name, embedding_type, network_generator, network_args, num_subgraphs, subgraph_size,
                          wl_hop_to_use, wl_max_hop, wl_x_type_for_hists, wl_num_color_clusters, wl_num_hist_clusters,
                          val_ratio, test_ratio, save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
 
+    def ba_seed_that_makes_balanced_datasets(self, ba_n, ba_m, ba_seed):
+        if ba_seed is not None:
+            return ba_seed
+        else:
+            return {  # comments are major_class_ratio_test
+                (10000, 4): 380,  # 0.6667
+                (10000, 5): 399,  # 0.64
+                (10000, 6): 288,  # 0.64
+                (10000, 7): 232,  # 0.6867
+                (10000, 8): 364,  # 0.66
+                (10000, 10): 451,  # 0.6533
+                (10000, 15): 489,  # 0.5933
+                (10000, 20): 51,  # 0.5533
+            }[(ba_n, ba_m)]
+
     def download(self):
+        from utils import make_deterministic_everything
+        make_deterministic_everything(self.network_args[2])
         super().download()
 
     def process(self):
@@ -552,7 +576,35 @@ class WLHistSubgraphER(WLHistSubgraph):
         super().process()
 
 
+def find_seed_that_makes_balanced_datasets(seed_name="ba_seed", class_ratio_thres=0.66, **kwargs):
+    min_of_max_vs, seed_at_min_of_max_vs = 999, None
+    for seed in range(500):
+        kwargs[seed_name] = seed
+        trial_dataset: WLHistSubgraph = eval(TYPE)(
+            root=PATH,
+            name=TYPE,
+            embedding_type=E_TYPE,
+            debug=DEBUG,
+            **kwargs,
+        )
+        mcrt_list = trial_dataset.y_stat_dict()["major_class_ratio_test"]
+        if max(mcrt_list) < class_ratio_thres:
+            cprint(f"Good seed found: {seed} ({[round(v, 3) for v in mcrt_list]})",
+                   "green")
+        else:
+            cprint(f"Bad seed: {seed} ({[round(v, 3) for v in mcrt_list]}), "
+                   f"removing: {trial_dataset.key_dir}", "red")
+            shutil.rmtree(trial_dataset.key_dir)
+
+        if min_of_max_vs > max(mcrt_list):
+            min_of_max_vs = max(mcrt_list)
+            seed_at_min_of_max_vs = seed
+        print(f"\t- Current min_of_max_vs is {min_of_max_vs} at seed {seed_at_min_of_max_vs}")
+
+
 if __name__ == '__main__':
+
+    FIND_SEED = False  # NOTE: If True, find_seed_that_makes_balanced_datasets will be performed
 
     TYPE = "WLHistSubgraphBA"
     # WLHistSubgraphBA, WLHistSubgraphER
@@ -567,7 +619,7 @@ if __name__ == '__main__':
     DEBUG = False
     WL_HIST_KWARGS = {
         "num_subgraphs": 1500,
-        "subgraph_size": 10,
+        "subgraph_size": None,  # NOTE: Using None will use ego-graphs
         "wl_hop_to_use": None,
         "wl_max_hop": 4,
         "wl_x_type_for_hists": "cluster",  # color, cluster
@@ -576,8 +628,9 @@ if __name__ == '__main__':
     }
     if TYPE == "WLHistSubgraphBA":
         KWARGS = {
-            "ba_n": 10000, "ba_m": 10,  # 10, 15, 20
-            "ba_seed": 42,
+            "ba_n": 10000,
+            "ba_m": 5,  # 5, 10, 15, 20
+            "ba_seed": None,  # NOTE: Using None will use ba_seed_that_makes_balanced_datasets
             **WL_HIST_KWARGS,
         }
     elif TYPE == "WLHistSubgraphER":
@@ -589,7 +642,11 @@ if __name__ == '__main__':
     else:
         KWARGS = {}
 
-    dts = eval(TYPE)(
+    if FIND_SEED:
+        find_seed_that_makes_balanced_datasets(**KWARGS)
+        exit("Exit with success")
+
+    dts: SubgraphDataset = eval(TYPE)(
         root=PATH,
         name=TYPE,
         embedding_type=E_TYPE,
@@ -622,5 +679,7 @@ if __name__ == '__main__':
     try:
         for k, vs in dts.y_stat_dict().items():
             print(k, [round(v, 3) for v in vs])
+            for v in vs:
+                print(round(v, 3))
     except AttributeError:
         pass

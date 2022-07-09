@@ -1,5 +1,5 @@
 from itertools import zip_longest
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 
 import matplotlib.pyplot as plt
 import networkx as nx
@@ -8,6 +8,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.preprocessing import StandardScaler, Normalizer
 from sklearn.cluster import KMeans
 from torch import Tensor
+from torch.nn.utils.rnn import pad_sequence
 from torch_geometric.data import Data
 from torch_geometric.nn import WLConv
 from torch_geometric.transforms import BaseTransform
@@ -126,13 +127,13 @@ class WL4PatternConv(WLConv):
 
     def subgraph_histogram(self,
                            subgraph_nodes: List[Tensor],
-                           x: Tensor,
+                           x_as_color: Tensor,
                            norm: bool = False, num_colors=None) -> Tensor:
         S = len(subgraph_nodes)
         sizes = torch.tensor([s.size(0) for s in subgraph_nodes], dtype=torch.long)
         batch = torch.arange(S).repeat_interleave(sizes)
-        sub_x = x[torch.cat(subgraph_nodes)]
-        sub_hist = self.histogram(sub_x, batch, norm=norm, num_colors=num_colors)
+        sub_x_as_color = x_as_color[torch.cat(subgraph_nodes)]
+        sub_hist = self.histogram(sub_x_as_color, batch, norm=norm, num_colors=num_colors)
         return sub_hist
 
     @staticmethod
@@ -157,10 +158,11 @@ class WL4PatternNet(torch.nn.Module):
         self.x_type_for_hists = x_type_for_hists
         assert x_type_for_hists in ["color", "cluster"]
 
-    def forward(self, sub_x, x, edge_index, hist_norm=True):
+    def forward(self, sub_x: Union[Tensor, List[Tensor]], x, edge_index, hist_norm=True, use_tqdm=False):
         colors, hists, clusters = [], [], []
 
-        for i, conv in enumerate(self.convs):
+        convs = tqdm(self.convs, desc="WL4PatternNet.forward") if use_tqdm else self.convs
+        for i, conv in enumerate(convs):
             conv: WL4PatternConv
             x = conv(x, edge_index)
 
@@ -199,14 +201,17 @@ def generate_random_subgraph_by_walk(global_data: Data, num_subgraphs, subgraph_
     return nodes_in_subgraphs
 
 
-def generate_random_subgraph_by_k_hop(global_data: Data, num_subgraphs, subgraph_size, k=1):
+def generate_random_subgraph_by_k_hop(global_data: Data, num_subgraphs,
+                                      subgraph_size=None, k=1) -> Union[Tensor, List[Tensor]]:
     N, E = global_data.num_nodes, global_data.num_edges
     nodes_in_subgraphs = []
     start = torch.randint(0, N, (num_subgraphs * 2,), dtype=torch.long).flatten()
     for n_idx in tqdm(start, desc="generate_random_subgraph_by_k_hop", total=num_subgraphs * 2):
         subset, _, idx_of_start_in_subset, _ = k_hop_subgraph([n_idx], k, global_data.edge_index, num_nodes=N)
         _S = subset.size(0)
-        if _S < subgraph_size:
+        if subgraph_size is None or _S == subgraph_size:
+            nodes_in_subgraphs.append(subset)
+        elif _S < subgraph_size:
             continue
         elif _S > subgraph_size:
             # Sample nodes of subgraph_size from subset:
@@ -215,14 +220,14 @@ def generate_random_subgraph_by_k_hop(global_data: Data, num_subgraphs, subgraph
             sub_subset = torch_choice(subset[mask], subgraph_size - 1)  # -1 for start
             sub_subset = torch.cat([sub_subset, torch.tensor([n_idx], dtype=torch.long)])
             nodes_in_subgraphs.append(sub_subset)
-        else:
-            nodes_in_subgraphs.append(subset)
 
         if len(nodes_in_subgraphs) == num_subgraphs:
             break
 
-    nodes_in_subgraphs = torch.stack(nodes_in_subgraphs)
-    assert list(nodes_in_subgraphs.size()) == [num_subgraphs, subgraph_size]
+    if subgraph_size is not None:
+        nodes_in_subgraphs = torch.stack(nodes_in_subgraphs)
+        assert list(nodes_in_subgraphs.size()) == [num_subgraphs, subgraph_size]
+
     return nodes_in_subgraphs
 
 
