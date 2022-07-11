@@ -114,6 +114,7 @@ class GraphNeuralModel(LightningModule):
             self.encoder = WL4Subgraph(
                 num_layers=self.h.num_layers,
                 out_channels=given_datamodule.num_classes,
+                dropout=self.h.dropout_channels,
                 concat=False,
                 cache=True,
             )

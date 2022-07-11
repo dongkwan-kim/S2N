@@ -430,11 +430,12 @@ class GraphEncoder(nn.Module):
 
 class WL4Subgraph(nn.Module):
 
-    def __init__(self, num_layers, out_channels, concat=False, cache=False):
-        self._hists_cache = {}
+    def __init__(self, num_layers, out_channels, dropout=0.0, concat=False, cache=False):
+        self.x_cache = {}
         super().__init__()
         self.num_layers = num_layers
         self.out_channels = out_channels
+        self.dropout = dropout
         self.concat = concat
         self.cache = cache
         self.wl_convs = torch.nn.ModuleList([WLConv() for _ in range(num_layers)])
@@ -448,8 +449,16 @@ class WL4Subgraph(nn.Module):
             x = x.flatten()
 
         hists = []
-        for conv in self.wl_convs:
-            x = conv(x, edge_index)
+        for wl_step, conv in enumerate(self.wl_convs):
+
+            if not self.cache:
+                x = conv(x, edge_index)
+            else:
+                cache_key = (wl_step, x.size(0), edge_index.size(1))
+                if cache_key not in self.x_cache:
+                    self.x_cache[cache_key] = conv(x, edge_index)
+                x = self.x_cache[cache_key]
+
             if x_to_xs is not None:  # for connected subgraphs
                 hists.append(conv.histogram(x[x_to_xs], batch, norm=True))
             else:
@@ -458,22 +467,19 @@ class WL4Subgraph(nn.Module):
 
     def forward(self, x=None, edge_index=None, batch=None, x_to_xs=None, **kwargs):
 
-        if self.cache:
-            cache_key = (x.size(0), edge_index.size(1), batch.size(0) if batch is not None else None)
-            if cache_key not in self._hists_cache:
-                self._hists_cache[cache_key] = self.forward_wl(x, edge_index, batch, x_to_xs)
-            hists = self._hists_cache[cache_key]
-        else:
-            hists = self.forward_wl(x, edge_index, batch, x_to_xs)
+        hists = self.forward_wl(x, edge_index, batch, x_to_xs)
 
         if self.concat:
             hist_x = torch.cat(hists, dim=1)  # [num_subgraphs, \sum colors_i]
         else:
             hist_x = hists[-1]  # [num_subgraphs, colors_last]
+
+        hist_x = F.dropout(hist_x, p=self.dropout, training=self.training)
         return self.lin(hist_x)  # [num_subgraphs, out_channels]
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(L={self.num_layers}, O={self.out_channels}, concat={self.concat})"
+        return f"{self.__class__.__name__}(L={self.num_layers}, O={self.out_channels}, " \
+               f"dropout={self.dropout}, concat={self.concat}, cache={self.cache})"
 
 
 class EdgePredictor(nn.Module):
@@ -862,7 +868,7 @@ if __name__ == '__main__':
         _batch[5:] = 1
         _x_to_xs = torch.Tensor([0, 1, 2, 3, 4, 0, 1, 2, 3, 4]).long()
 
-        wl4s = WL4Subgraph(num_layers=4, out_channels=2, concat=True, cache=True)
+        wl4s = WL4Subgraph(num_layers=4, out_channels=2, dropout=0.2, concat=True, cache=True)
         print(wl4s)
         print(wl4s(_x, _ei, _batch))
         print(wl4s(_x, _ei, _batch))
