@@ -230,7 +230,7 @@ def aggregate_csv_metrics(in_path, out_path,
     key_to_values = defaultdict(lambda: defaultdict(list))
     key_to_ingredients = dict()
     for csv_path in tqdm(in_path.glob("**/*.csv"),
-                         desc="Reading CSVs",
+                         desc=f"Reading CSVs from {in_path}",
                          total=len(list(in_path.glob("**/*.csv")))):
         csv_path = Path(csv_path)
         yaml_path = csv_path.parent / "hparams.yaml"
@@ -266,11 +266,11 @@ def aggregate_csv_metrics(in_path, out_path,
         with open(out_file, "w") as f:
             writer = csv.DictWriter(
                 f, fieldnames=[
+                    "best_of_model",
                     *key_hparams[:2],
                     f"mean/{metric}", f"std/{metric}", f"N/{metric}",
                     *key_hparams[2:],
                     "list",
-                    "best_of_model",
                 ])
             writer.writeheader()
 
@@ -281,18 +281,22 @@ def aggregate_csv_metrics(in_path, out_path,
                                                          model_to_bom_metric[model_subname])
 
             num_lines = 0
+            bom_logged = False
             for experiment_key, values in experiment_key_to_values.items():
                 key_dict = key_to_ingredients[experiment_key]
                 mean_metric = float(np.mean(values))
+                bom = True if (mean_metric == model_to_bom_metric[key_dict[model_key]]) else ""
                 writer.writerow({
+                    "best_of_model": bom if not bom_logged else "",
                     **key_dict,
                     f"mean/{metric}": mean_metric,
                     f"std/{metric}": float(np.std(values)),
                     f"N/{metric}": len(values),
                     "list": str(values),
-                    "best_of_model": True if (mean_metric == model_to_bom_metric[key_dict[model_key]]) else "",
                 })
                 num_lines += 1
+                if bom != "":
+                    bom_logged = True
             print(f"Saved (lines {num_lines}): {out_file.resolve()}")
 
 
