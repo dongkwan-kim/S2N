@@ -1,3 +1,4 @@
+from collections import defaultdict, Counter
 from itertools import zip_longest
 from typing import Optional, List, Dict, Any, Union
 
@@ -7,6 +8,7 @@ import torch
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.preprocessing import StandardScaler, Normalizer
 from sklearn.cluster import KMeans
+from termcolor import cprint
 from torch import Tensor
 from torch.nn.utils.rnn import pad_sequence
 from torch_geometric.data import Data
@@ -145,7 +147,8 @@ class WL4PatternConv(WLConv):
 
 class WL4PatternNet(torch.nn.Module):
 
-    def __init__(self, num_layers, clustering_name="KMeans", x_type_for_hists="color", **kwargs):
+    def __init__(self, num_layers, clustering_name="KMeans", x_type_for_hists="color",
+                 use_clustering_validation=False, **kwargs):
         super().__init__()
         self.convs = torch.nn.ModuleList([WL4PatternConv() for _ in range(num_layers)])
 
@@ -157,6 +160,20 @@ class WL4PatternNet(torch.nn.Module):
 
         self.x_type_for_hists = x_type_for_hists
         assert x_type_for_hists in ["color", "cluster", "all"]
+        self.use_clustering_validation = use_clustering_validation
+
+    def validate_clustering(self, color, cluster, memo=""):
+        cprint(f"Validating clustering: ({memo})", "green")
+        co_to_cl = defaultdict(list)
+        for co, cl in zip(color.tolist(), cluster.tolist()):
+            co_to_cl[co].append(cl)
+        co_to_cl_set = {}
+        for co, cl_list in co_to_cl.items():
+            co_to_cl_set[co] = set(cl_list)
+            if len(set(cl_list)) != 1:
+                cprint(f"Clustering validation failed:", "red")
+                print(co, "->", set(cl_list), Counter(cl_list))
+        print(f"{memo} co_to_cl passed.")
 
     def forward(self, sub_x: Union[Tensor, List[Tensor]], x, edge_index, hist_norm=True, use_tqdm=False) -> Dict:
         colors, clusters = [], []
@@ -169,6 +186,9 @@ class WL4PatternNet(torch.nn.Module):
 
             colors.append(x)
             clusters.append(conv.color_pattern_cluster(x, **self.cluster_kwargs))
+            if self.use_clustering_validation:
+                self.validate_clustering(colors[-1], clusters[-1], memo=f"{i+1}-step")
+
             if self.x_type_for_hists in ["color", "all"]:
                 hists_colors.append(conv.subgraph_histogram(list(sub_x), colors[-1], norm=hist_norm,
                                                             num_colors=len(conv.hashmap)))
@@ -272,6 +292,7 @@ def run_and_draw_examples(edge_index, num_layers):
     wl = WL4PatternNet(
         num_layers=num_layers, x_type_for_hists="color",
         clustering_name="KMeans", n_clusters=3,  # clustering & kwargs
+        use_clustering_validation=True,
     )
     wl_rets = wl(sub_x, data.x, data.edge_index)
     colors, hists, clusters = wl_rets["colors"], wl_rets["hists"], wl_rets["clusters"]
