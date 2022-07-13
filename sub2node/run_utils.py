@@ -281,13 +281,13 @@ def aggregate_csv_metrics(in_path, out_path,
                                                          model_to_bom_metric[model_subname])
 
             num_lines = 0
-            bom_logged = False
+            model_to_bom_logged = defaultdict(bool)
             for experiment_key, values in experiment_key_to_values.items():
                 key_dict = key_to_ingredients[experiment_key]
                 mean_metric = float(np.mean(values))
                 bom = True if (mean_metric == model_to_bom_metric[key_dict[model_key]]) else ""
                 writer.writerow({
-                    "best_of_model": bom if not bom_logged else "",
+                    "best_of_model": bom if not model_to_bom_logged[key_dict[model_key]] else "",
                     **key_dict,
                     f"mean/{metric}": mean_metric,
                     f"std/{metric}": float(np.std(values)),
@@ -296,7 +296,7 @@ def aggregate_csv_metrics(in_path, out_path,
                 })
                 num_lines += 1
                 if bom != "":
-                    bom_logged = True
+                    model_to_bom_logged[key_dict[model_key]] = True
             print(f"Saved (lines {num_lines}): {out_file.resolve()}")
 
 
