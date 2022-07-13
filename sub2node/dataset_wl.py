@@ -156,10 +156,11 @@ class WL4PatternNet(torch.nn.Module):
         self.cluster_kwargs.update(kwargs)
 
         self.x_type_for_hists = x_type_for_hists
-        assert x_type_for_hists in ["color", "cluster"]
+        assert x_type_for_hists in ["color", "cluster", "all"]
 
-    def forward(self, sub_x: Union[Tensor, List[Tensor]], x, edge_index, hist_norm=True, use_tqdm=False):
-        colors, hists, clusters = [], [], []
+    def forward(self, sub_x: Union[Tensor, List[Tensor]], x, edge_index, hist_norm=True, use_tqdm=False) -> Dict:
+        colors, clusters = [], []
+        hists_colors, hists_clusters = [], []
 
         convs = tqdm(self.convs, desc="WL4PatternNet.forward") if use_tqdm else self.convs
         for i, conv in enumerate(convs):
@@ -168,14 +169,22 @@ class WL4PatternNet(torch.nn.Module):
 
             colors.append(x)
             clusters.append(conv.color_pattern_cluster(x, **self.cluster_kwargs))
-            if self.x_type_for_hists == "color":
-                hists.append(conv.subgraph_histogram(list(sub_x), colors[-1], norm=hist_norm,
-                                                     num_colors=len(conv.hashmap)))
-            else:  # cluster
-                hists.append(conv.subgraph_histogram(list(sub_x), clusters[-1], norm=hist_norm,
-                                                     num_colors=self.cluster_kwargs["n_clusters"]))
+            if self.x_type_for_hists in ["color", "all"]:
+                hists_colors.append(conv.subgraph_histogram(list(sub_x), colors[-1], norm=hist_norm,
+                                                            num_colors=len(conv.hashmap)))
+            if self.x_type_for_hists in ["clusters", "all"]:
+                hists_clusters.append(conv.subgraph_histogram(list(sub_x), clusters[-1], norm=hist_norm,
+                                                              num_colors=self.cluster_kwargs["n_clusters"]))
 
-        return colors, hists, clusters
+        if self.x_type_for_hists == "all":
+            hists_rets = {"hists_colors": hists_colors, "hists_clusters": hists_clusters}
+        else:
+            hists_rets = {"hists": hists_colors or hists_clusters}
+        return {
+            "colors": colors,
+            "clusters": clusters,
+            **hists_rets,
+        }
 
 
 def generate_random_subgraph_by_walk(global_data: Data, num_subgraphs, subgraph_size):
@@ -264,7 +273,8 @@ def run_and_draw_examples(edge_index, num_layers):
         num_layers=num_layers, x_type_for_hists="color",
         clustering_name="KMeans", n_clusters=3,  # clustering & kwargs
     )
-    colors, hists, clusters = wl(sub_x, data.x, data.edge_index)
+    wl_rets = wl(sub_x, data.x, data.edge_index)
+    colors, hists, clusters = wl_rets["colors"], wl_rets["hists"], wl_rets["clusters"]
 
     for i, (co, cl, hi) in enumerate(zip(colors, clusters, hists)):
         hist_cluster = WL4PatternConv.to_cluster(
@@ -287,16 +297,71 @@ def run_and_draw_examples(edge_index, num_layers):
             draw_graph_with_coloring(data, co, title=f"WL color: {i + 1} steps")
 
 
+def draw_subgraph_embeddings(edge_index, num_layers,
+                             num_subgraphs=1500,
+                             **kwargs):
+    edge_index = to_undirected(edge_index.long())
+    data = Data(x=torch.ones(maybe_num_nodes(edge_index)).long(),
+                edge_index=edge_index)
+
+    sub_x = generate_random_subgraph_by_k_hop(
+        data, num_subgraphs=num_subgraphs, subgraph_size=None)
+
+    wl = WL4PatternNet(
+        num_layers=num_layers, x_type_for_hists="all",
+        clustering_name="KMeans", n_clusters=num_layers,  # clustering & kwargs
+    )
+    wl_rets = wl(sub_x, data.x, data.edge_index)
+    colors, clusters = wl_rets["colors"], wl_rets["clusters"]
+    hists_colors, hists_clusters = wl_rets["hists_colors"], wl_rets["hists_clusters"]
+
+    from visualize import plot_data_points_by_tsne
+    hist_co_label_list, hist_cl_label_list = [], []
+
+    for i, (hi_co, hi_cl) in enumerate(zip(tqdm(hists_colors, desc="WL4PatternConv.to_cluster"),
+                                           hists_clusters)):
+        hist_co_label_list.append(WL4PatternConv.to_cluster(hi_co, clustering_name="KMeans", n_clusters=2).view(-1, 1))
+        hist_cl_label_list.append(WL4PatternConv.to_cluster(hi_cl, clustering_name="KMeans", n_clusters=2).view(-1, 1))
+    hist_co_labels = torch.cat(hist_co_label_list, dim=1)  # [S, C]
+    hist_cl_labels = torch.cat(hist_cl_label_list, dim=1)  # [S, C]
+
+    for i, (hi_co, hi_cl) in enumerate(zip(tqdm(hists_colors, desc="plot_data_points_by_tsne"),
+                                           hists_clusters)):
+        plot_data_points_by_tsne(
+            xs=hi_co.numpy(),
+            ys=hist_cl_labels.numpy(),
+            key=f"WL4S-{num_layers} / x from color-{i} / y from cluster",
+            **kwargs,
+        )
+        plot_data_points_by_tsne(
+            xs=hi_cl.numpy(),
+            ys=hist_cl_labels.numpy(),
+            key=f"WL4S-{num_layers} / x from cluster-{i} / y from cluster",
+            **kwargs,
+        )
+
+
 if __name__ == '__main__':
 
-    MODE = "draw_examples"
+    MODE = "draw_subgraph_embeddings"
 
     # _g = nx.dorogovtsev_goltsev_mendes_graph(3)
     # _g = nx.random_partition_graph([7, 7, 7, 7], 0.64, 0.1, seed=10)
     # _g = nx.lollipop_graph(3, 5)
-    _g = nx.barabasi_albert_graph(50, 3)
     if MODE == "draw_examples":
+        _g = nx.barabasi_albert_graph(50, 3)
         run_and_draw_examples(
             edge_index=from_networkx(_g).edge_index,
             num_layers=4,
+        )
+    elif MODE == "draw_subgraph_embeddings":
+        SEED = 399
+        from utils import make_deterministic_everything
+
+        make_deterministic_everything(SEED)
+        _g = nx.barabasi_albert_graph(10000, 5, SEED)
+        draw_subgraph_embeddings(
+            edge_index=from_networkx(_g).edge_index,
+            num_layers=4,
+            alpha=0.5, s=5,
         )

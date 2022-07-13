@@ -493,7 +493,8 @@ class WLHistSubgraph(SubgraphDataset):
             num_layers=self.wl_max_hop, x_type_for_hists=self.wl_x_type_for_hists,
             clustering_name="KMeans", n_clusters=self.wl_num_color_clusters,  # clustering & kwargs
         )
-        colors, hists, clusters = wl(sub_x, data.x, data.edge_index, use_tqdm=True)
+        wl_rets = wl(sub_x, data.x, data.edge_index, use_tqdm=True)
+        colors, hists, clusters = wl_rets["colors"], wl_rets["hists"], wl_rets["clusters"]
         hist_cluster_list = []
         for wl_step, (co, hi, cl) in enumerate(zip(colors, hists, clusters)):
             _hist_cluster = WL4PatternConv.to_cluster(

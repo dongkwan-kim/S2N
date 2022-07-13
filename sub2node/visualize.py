@@ -1,5 +1,6 @@
 from typing import List, Dict, Any
 
+from sklearn.manifold import TSNE
 from termcolor import cprint
 
 try:
@@ -8,6 +9,41 @@ try:
 except ImportError:
     pass
 import pandas as pd
+import numpy as np
+
+
+def plot_data_points_by_tsne(xs: np.ndarray, ys: np.ndarray,
+                             path=None, key=None, extension="png", **kwargs):
+
+    def plot_for_one_y(_ys, _key, _title=None):
+        df = pd.DataFrame({
+            "coord_1": x_embed[:, 0],
+            "coord_2": x_embed[:, 1],
+            "class": _ys,
+        })
+        plot = sns.scatterplot(x="coord_1", y="coord_2", hue="class", data=df,
+                               legend=False, palette="Set1", **kwargs)
+        if _title:
+            plt.title(_title)
+        plot.set_xlabel("")
+        plot.set_ylabel("")
+        plot.get_xaxis().set_visible(False)
+        plot.get_yaxis().set_visible(False)
+        sns.despine(left=False, right=False, bottom=False, top=False)
+
+        if path is not None:
+            plot.get_figure().savefig("{}/fig_tsne_{}.{}".format(path, _key, extension), bbox_inches='tight')
+        else:
+            plt.show()
+        plt.clf()
+
+    x_embed = TSNE(n_components=2).fit_transform(xs)
+
+    if len(ys.shape) == 1:
+        plot_for_one_y(ys, _key=key, _title=f"TSNE: {key}")
+    elif len(ys.shape) == 2:  # [N, C]
+        for y_idx in range(ys.shape[1]):
+            plot_for_one_y(ys[:, y_idx], _key=f"{key}_y{y_idx}", _title=f"TSNE: {key} of y={y_idx}")
 
 
 def plot_scatter(xs, ys, xlabel, ylabel,
