@@ -218,7 +218,10 @@ if __name__ == '__main__':
     # Density, CC, Coreness, CutRatio
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
-    E_TYPE = "graphsaint_gcn"  # gin, graphsaint_gcn
+    if NAME.startswith("WL"):
+        E_TYPE = "no_embedding"
+    else:
+        E_TYPE = "gin"  # gin, graphsaint_gcn
 
     USE_S2N = False
     USE_SPARSE_TENSOR = False
@@ -246,9 +249,9 @@ if __name__ == '__main__':
     else:
         E_TYPE = "no_embedding"  # override
         if NAME == "WLHistSubgraphBA":
-            _more_kwargs = {"ba_n": 10000, "ba_m": 10, "ba_seed": 42}
+            _more_kwargs = {"ba_n": 10000, "ba_m": 10, "ba_seed": None}
         elif NAME == "WLHistSubgraphER":
-            _more_kwargs = {"er_n": 10000, "er_p": 0.002, "er_seed": 42}
+            _more_kwargs = {"er_n": 10000, "er_p": 0.002, "er_seed": None}
         else:
             _more_kwargs = {}
 
@@ -271,7 +274,7 @@ if __name__ == '__main__':
             pre_add_self_loops=False,
             **{
                 "num_subgraphs": 1500,
-                "subgraph_size": 10,
+                "subgraph_size": None,
                 "wl_hop_to_use": None,
                 "wl_max_hop": 4,
                 "wl_x_type_for_hists": "cluster",  # color, cluster
