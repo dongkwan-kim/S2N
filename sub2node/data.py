@@ -18,7 +18,7 @@ from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, SubgraphDataset
 from data_sub import WLHistSubgraphBA, WLHistSubgraphER
 from data_sub import Density, CC, Coreness, CutRatio
 from data_utils import AddSelfLoopsV2, RemoveAttrs
-from dataset_wl import SliceYByIndex
+from dataset_wl import SliceYByIndex, ReplaceXWithWL4Pattern
 from sub2node import SubgraphToNode
 from utils import get_log_func, EternalIter, merge_dict_by_keys
 
@@ -46,6 +46,7 @@ class SubgraphDataModule(LightningDataModule):
                  use_sparse_tensor=False,
                  pre_add_self_loops=False,
                  num_channels_global: int = None,
+                 replace_x_with_wl4pattern=False,
                  num_workers=0,
                  verbose=2,
                  prepare_data=False,
@@ -75,6 +76,10 @@ class SubgraphDataModule(LightningDataModule):
             return self.dataset.global_data.x.size(1)
         except AttributeError:  # If x is not given.
             return self.h.num_channels_global
+
+    @property
+    def num_channels_transformed(self):
+        return self.train_data.num_features
 
     @property
     def num_classes(self):
@@ -163,6 +168,16 @@ class SubgraphDataModule(LightningDataModule):
                     = self.dataset.get_train_val_test_connected_on_global_data()
             else:
                 raise ValueError(f"Wrong subgraph_batching: {self.h.subgraph_batching}")
+            if self.h.replace_x_with_wl4pattern:
+                assert hasattr(self.h, "transform_args") and len(self.h.transform_args) == 2
+                self.train_data, self.val_data, self.test_data = ReplaceXWithWL4Pattern(
+                    num_layers=4,  # NOTE: num_layer is hard-coded.
+                    wl_step_to_use=self.h.transform_args[0],
+                    wl_type_to_use=self.h.transform_args[1],
+                    cache_path=os.path.join(self.dataset.processed_dir,
+                                            f"WL4Pattern_{self.h.subgraph_batching}.pt"),
+                )([self.train_data, self.val_data, self.test_data])
+                # The output will be a List of Data(x=[S, F], y=[S])
 
     def train_dataloader(self):
         if isinstance(self.train_data, (Data, Batch)):  # s2n, connected
@@ -202,7 +217,7 @@ def _print_data(data):
         print("\t- sub_x (Tensor)", f"{data.sub_x.min()} -- {data.sub_x.max()}")
     if data.edge_index is not None:
         print("\t- edge (Tensor)", f"{data.edge_index.min()} -- {data.edge_index.max()}")
-    else:
+    elif hasattr(data, "adj_t") and data.adj_t is not None:
         data.adj_t: SparseTensor
         row, col, _ = data.adj_t.coo()
         e = torch.cat([row, col])
@@ -212,7 +227,7 @@ def _print_data(data):
 
 if __name__ == '__main__':
 
-    NAME = "WLHistSubgraphBA"
+    NAME = "HPONeuro"
     # WLHistSubgraphBA, WLHistSubgraphER
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
@@ -226,6 +241,12 @@ if __name__ == '__main__':
     USE_S2N = False
     USE_SPARSE_TENSOR = False
     SUBGRAPH_BATCHING = None if USE_S2N else "connected"  # separated, connected
+
+    REPLACE_X_WITH_WL4PATTERN = True  # False
+    if REPLACE_X_WITH_WL4PATTERN:
+        TRANSFORM_ARGS = [0, "color"]
+    else:
+        TRANSFORM_ARGS = None
 
     if not NAME.startswith("WL"):
         _sdm = SubgraphDataModule(
@@ -245,6 +266,8 @@ if __name__ == '__main__':
             eval_batch_size=5,
             use_sparse_tensor=USE_SPARSE_TENSOR,
             pre_add_self_loops=False,
+            replace_x_with_wl4pattern=REPLACE_X_WITH_WL4PATTERN,
+            transform_args=TRANSFORM_ARGS,
         )
     else:
         E_TYPE = "no_embedding"  # override

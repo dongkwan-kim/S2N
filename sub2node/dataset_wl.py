@@ -1,5 +1,6 @@
 from collections import defaultdict, Counter
-from itertools import zip_longest
+from itertools import zip_longest, accumulate
+from pprint import pprint
 from typing import Optional, List, Dict, Any, Union
 
 import matplotlib.pyplot as plt
@@ -11,7 +12,7 @@ from sklearn.cluster import KMeans
 from termcolor import cprint
 from torch import Tensor
 from torch.nn.utils.rnn import pad_sequence
-from torch_geometric.data import Data
+from torch_geometric.data import Data, Batch
 from torch_geometric.nn import WLConv
 from torch_geometric.transforms import BaseTransform
 from torch_geometric.typing import Adj
@@ -38,6 +39,84 @@ class SliceYByIndex(BaseTransform):
 
     def __repr__(self):
         return f'{self.__class__.__name__}({self.y_idx})'
+
+
+class ReplaceXWithWL4Pattern(BaseTransform):
+
+    def __init__(self, num_layers, wl_step_to_use, wl_type_to_use,
+                 clustering_name="KMeans", cache_path=None, **kwargs):
+        self.wl = WL4PatternNet(
+            num_layers=num_layers, x_type_for_hists="all",
+            clustering_name=clustering_name, n_clusters=num_layers,  # clustering & kwargs
+            use_clustering_validation=False,
+            **kwargs,
+        )
+        self.cache_path = cache_path
+        self.wl_step_to_use = wl_step_to_use
+        self.wl_type_to_use = wl_type_to_use
+
+    def __call__(self, data: Union[Data, List[Data], List[List[Data]]]):
+        # TODO: Functionally, it is working, but refactoring is needed, but some other day...
+        """
+        Data --> List[Data(x=[S, F], y=[S])] (one)
+        List[Data] (connected) --> List[Data(x=[S, F], y=[S])] (same length)
+        List[List[Data]] (separated) --> List[Data(x=[S, F], y=[S])] (same length)
+        """
+        num_split_list = None
+        if isinstance(data, Data):
+            data_list = [data]
+        elif isinstance(data, list) and isinstance(data[0], list):  # separated: List[List[Data]]
+            num_split_list = list(accumulate([0] + [len(d) for d in data]))
+            data_list = [Batch.from_data_list(sum(data, []))]
+            data_list[0].x_to_xs = torch.arange(data_list[0].batch.size(0))
+        else:  # connected: List[Data]
+            data_list = data
+        # Here, data_list will be list of
+        #   DataBatch(x=[Ng, 1], edge_index=[2, E], y=[S, 4], batch=[\sum Ns], ptr=[S+1], x_to_xs=[\sum Ns])
+
+        try:
+            data_ptr, hists_colors, hists_clusters = torch.load(self.cache_path)
+            cprint(f"Load (data_ptr, hists_colors, hists_clusters) from {self.cache_path}", "green")
+
+        except (FileNotFoundError, AttributeError):
+            sub_x = []
+            data_ptr, count = [0], 0
+            for data in data_list:
+                ptr_list = data.ptr.tolist()
+                # x_to_xs, batch (or ptr) --> sub_x: List[Tensor]
+                for prev, curr in zip(ptr_list, ptr_list[1:]):
+                    sub_x.append(data.x_to_xs[prev:curr])
+                    count += 1
+                data_ptr.append(count)
+
+            assert len(set(data.num_nodes for data in data_list)) == 1  # same num_nodes across data_list
+            x_as_colors = torch.ones(data_list[0].num_nodes).long()  # as initial colors.
+
+            assert len(set(data.edge_index.size(0) for data in data_list)) == 1  # same num_edges across data_list
+            wl_rets = self.wl(sub_x, x_as_colors, data_list[0].edge_index)
+            hists_colors, hists_clusters = wl_rets["hists_colors"], wl_rets["hists_clusters"]
+
+            if self.cache_path is not None:
+                torch.save((data_ptr, hists_colors, hists_clusters), self.cache_path)
+                cprint(f"Save (data_ptr, hists_colors, hists_clusters) at {self.cache_path}", "blue")
+
+        for data_idx, data in enumerate(data_list):
+            p1, p2 = data_ptr[data_idx], data_ptr[data_idx + 1]
+            if self.wl_type_to_use == "color":
+                data.x = hists_colors[self.wl_step_to_use][p1:p2, :]
+            else:  # cluster
+                data.x = hists_clusters[self.wl_step_to_use][p1:p2, :]
+            data.edge_index, data.batch, data.ptr, data.x_to_xs = None, None, None, None
+
+        if num_split_list is not None:  # separated
+            assert len(data_list) == 1
+            data = data_list[0]
+            data_list = [Data(x=data.x[prev:curr, :], y=data.y[prev:curr])
+                         for prev, curr in zip(num_split_list, num_split_list[1:])]
+        # The output will be a List of Data(x=[S, F], y=[S])
+        pprint(data_list)
+        exit()
+        return data_list
 
 
 class WL4PatternConv(WLConv):
