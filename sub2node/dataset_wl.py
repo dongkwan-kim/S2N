@@ -114,8 +114,6 @@ class ReplaceXWithWL4Pattern(BaseTransform):
             data_list = [Data(x=data.x[prev:curr, :], y=data.y[prev:curr])
                          for prev, curr in zip(num_split_list, num_split_list[1:])]
         # The output will be a List of Data(x=[S, F], y=[S])
-        pprint(data_list)
-        exit()
         return data_list
 
 
