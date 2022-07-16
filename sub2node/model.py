@@ -10,7 +10,7 @@ from torch_geometric.data import Data
 from data import SubgraphDataModule
 from evaluator import Evaluator
 from model_linkx import InductiveLINKX
-from model_utils import GraphEncoder, VersatileEmbedding, MLP, DeepSets, Readout, GraphEncoderSequential, WL4Subgraph
+from model_utils import GraphEncoder, VersatileEmbedding, MLP, DeepSets, Readout, GraphEncoderSequential
 from run_utils import get_logger
 from utils import try_getattr, ld_to_dl, try_get_from_dict
 
@@ -53,21 +53,22 @@ class GraphNeuralModel(LightningModule):
         assert given_datamodule is not None
         self.given_datamodule = given_datamodule
 
-        embedding_type = "Embedding"
-        if self.h.encoder_layer_name == "WL":
+        embedding_type, num_embedding_channels = "Embedding", given_datamodule.num_channels_global
+        if self.dh.replace_x_with_wl4pattern:
             embedding_type = "UseRawFeature"
+            num_embedding_channels = given_datamodule.num_channels_sub
         elif given_datamodule.embedding is not None:
             embedding_type = "Pretrained"
         self.node_emb = VersatileEmbedding(
             embedding_type=embedding_type,
             num_entities=given_datamodule.num_nodes_global,
-            num_channels=given_datamodule.num_channels_global,
+            num_channels=num_embedding_channels,
             pretrained_embedding=given_datamodule.embedding,
         )
         if self.h.use_s2n:
             if self.h.sub_node_num_layers == 0:
                 encoder, decoder = nn.Identity(), nn.Identity()
-                in_channels = given_datamodule.num_channels_global
+                in_channels = self.node_emb.num_channels
             else:
                 kws = dict(num_layers=self.h.sub_node_num_layers,
                            hidden_channels=self.h.hidden_channels,
@@ -89,8 +90,11 @@ class GraphNeuralModel(LightningModule):
             self.sub_node_encoder = None
             num_nodes = given_datamodule.num_nodes_global
             num_train_nodes = None
-            in_channels = given_datamodule.num_channels_global
-            out_channels = self.h.hidden_channels
+            in_channels = self.node_emb.num_channels
+            if self.dh.replace_x_with_wl4pattern:
+                out_channels = given_datamodule.num_classes
+            else:
+                out_channels = self.h.hidden_channels
 
         # If weighted edges are using, some models require special kwargs.
         if given_datamodule.h.s2n_is_weighted:
@@ -110,16 +114,7 @@ class GraphNeuralModel(LightningModule):
                 num_train_nodes=num_train_nodes,
                 **self.h.layer_kwargs,  # num_edge_layers, num_node_layers
             )
-        elif self.h.encoder_layer_name == "WL":
-            self.encoder = WL4Subgraph(
-                num_layers=self.h.num_layers,
-                out_channels=given_datamodule.num_classes,
-                dropout=self.h.dropout_channels,
-                concat=False,
-                cache=True,
-            )
         else:
-
             if isinstance(self.h.encoder_layer_name, (ListConfig, list)):
                 if isinstance(self.h.num_layers, int):  # TODO: Remove HARD-CODED PARTS.
                     self.h.num_layers = [2 for _ in range(len(self.h.encoder_layer_name) - 1)] + [self.h.num_layers]
@@ -142,7 +137,7 @@ class GraphNeuralModel(LightningModule):
                 **self.h.layer_kwargs,
             )
 
-        if self.h.use_s2n or self.h.encoder_layer_name == "WL":
+        if self.h.use_s2n or self.dh.replace_x_with_wl4pattern:
             self.readout = None
         else:
             self.readout = Readout("sum", use_in_mlp=False, use_out_linear=True,
@@ -157,8 +152,8 @@ class GraphNeuralModel(LightningModule):
     def forward(self, x=None, batch=None, sub_x=None, sub_batch=None,
                 edge_index=None, edge_attr=None, adj_t=None, x_to_xs=None):
 
-        if self.h.encoder_layer_name == "WL":
-            return self.encoder(x, edge_index, batch, x_to_xs)
+        if self.dh.replace_x_with_wl4pattern:
+            return self.encoder(x, edge_index)  # edge_index is actually None.
 
         if sub_x is not None:
             sub_x = self.node_emb(sub_x)
@@ -249,9 +244,15 @@ if __name__ == '__main__':
     USE_S2N = False
     USE_SPARSE_TENSOR = False
     PRE_ADD_SELF_LOOPS = False
-    SUBGRAPH_BATCHING = None if USE_S2N else "connected"  # separated, connected
+    SUBGRAPH_BATCHING = None if USE_S2N else "separated"  # separated, connected
 
-    ENCODER_NAME = "WL"  # ["Linear", "GCNConv"]  # GATConv, LINKX, FAConv
+    REPLACE_X_WITH_WL4PATTERN = True  # False
+    if REPLACE_X_WITH_WL4PATTERN:
+        WL4PATTERN_ARGS = [0, "color"]  # color, cluster
+    else:
+        WL4PATTERN_ARGS = None
+
+    ENCODER_NAME = "Linear"  # ["Linear", "GCNConv"]  # GATConv, LINKX, FAConv
     NUM_LAYERS = 2
     if isinstance(ENCODER_NAME, list):
         NUM_LAYERS = [2, 3]
@@ -291,6 +292,8 @@ if __name__ == '__main__':
         eval_batch_size=5,
         use_sparse_tensor=USE_SPARSE_TENSOR,
         pre_add_self_loops=False,
+        replace_x_with_wl4pattern=REPLACE_X_WITH_WL4PATTERN,
+        wl4pattern_args=WL4PATTERN_ARGS,
     )
     _gnm = GraphNeuralModel(
         encoder_layer_name=ENCODER_NAME,

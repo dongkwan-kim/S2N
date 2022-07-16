@@ -15,3 +15,8 @@ s2n_is_weighted: True
 # NOTE: common args when use_s2n=False
 batch_size: null
 subgraph_batching: null  # separated, connected
+
+# NOTE: common args when replace_x_with_wl4pattern=True
+# type of which is (int, str), e.g., (0, "color"), (1, "cluster")
+replace_x_with_wl4pattern: False
+wl4pattern_args: [null, null]
