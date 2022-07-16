@@ -228,13 +228,8 @@ def _print_data(data):
         print("\t- adj_t", data.adj_t)
 
 
-if __name__ == '__main__':
-
-    NAME = "HPONeuro"
-    # WLHistSubgraphBA, WLHistSubgraphER
-    # PPIBP, HPOMetab, HPONeuro, EMUser
-    # Density, CC, Coreness, CutRatio
-
+def get_subgraph_datamodule_for_test(name, **kwargs):
+    NAME = name
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
     if NAME.startswith("WL"):
         E_TYPE = "no_embedding"
@@ -251,66 +246,56 @@ if __name__ == '__main__':
     else:
         WL4PATTERN_ARGS = None
 
-    if not NAME.startswith("WL"):
-        _sdm = SubgraphDataModule(
-            dataset_name=NAME,
-            dataset_path=PATH,
-            embedding_type=E_TYPE,
-            use_s2n=USE_S2N,
-            edge_thres=0.0,
-            use_consistent_processing=True,
-            edge_normalize="standardize_then_trunc_thres_max_linear",
-            edge_normalize_arg_1=0.0,
-            edge_normalize_arg_2=2.0,
-            s2n_target_matrix="adjacent_no_self_loops",
-            s2n_is_weighted=False,
-            subgraph_batching=SUBGRAPH_BATCHING,
-            batch_size=32,
-            eval_batch_size=5,
-            use_sparse_tensor=USE_SPARSE_TENSOR,
-            pre_add_self_loops=False,
-            replace_x_with_wl4pattern=REPLACE_X_WITH_WL4PATTERN,
-            wl4pattern_args=WL4PATTERN_ARGS,
-        )
+    MORE_KWARGS = {
+        "num_subgraphs": 1500,
+        "subgraph_size": None,
+        "wl_hop_to_use": None,
+        "wl_max_hop": 4,
+        "wl_x_type_for_hists": "cluster",  # color, cluster
+        "wl_num_color_clusters": None,
+        "wl_num_hist_clusters": 2,
+    }
+    if NAME == "WLHistSubgraphBA":
+        MORE_KWARGS = {"ba_n": 10000, "ba_m": 10, "ba_seed": None, **MORE_KWARGS}
+    elif NAME == "WLHistSubgraphER":
+        MORE_KWARGS = {"er_n": 10000, "er_p": 0.002, "er_seed": None, **MORE_KWARGS}
     else:
-        E_TYPE = "no_embedding"  # override
-        if NAME == "WLHistSubgraphBA":
-            _more_kwargs = {"ba_n": 10000, "ba_m": 7, "ba_seed": None}
-        elif NAME == "WLHistSubgraphER":
-            _more_kwargs = {"er_n": 10000, "er_p": 0.002, "er_seed": None}
-        else:
-            _more_kwargs = {}
+        MORE_KWARGS = {}
 
-        _sdm = SubgraphDataModule(
-            dataset_name=NAME,
-            dataset_path=PATH,
-            embedding_type=E_TYPE,
-            use_s2n=USE_S2N,
-            edge_thres=0.0,
-            use_consistent_processing=True,
-            edge_normalize="standardize_then_trunc_thres_max_linear",
-            edge_normalize_arg_1=0.0,
-            edge_normalize_arg_2=2.0,
-            s2n_target_matrix="adjacent_no_self_loops",
-            s2n_is_weighted=False,
-            subgraph_batching=SUBGRAPH_BATCHING,
-            batch_size=32,
-            eval_batch_size=5,
-            use_sparse_tensor=USE_SPARSE_TENSOR,
-            pre_add_self_loops=False,
-            **{
-                "num_subgraphs": 1500,
-                "subgraph_size": None,
-                "wl_hop_to_use": None,
-                "wl_max_hop": 4,
-                "wl_x_type_for_hists": "cluster",  # color, cluster
-                "wl_num_color_clusters": None,
-                "wl_num_hist_clusters": 2,
-                **_more_kwargs,
-            },
-            replace_x_with_wl4pattern=REPLACE_X_WITH_WL4PATTERN,
-            wl4pattern_args=WL4PATTERN_ARGS,
-        )
+    KWARGS = dict(
+        dataset_name=NAME,
+        dataset_path=PATH,
+        embedding_type=E_TYPE,
+        use_s2n=USE_S2N,
+        edge_thres=0.0,
+        use_consistent_processing=True,
+        edge_normalize="standardize_then_trunc_thres_max_linear",
+        edge_normalize_arg_1=0.0,
+        edge_normalize_arg_2=2.0,
+        s2n_target_matrix="adjacent_no_self_loops",
+        s2n_is_weighted=False,
+        subgraph_batching=SUBGRAPH_BATCHING,
+        batch_size=32,
+        eval_batch_size=5,
+        use_sparse_tensor=USE_SPARSE_TENSOR,
+        pre_add_self_loops=False,
+        replace_x_with_wl4pattern=REPLACE_X_WITH_WL4PATTERN,
+        wl4pattern_args=WL4PATTERN_ARGS,
+        **MORE_KWARGS,
+    )
+    KWARGS.update(kwargs)
+    sdm = SubgraphDataModule(**KWARGS)
+    return sdm
+
+
+if __name__ == '__main__':
+
+    # WLHistSubgraphBA, WLHistSubgraphER
+    # PPIBP, HPOMetab, HPONeuro, EMUser
+    # Density, CC, Coreness, CutRatio
+    _sdm = get_subgraph_datamodule_for_test(
+        name="WLHistSubgraphBA",
+    )
 
     print(_sdm)
     cprint("Train ----", "green")
