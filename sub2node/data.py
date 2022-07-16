@@ -47,6 +47,7 @@ class SubgraphDataModule(LightningDataModule):
                  pre_add_self_loops=False,
                  num_channels_global: int = None,
                  replace_x_with_wl4pattern=False,
+                 wl4pattern_args=None,
                  num_workers=0,
                  verbose=2,
                  prepare_data=False,
@@ -78,7 +79,8 @@ class SubgraphDataModule(LightningDataModule):
             return self.h.num_channels_global
 
     @property
-    def num_channels_transformed(self):
+    def num_channels_sub(self):
+        assert self.train_data.num_features == self.val_data.num_features == self.test_data.num_features
         return self.train_data.num_features
 
     @property
@@ -169,11 +171,12 @@ class SubgraphDataModule(LightningDataModule):
             else:
                 raise ValueError(f"Wrong subgraph_batching: {self.h.subgraph_batching}")
             if self.h.replace_x_with_wl4pattern:
-                assert hasattr(self.h, "transform_args") and len(self.h.transform_args) == 2
+                assert self.h.wl4pattern_args is not None and len(self.h.wl4pattern_args) == 2
+                assert isinstance(self.h.wl4pattern_args[0], int) and isinstance(self.h.wl4pattern_args[1], str)
                 self.train_data, self.val_data, self.test_data = ReplaceXWithWL4Pattern(
                     num_layers=4,  # NOTE: num_layer is hard-coded.
-                    wl_step_to_use=self.h.transform_args[0],
-                    wl_type_to_use=self.h.transform_args[1],
+                    wl_step_to_use=self.h.wl4pattern_args[0],
+                    wl_type_to_use=self.h.wl4pattern_args[1],
                     cache_path=os.path.join(self.dataset.processed_dir,
                                             f"WL4Pattern_{self.h.subgraph_batching}.pt"),
                 )([self.train_data, self.val_data, self.test_data])
@@ -244,9 +247,9 @@ if __name__ == '__main__':
 
     REPLACE_X_WITH_WL4PATTERN = True  # False
     if REPLACE_X_WITH_WL4PATTERN:
-        TRANSFORM_ARGS = [0, "color"]
+        WL4PATTERN_ARGS = [0, "color"]
     else:
-        TRANSFORM_ARGS = None
+        WL4PATTERN_ARGS = None
 
     if not NAME.startswith("WL"):
         _sdm = SubgraphDataModule(
@@ -267,12 +270,12 @@ if __name__ == '__main__':
             use_sparse_tensor=USE_SPARSE_TENSOR,
             pre_add_self_loops=False,
             replace_x_with_wl4pattern=REPLACE_X_WITH_WL4PATTERN,
-            transform_args=TRANSFORM_ARGS,
+            wl4pattern_args=WL4PATTERN_ARGS,
         )
     else:
         E_TYPE = "no_embedding"  # override
         if NAME == "WLHistSubgraphBA":
-            _more_kwargs = {"ba_n": 10000, "ba_m": 10, "ba_seed": None}
+            _more_kwargs = {"ba_n": 10000, "ba_m": 7, "ba_seed": None}
         elif NAME == "WLHistSubgraphER":
             _more_kwargs = {"er_n": 10000, "er_p": 0.002, "er_seed": None}
         else:
@@ -304,7 +307,9 @@ if __name__ == '__main__':
                 "wl_num_color_clusters": None,
                 "wl_num_hist_clusters": 2,
                 **_more_kwargs,
-            }
+            },
+            replace_x_with_wl4pattern=REPLACE_X_WITH_WL4PATTERN,
+            wl4pattern_args=WL4PATTERN_ARGS,
         )
 
     print(_sdm)
