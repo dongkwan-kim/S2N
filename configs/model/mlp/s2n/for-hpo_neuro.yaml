@@ -17,4 +17,4 @@ _gradient_clip_val: 0.2
 sub_node_num_layers: 1
 sub_node_encoder_aggr: "sum"
 
-subname: MLP
+subname: MLP-S2N
