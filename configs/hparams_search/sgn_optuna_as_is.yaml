@@ -6,7 +6,7 @@
 # python run.py -m hparams_search=mnist_optuna experiment=example_simple logger=wandb
 
 defaults:
-  - optuna_random.yaml  # optuna_random, optuna_tpe
+  - optuna_tpe.yaml  # optuna_random, optuna_tpe
   - override /callbacks: checkpoint.yaml # If set no checkpoint, it cannot use the best model path
 
 # choose metric which will be optimized by Optuna

@@ -241,12 +241,15 @@ if __name__ == '__main__':
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
     E_TYPE = "graphsaint_gcn"  # gin, graphsaint_gcn
 
-    USE_S2N = False
+    USE_S2N = True
     USE_SPARSE_TENSOR = False
     PRE_ADD_SELF_LOOPS = False
     SUBGRAPH_BATCHING = None if USE_S2N else "separated"  # separated, connected
 
-    REPLACE_X_WITH_WL4PATTERN = True  # False
+    if USE_S2N:
+        REPLACE_X_WITH_WL4PATTERN = False
+    else:
+        REPLACE_X_WITH_WL4PATTERN = True  # False
     if REPLACE_X_WITH_WL4PATTERN:
         WL4PATTERN_ARGS = [0, "color"]  # color, cluster
     else:
@@ -304,8 +307,8 @@ if __name__ == '__main__':
         weight_decay=1e-6,
         is_multi_labels=(NAME == "HPONeuro"),
         use_s2n=USE_S2N,
-        sub_node_num_layers=0,
-        use_bn=False,
+        sub_node_num_layers=1,
+        use_bn=True,
         use_skip=False,
         dropout_channels=0.0,
         dropout_edges=0.0,

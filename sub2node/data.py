@@ -240,7 +240,10 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
     USE_SPARSE_TENSOR = False
     SUBGRAPH_BATCHING = None if USE_S2N else "connected"  # separated, connected
 
-    REPLACE_X_WITH_WL4PATTERN = True  # False
+    if USE_S2N:
+        REPLACE_X_WITH_WL4PATTERN = False
+    else:
+        REPLACE_X_WITH_WL4PATTERN = True  # False
     if REPLACE_X_WITH_WL4PATTERN:
         WL4PATTERN_ARGS = [0, "color"]
     else:
@@ -256,7 +259,7 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
         "wl_num_hist_clusters": 2,
     }
     if NAME == "WLHistSubgraphBA":
-        MORE_KWARGS = {"ba_n": 10000, "ba_m": 10, "ba_seed": None, **MORE_KWARGS}
+        MORE_KWARGS = {"ba_n": 10000, "ba_m": 5, "ba_seed": None, **MORE_KWARGS}
     elif NAME == "WLHistSubgraphER":
         MORE_KWARGS = {"er_n": 10000, "er_p": 0.002, "er_seed": None, **MORE_KWARGS}
     else:
