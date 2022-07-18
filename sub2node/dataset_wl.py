@@ -269,7 +269,7 @@ class WL4PatternNet(torch.nn.Module):
             if self.x_type_for_hists in ["color", "all"]:
                 hists_colors.append(conv.subgraph_histogram(list(sub_x), colors[-1], norm=hist_norm,
                                                             num_colors=len(conv.hashmap)))
-            if self.x_type_for_hists in ["clusters", "all"]:
+            if self.x_type_for_hists in ["cluster", "all"]:
                 hists_clusters.append(conv.subgraph_histogram(list(sub_x), clusters[-1], norm=hist_norm,
                                                               num_colors=self.cluster_kwargs["n_clusters"]))
 
