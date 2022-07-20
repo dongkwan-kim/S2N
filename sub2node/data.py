@@ -174,9 +174,10 @@ class SubgraphDataModule(LightningDataModule):
                 assert self.h.wl4pattern_args is not None and len(self.h.wl4pattern_args) == 2
                 assert isinstance(self.h.wl4pattern_args[0], int) and isinstance(self.h.wl4pattern_args[1], str)
                 self.train_data, self.val_data, self.test_data = ReplaceXWithWL4Pattern(
-                    num_layers=4,  # NOTE: num_layer is hard-coded.
+                    num_layers=3,  # NOTE: num_layer is hard-coded.
                     wl_step_to_use=self.h.wl4pattern_args[0],
                     wl_type_to_use=self.h.wl4pattern_args[1],
+                    num_color_clusters=self.h.wl_num_color_clusters,
                     cache_path=os.path.join(self.dataset.processed_dir,
                                             f"WL4Pattern_{self.h.subgraph_batching}.pt"),
                 )([self.train_data, self.val_data, self.test_data])
@@ -253,7 +254,7 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
         "num_subgraphs": 1500,
         "subgraph_size": None,
         "wl_hop_to_use": None,
-        "wl_max_hop": 4,
+        "wl_max_hop": 3,
         "wl_x_type_for_hists": "cluster",  # color, cluster
         "wl_num_color_clusters": None,
         "wl_num_hist_clusters": 2,

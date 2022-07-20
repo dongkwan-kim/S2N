@@ -44,10 +44,12 @@ class SliceYByIndex(BaseTransform):
 class ReplaceXWithWL4Pattern(BaseTransform):
 
     def __init__(self, num_layers, wl_step_to_use, wl_type_to_use,
-                 clustering_name="KMeans", cache_path=None, **kwargs):
+                 num_color_clusters=None, clustering_name="KMeans",
+                 cache_path=None, **kwargs):
         self.wl = WL4PatternNet(
             num_layers=num_layers, x_type_for_hists="all",
-            clustering_name=clustering_name, n_clusters=num_layers,  # clustering & kwargs
+            clustering_name=clustering_name,
+            n_clusters=num_color_clusters or num_layers,  # clustering & kwargs
             use_clustering_validation=False,
             **kwargs,
         )
