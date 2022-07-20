@@ -493,14 +493,14 @@ class WLHistSubgraph(SubgraphDataset):
             num_layers=self.wl_max_hop, x_type_for_hists=self.wl_x_type_for_hists,
             clustering_name="KMeans", n_clusters=self.wl_num_color_clusters,  # clustering & kwargs
         )
-        wl_rets = wl(sub_x, data.x, data.edge_index, use_tqdm=True)
+        wl_rets = wl(sub_x, data.x, data.edge_index, hist_norm=True, use_tqdm=True)
         colors, hists, clusters = wl_rets["colors"], wl_rets["hists"], wl_rets["clusters"]
         hist_cluster_list = []
         for wl_step, (co, hi, cl) in enumerate(zip(colors, hists, clusters)):
             _hist_cluster = WL4PatternConv.to_cluster(
                 hi, clustering_name="KMeans", n_clusters=self.wl_num_hist_clusters)
-            hist_cluster_list.append(_hist_cluster.view(-1, 1))
-        hist_cluster = torch.cat(hist_cluster_list, dim=-1)
+            hist_cluster_list.append(_hist_cluster.view(-1, 1))  # (S, 1)
+        hist_cluster = torch.cat(hist_cluster_list, dim=-1)  # (S, C)
 
         if isinstance(sub_x, list):
             nodes_in_subgraphs = [nodes.tolist() for nodes in sub_x]
@@ -581,6 +581,7 @@ class WLHistSubgraphER(WLHistSubgraph):
 def find_seed_that_makes_balanced_datasets(seed_name="ba_seed", class_ratio_thres=0.66, **kwargs):
     min_of_max_vs, seed_at_min_of_max_vs = 999, None
     for seed in range(500):
+        assert seed_name in kwargs
         kwargs[seed_name] = seed
         trial_dataset: WLHistSubgraph = eval(TYPE)(
             root=PATH,
@@ -623,7 +624,7 @@ if __name__ == '__main__':
         "num_subgraphs": 1500,
         "subgraph_size": None,  # NOTE: Using None will use ego-graphs
         "wl_hop_to_use": None,
-        "wl_max_hop": 4,
+        "wl_max_hop": 3,
         "wl_x_type_for_hists": "cluster",  # color, cluster
         "wl_num_color_clusters": None,
         "wl_num_hist_clusters": 2,
