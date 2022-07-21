@@ -11,9 +11,8 @@ import math
 from termcolor import cprint
 from torch import Tensor
 from torch.nn import Linear
-from torch_geometric.nn.conv.gcn_conv import gcn_norm
 from torch_geometric.nn.glob import global_mean_pool, global_max_pool, global_add_pool
-from torch_geometric.nn import GlobalAttention, GCNConv, SAGEConv, GATConv, FAConv, GCN2Conv, WLConv
+from torch_geometric.nn import GlobalAttention, GCNConv, SAGEConv, GATConv, FAConv, GCN2Conv, WLConv, GraphNorm
 from torch_geometric.typing import OptTensor, Adj
 from torch_scatter import scatter_add
 from torch_sparse import SparseTensor
@@ -191,11 +190,11 @@ class BilinearWith1d(nn.Bilinear):
 class MLP(nn.Module):
 
     def __init__(self, num_layers, in_channels, hidden_channels, out_channels, activation,
-                 use_bn=False, dropout=0.0, activate_last=False):
+                 use_bn=False, use_gn=False, dropout=0.0, activate_last=False):
         super().__init__()
         self.num_layers = num_layers
         self.in_channels, self.hidden_channels, self.out_channels = in_channels, hidden_channels, out_channels
-        self.activation, self.use_bn, self.dropout = activation, use_bn, dropout
+        self.activation, self.use_bn, self.use_gn, self.dropout = activation, use_bn, use_gn, dropout
         self.activate_last = activate_last
         layers = nn.ModuleList()
 
@@ -206,6 +205,8 @@ class MLP(nn.Module):
                 layers.append(Linear(hidden_channels, hidden_channels))
             if use_bn:
                 layers.append(nn.BatchNorm1d(hidden_channels))
+            if use_gn:
+                layers.append(GraphNorm(hidden_channels))
             layers.append(Activation(activation))
             if dropout > 0.0:
                 layers.append(nn.Dropout(p=dropout))
@@ -218,6 +219,8 @@ class MLP(nn.Module):
         if self.activate_last:
             if use_bn:
                 layers.append(nn.BatchNorm1d(hidden_channels))
+            if use_gn:
+                layers.append(GraphNorm(hidden_channels))
             layers.append(Activation(activation))
             if dropout > 0.0:
                 layers.append(nn.Dropout(p=dropout))
@@ -229,14 +232,14 @@ class MLP(nn.Module):
 
     def __repr__(self):
         if self.num_layers > 1:
-            return "{}(L={}, I={}, H={}, O={}, act={}, act_last={}, bn={}, do={})".format(
+            return "{}(L={}, I={}, H={}, O={}, act={}, act_last={}, bn={}, gn={}, do={})".format(
                 self.__class__.__name__, self.num_layers, self.in_channels, self.hidden_channels, self.out_channels,
-                self.activation, self.activate_last, self.use_bn, self.dropout,
+                self.activation, self.activate_last, self.use_bn, self.use_gn, self.dropout,
             )
         else:
-            return "{}(L={}, I={}, O={}, act={}, act_last={}, bn={}, do={})".format(
+            return "{}(L={}, I={}, O={}, act={}, act_last={}, bn={}, gn={}, do={})".format(
                 self.__class__.__name__, self.num_layers, self.in_channels, self.out_channels,
-                self.activation, self.activate_last, self.use_bn, self.dropout,
+                self.activation, self.activate_last, self.use_bn, self.use_gn, self.dropout,
             )
 
     def layer_repr(self):
@@ -291,7 +294,7 @@ class GraphEncoderSequential(nn.Module):
 
     def __init__(self, layer_name_list: List[str], num_layers_list: List[int],
                  in_channels, hidden_channels, out_channels,
-                 activation="relu", use_bn=False, use_skip=False,
+                 activation="relu", use_bn=False, use_gn=False, use_skip=False,
                  dropout_channels=0.0, dropout_edges=0.0,
                  activate_last=True, force_lin_x_0=False,
                  **kwargs):
@@ -311,23 +314,23 @@ class GraphEncoderSequential(nn.Module):
             self.add_module(
                 f"enc_{i}",
                 GraphEncoder(layer_name, num_layers, _in_channels, hidden_channels, _out_channels,
-                             activation, use_bn, use_skip, dropout_channels, dropout_edges,
+                             activation, use_bn, use_gn, use_skip, dropout_channels, dropout_edges,
                              _activate_last, force_lin_x_0, **kwargs))
 
     def encoders(self):
         for i in range(self.num_encoders):
             yield getattr(self, f"enc_{i}")
 
-    def forward(self, x, edge_index, edge_attr=None, **kwargs):
+    def forward(self, x, edge_index, edge_attr=None, batch=None, **kwargs):
         for encoder in self.encoders():
-            x = encoder(x, edge_index, edge_attr, **kwargs)
+            x = encoder(x, edge_index, edge_attr, batch, **kwargs)
         return x
 
 
 class GraphEncoder(nn.Module):
 
     def __init__(self, layer_name, num_layers, in_channels, hidden_channels, out_channels,
-                 activation="relu", use_bn=False, use_skip=False,
+                 activation="relu", use_bn=False, use_gn=False, use_skip=False,
                  dropout_channels=0.0, dropout_edges=0.0,
                  activate_last=True, force_lin_x_0=False,
                  **kwargs):
@@ -336,7 +339,7 @@ class GraphEncoder(nn.Module):
         self.layer_name, self.num_layers = layer_name, num_layers
         self.in_channels, self.hidden_channels, self.out_channels = in_channels, hidden_channels, out_channels
         self.activation = activation
-        self.use_bn, self.use_skip = use_bn, use_skip
+        self.use_bn, self.use_gn, self.use_skip = use_bn, use_gn, use_skip
         self.dropout_channels = dropout_channels
         self.dropout_edges = dropout_edges
         self.activate_last = activate_last
@@ -347,6 +350,7 @@ class GraphEncoder(nn.Module):
         self.gnn_kwargs = {}
         self.convs = torch.nn.ModuleList()
         self.bns = torch.nn.ModuleList() if self.use_bn else []
+        self.gns = torch.nn.ModuleList() if self.use_gn else []
         self.skips = torch.nn.ModuleList() if self.use_skip else []
         self.build(**kwargs)
         self.reset_parameters()
@@ -374,7 +378,9 @@ class GraphEncoder(nn.Module):
             self.convs.append(gnn(_in_channels, _out_channels, **layer_kwargs))
             if conv_id != self.num_layers - 1 or self.activate_last:
                 if self.use_bn:
-                    self.bns.append(nn.BatchNorm1d(self.hidden_channels))
+                    self.bns.append(nn.BatchNorm1d(_out_channels))
+                if self.use_gn:
+                    self.gns.append(GraphNorm(_out_channels))
                 if self.use_skip:
                     self.skips.append(Linear(_in_channels, _out_channels))
 
@@ -385,8 +391,10 @@ class GraphEncoder(nn.Module):
             conv.reset_parameters()
         for bn in self.bns:
             bn.reset_parameters()
+        for gn in self.gns:
+            gn.reset_parameters()
 
-    def forward(self, x, edge_index, edge_attr=None, **kwargs):
+    def forward(self, x, edge_index, edge_attr=None, batch=None, **kwargs):
         # Order references.
         #  https://d2l.ai/chapter_convolutional-modern/resnet.html#residual-blocks
         #  https://github.com/rusty1s/pytorch_geometric/blob/master/examples/ppi.py#L30-L34
@@ -407,6 +415,8 @@ class GraphEncoder(nn.Module):
             if i != self.num_layers - 1 or self.activate_last:
                 if self.use_bn:
                     x = self.bns[i](x)
+                if self.use_gn:
+                    x = self.gns[i](x, batch)
                 if self.use_skip:
                     x = x + self.skips[i](x_before_layer)
                 x = act(x, self.activation)
@@ -420,10 +430,10 @@ class GraphEncoder(nn.Module):
             return ", " + ", ".join([f"{k}={v}" for k, v in self.gnn_kwargs.items()])
 
     def __repr__(self):
-        return "{}(conv={}, L={}, I={}, H={}, O={}, act={}, act_last={}, skip={}, bn={}{})".format(
+        return "{}(conv={}, L={}, I={}, H={}, O={}, act={}, act_last={}, skip={}, bn={}, gn={}{})".format(
             self.__class__.__name__, self.layer_name, self.num_layers,
             self.in_channels, self.hidden_channels, self.out_channels,
-            self.activation, self.activate_last, self.use_skip, self.use_bn,
+            self.activation, self.activate_last, self.use_skip, self.use_bn, self.use_gn,
             self.__gnn_kwargs_repr__(),
         )
 
@@ -485,7 +495,8 @@ class WL4Subgraph(nn.Module):
 class EdgePredictor(nn.Module):
 
     def __init__(self, predictor_type, num_layers, hidden_channels, out_channels,
-                 activation="relu", out_activation=None, use_bn=False, dropout_channels=0.0):
+                 activation="relu", out_activation=None, use_bn=False, use_gn=False,
+                 dropout_channels=0.0):
         super().__init__()
         assert predictor_type in ["DotProduct", "Concat", "HadamardProduct"]
         if predictor_type == "DotProduct":
@@ -499,6 +510,7 @@ class EdgePredictor(nn.Module):
             out_channels=out_channels,
             activation=activation,
             use_bn=use_bn,
+            use_gn=use_gn,
             dropout=dropout_channels,
             activate_last=False,
         )
@@ -635,9 +647,9 @@ class DeepSets(nn.Module):
             return self.att(x, batch)
 
     def forward(self, x, batch=None, *args, **kwargs):
-        x = self.encoder(x)
+        x = self.encoder(x, batch)
         x = self.aggregate(x, batch)
-        x = self.decoder(x)
+        x = self.decoder(x)  # batch is not matched for decoder.
         return x
 
     def extra_repr(self) -> str:
@@ -736,7 +748,7 @@ class GlobalAttentionHalf(GlobalAttention):
 
 if __name__ == '__main__':
 
-    MODE = "WL4Subgraph"
+    MODE = "GraphEncoderSequential"
 
     from pytorch_lightning import seed_everything
 
@@ -782,7 +794,7 @@ if __name__ == '__main__':
         _batch = torch.zeros(10).long()
         _batch[4:] = 1
         _ds = DeepSets(
-            encoder=MLP(2, 64, 17, 17, "relu"),
+            encoder=MLP(2, 64, 17, 17, "relu", use_gn=True),
             decoder=MLP(2, 17, 17, 10, "relu"),
             aggr="attention",
         )
@@ -792,7 +804,7 @@ if __name__ == '__main__':
     elif MODE == "GraphEncoder":
         enc = GraphEncoder(
             layer_name="GCN2Conv", num_layers=3, in_channels=32, hidden_channels=64, out_channels=128,
-            activation="relu", use_bn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
+            activation="relu", use_bn=False, use_gn=True, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
             activate_last=True,
             alpha=0.5, theta=1.0, shared_weights=False,
         )
@@ -803,7 +815,7 @@ if __name__ == '__main__':
 
         enc = GraphEncoder(
             layer_name="GCN2Conv", num_layers=3, in_channels=32, hidden_channels=64, out_channels=128,
-            activation="relu", use_bn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
+            activation="relu", use_bn=True, use_gn=True, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
             activate_last=True,
             alpha=0.5, shared_weights=True,
         )
@@ -812,7 +824,7 @@ if __name__ == '__main__':
 
         enc = GraphEncoder(
             layer_name="FAConv", num_layers=3, in_channels=32, hidden_channels=64, out_channels=128,
-            activation="relu", use_bn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
+            activation="relu", use_bn=True, use_gn=True, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
             activate_last=True,
         )
         cprint(enc, "green")
@@ -820,7 +832,7 @@ if __name__ == '__main__':
 
         enc = GraphEncoder(
             layer_name="FAConv", num_layers=3, in_channels=32, hidden_channels=32, out_channels=128,
-            activation="relu", use_bn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
+            activation="relu", use_bn=False, use_gn=True, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
             activate_last=True,
         )
         cprint(enc, "green")
@@ -830,7 +842,7 @@ if __name__ == '__main__':
 
         enc = GraphEncoder(
             layer_name="GATConv", num_layers=3, in_channels=32, hidden_channels=64, out_channels=64,
-            activation="elu", use_bn=True, use_skip=True, dropout_channels=0.0,
+            activation="elu", use_bn=True, use_gn=False, use_skip=True, dropout_channels=0.0,
             activate_last=True, add_self_loops=False, heads=8,
         )
         cprint(enc, "green")
@@ -840,18 +852,20 @@ if __name__ == '__main__':
 
         _ges = GraphEncoderSequential(
             ["Linear", "GCN2Conv"], [2, 4], in_channels=32, hidden_channels=64, out_channels=7,
-            activation="relu", use_bn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
+            activation="relu", use_bn=False, use_gn=True, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
             activate_last=False,
             alpha=0.5, theta=1.0, shared_weights=False,
         )
         cprint(_ges, "green")
         _x = torch.ones(10 * 32).view(10, -1)
         _ei = torch.randint(0, 10, [2, 10])
-        print(_ges(_x, _ei, _ei[0].float()).size())
+        _batch = torch.ones(10).long()
+        _batch[:4] = 0
+        print(_ges(_x, _ei, _ei[0].float(), _batch).size())
 
         _ges = GraphEncoderSequential(
             ["GCN2Conv"], [2], in_channels=32, hidden_channels=64, out_channels=7,
-            activation="relu", use_bn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
+            activation="relu", use_bn=True, use_gn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
             activate_last=True,
             alpha=0.5, theta=1.0, shared_weights=False,
         )

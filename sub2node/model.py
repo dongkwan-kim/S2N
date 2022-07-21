@@ -42,6 +42,7 @@ class GraphNeuralModel(LightningModule):
                  metrics=["micro_f1", "macro_f1"],
                  hp_metric=None,
                  use_bn: bool = False,
+                 use_gn: bool = False,
                  use_skip: bool = False,
                  dropout_channels: float = 0.0,
                  dropout_edges: float = 0.0,
@@ -75,6 +76,7 @@ class GraphNeuralModel(LightningModule):
                            out_channels=self.h.hidden_channels,
                            activation=self.h.activation,
                            dropout=self.h.dropout_channels,
+                           use_gn=self.h.use_gn,
                            activate_last=True)
                 num_aggr = self.h.sub_node_encoder_aggr.count("-") + 1
                 encoder = MLP(in_channels=given_datamodule.num_channels_global, **kws)
@@ -130,6 +132,7 @@ class GraphNeuralModel(LightningModule):
                 out_channels=out_channels,
                 activation=self.h.activation,
                 use_bn=self.h.use_bn,
+                use_gn=self.h.use_gn,
                 use_skip=self.h.use_skip,
                 dropout_channels=self.h.dropout_channels,
                 dropout_edges=self.h.dropout_edges,
@@ -241,7 +244,7 @@ if __name__ == '__main__':
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
     E_TYPE = "graphsaint_gcn"  # gin, graphsaint_gcn
 
-    USE_S2N = True
+    USE_S2N = True  # NOTE: important
     USE_SPARSE_TENSOR = False
     PRE_ADD_SELF_LOOPS = False
     SUBGRAPH_BATCHING = None if USE_S2N else "separated"  # separated, connected
@@ -249,7 +252,7 @@ if __name__ == '__main__':
     if USE_S2N:
         REPLACE_X_WITH_WL4PATTERN = False
     else:
-        REPLACE_X_WITH_WL4PATTERN = True  # False
+        REPLACE_X_WITH_WL4PATTERN = False  # NOTE: important
     if REPLACE_X_WITH_WL4PATTERN:
         WL4PATTERN_ARGS = [0, "color"]  # color, cluster
     else:
@@ -308,7 +311,8 @@ if __name__ == '__main__':
         is_multi_labels=(NAME == "HPONeuro"),
         use_s2n=USE_S2N,
         sub_node_num_layers=1,
-        use_bn=True,
+        use_bn=False,
+        use_gn=True,
         use_skip=False,
         dropout_channels=0.0,
         dropout_edges=0.0,
@@ -317,6 +321,7 @@ if __name__ == '__main__':
     )
     print(_gnm)
     for _i, _b in enumerate(_sdm.train_dataloader()):
+        print(_b)
         _step_out = _gnm.training_step(_b, _i)
         _pprint_tensor_dict(_step_out)
         _gnm.training_epoch_end([_step_out, _step_out])
