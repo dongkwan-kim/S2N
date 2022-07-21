@@ -374,7 +374,8 @@ class WLHistSubgraph(SubgraphDataset):
                  network_generator: str, network_args: list,
                  num_subgraphs: int, subgraph_size: int,
                  wl_hop_to_use: int, wl_max_hop: int, wl_x_type_for_hists: str = "color",
-                 wl_num_color_clusters: int = None, wl_num_hist_clusters: int = 2,
+                 wl_num_color_clusters: int = None, wl_num_slice_hist_by_std: int = 4,
+                 wl_num_hist_clusters: int = 2,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
         """Params specific for WLHistSubgraph
@@ -400,6 +401,7 @@ class WLHistSubgraph(SubgraphDataset):
         self.wl_max_hop = wl_max_hop
         self.wl_x_type_for_hists = wl_x_type_for_hists
         self.wl_num_color_clusters = wl_num_color_clusters or self.wl_max_hop
+        self.wl_num_slice_hist_by_std = wl_num_slice_hist_by_std
         self.wl_num_hist_clusters = wl_num_hist_clusters
         assert self.wl_x_type_for_hists in ["cluster", "color"]
         assert network_generator.startswith("nx.")
@@ -472,6 +474,7 @@ class WLHistSubgraph(SubgraphDataset):
             "wl_max_hop": self.wl_max_hop,
             "wl_x_type_for_hists": self.wl_x_type_for_hists,
             "wl_num_hist_clusters": self.wl_num_hist_clusters,
+            "wl_num_slice_hist_by_std": self.wl_num_slice_hist_by_std,
         })
         if self.wl_x_type_for_hists == "cluster":
             ie["wl_num_color_clusters"] = self.wl_num_color_clusters
@@ -496,7 +499,14 @@ class WLHistSubgraph(SubgraphDataset):
         wl_rets = wl(sub_x, data.x, data.edge_index, hist_norm=True, use_tqdm=True)
         colors, hists, clusters = wl_rets["colors"], wl_rets["hists"], wl_rets["clusters"]
         hist_cluster_list = []
-        for wl_step, (co, hi, cl) in enumerate(zip(colors, hists, clusters)):
+        for wl_step, (co, hi, cl) in enumerate(zip(tqdm(colors, desc="WL4PatternConv.to_cluster"),
+                                                   hists, clusters)):
+            hi: Tensor  # [S, #colors]
+            if self.wl_num_slice_hist_by_std is not None and hi.size(1) > self.wl_num_slice_hist_by_std:
+                hi_std = torch.std(hi, dim=0)
+                topk_hi_std = torch.topk(hi_std, self.wl_num_slice_hist_by_std)
+                hi = hi[:, topk_hi_std.indices]  # [S, #cut]
+
             _hist_cluster = WL4PatternConv.to_cluster(
                 hi, clustering_name="KMeans", n_clusters=self.wl_num_hist_clusters)
             hist_cluster_list.append(_hist_cluster.view(-1, 1))  # (S, 1)
@@ -522,30 +532,25 @@ class WLHistSubgraphBA(WLHistSubgraph):
 
     def __init__(self, root, name, embedding_type, ba_n, ba_m, ba_seed,
                  num_subgraphs: int, subgraph_size: int, wl_hop_to_use: int, wl_max_hop: int,
-                 wl_x_type_for_hists: str = "color", wl_num_color_clusters: int = None, wl_num_hist_clusters: int = 2,
+                 wl_x_type_for_hists: str = "color", wl_num_color_clusters: int = None,
+                 wl_num_slice_hist_by_std: int = 4, wl_num_hist_clusters: int = 2,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
 
         network_generator = "nx.barabasi_albert_graph"
         network_args = [ba_n, ba_m, self.ba_seed_that_makes_balanced_datasets(ba_n, ba_m, ba_seed)]
-        super().__init__(root, name, embedding_type, network_generator, network_args, num_subgraphs, subgraph_size,
-                         wl_hop_to_use, wl_max_hop, wl_x_type_for_hists, wl_num_color_clusters, wl_num_hist_clusters,
-                         val_ratio, test_ratio, save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
+        super().__init__(root, name, embedding_type, network_generator, network_args,
+                         num_subgraphs, subgraph_size, wl_hop_to_use, wl_max_hop, wl_x_type_for_hists,
+                         wl_num_color_clusters, wl_num_slice_hist_by_std, wl_num_hist_clusters,
+                         val_ratio, test_ratio, save_directed_edges, debug, seed,
+                         transform, pre_transform, **kwargs)
 
     def ba_seed_that_makes_balanced_datasets(self, ba_n, ba_m, ba_seed):
         if ba_seed is not None:
             return ba_seed
         else:
-            return {  # comments are major_class_ratio_test
-                (10000, 4): 380,  # 0.6667
-                (10000, 5): 399,  # 0.64
-                (10000, 6): 288,  # 0.64
-                (10000, 7): 232,  # 0.6867
-                (10000, 8): 364,  # 0.66
-                (10000, 9): 474,  # 0.6333
-                (10000, 10): 451,  # 0.6533
-                (10000, 15): 489,  # 0.5933
-                (10000, 20): 51,  # 0.5533
+            return {
+                (10000, 5): 22,
             }[(ba_n, ba_m)]
 
     def download(self):
@@ -559,17 +564,20 @@ class WLHistSubgraphBA(WLHistSubgraph):
 
 class WLHistSubgraphER(WLHistSubgraph):
 
-    def __init__(self, root, name, embedding_type, er_n, er_p, er_seed,
+    def __init__(self, root, name, embedding_type, ba_n, ba_m, ba_seed,
                  num_subgraphs: int, subgraph_size: int, wl_hop_to_use: int, wl_max_hop: int,
-                 wl_x_type_for_hists: str = "color", wl_num_color_clusters: int = None, wl_num_hist_clusters: int = 2,
+                 wl_x_type_for_hists: str = "color", wl_num_color_clusters: int = None,
+                 wl_num_slice_hist_by_std: int = 4, wl_num_hist_clusters: int = 2,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
 
-        network_generator = "nx.erdos_renyi_graph"
-        network_args = [er_n, er_p, er_seed]
-        super().__init__(root, name, embedding_type, network_generator, network_args, num_subgraphs, subgraph_size,
-                         wl_hop_to_use, wl_max_hop, wl_x_type_for_hists, wl_num_color_clusters, wl_num_hist_clusters,
-                         val_ratio, test_ratio, save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
+        network_generator = "nx.barabasi_albert_graph"
+        network_args = [ba_n, ba_m, self.ba_seed_that_makes_balanced_datasets(ba_n, ba_m, ba_seed)]
+        super().__init__(root, name, embedding_type, network_generator, network_args,
+                         num_subgraphs, subgraph_size, wl_hop_to_use, wl_max_hop, wl_x_type_for_hists,
+                         wl_num_color_clusters, wl_num_slice_hist_by_std, wl_num_hist_clusters,
+                         val_ratio, test_ratio, save_directed_edges, debug, seed,
+                         transform, pre_transform, **kwargs)
 
     def download(self):
         super().download()
@@ -626,7 +634,8 @@ if __name__ == '__main__':
         "wl_hop_to_use": None,
         "wl_max_hop": 3,
         "wl_x_type_for_hists": "cluster",  # color, cluster
-        "wl_num_color_clusters": None,
+        "wl_num_color_clusters": 64,
+        "wl_num_slice_hist_by_std": 8,
         "wl_num_hist_clusters": 2,
     }
     if TYPE == "WLHistSubgraphBA":

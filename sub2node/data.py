@@ -256,7 +256,8 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
         "wl_hop_to_use": None,
         "wl_max_hop": 3,
         "wl_x_type_for_hists": "cluster",  # color, cluster
-        "wl_num_color_clusters": None,
+        "wl_num_color_clusters": 64,
+        "wl_num_slice_hist_by_std": 8,
         "wl_num_hist_clusters": 2,
     }
     if NAME == "WLHistSubgraphBA":

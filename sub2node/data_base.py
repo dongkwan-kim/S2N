@@ -193,12 +193,12 @@ class DatasetBase(InMemoryDataset):
         def out(v):
             return str(float(v)) if isinstance(v, torch.Tensor) else str(v)
 
-        print("---------------------------------------------------------------")
+        print("-" * 69)
         for k, v in chain(self._get_important_elements().items(),
                           self._get_stats().items(),
                           kwargs.items()):
-            print("{:>20}{:>43}".format(k, out(v)))
-        print("---------------------------------------------------------------")
+            print("{:>25}{:>43}".format(k, out(v)))
+        print("-" * 69)
 
     def __repr__(self):
         return '{}(\n{}\n)'.format(
