@@ -265,7 +265,7 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
     elif NAME == "WLHistSubgraphER":
         MORE_KWARGS = {"er_n": 10000, "er_p": 0.002, "er_seed": None, **MORE_KWARGS}
     else:
-        MORE_KWARGS = {}
+        MORE_KWARGS = {"wl_num_color_clusters": None}
 
     KWARGS = dict(
         dataset_name=NAME,

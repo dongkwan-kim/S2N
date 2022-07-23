@@ -550,7 +550,7 @@ class WLHistSubgraphBA(WLHistSubgraph):
             return ba_seed
         else:
             return {
-                (10000, 5): 22,
+                (10000, 5): 36,
             }[(ba_n, ba_m)]
 
     def download(self):
