@@ -15,7 +15,7 @@ from torch_geometric.loader import DataLoader
 from torch_sparse import SparseTensor
 
 from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, SubgraphDataset
-from data_sub import WLHistSubgraphBA, WLHistSubgraphER
+from data_sub import WLHistSubgraphBA
 from data_sub import Density, CC, Coreness, CutRatio
 from data_utils import AddSelfLoopsV2, RemoveAttrs
 from dataset_wl import SliceYByIndex, ReplaceXWithWL4Pattern
@@ -99,7 +99,7 @@ class SubgraphDataModule(LightningDataModule):
     def dataset_class(self):
         assert self.h.dataset_name in ["HPOMetab", "PPIBP", "HPONeuro", "EMUser",
                                        "Density", "CC", "Coreness", "CutRatio",
-                                       "WLHistSubgraphER", "WLHistSubgraphBA"]
+                                       "WLHistSubgraphBA"]
         return eval(self.h.dataset_name)
 
     def load_dataset(self):
@@ -118,7 +118,7 @@ class SubgraphDataModule(LightningDataModule):
 
     @property
     def s2n_path(self) -> str:
-        if self.h.dataset_name in ["WLHistSubgraphER", "WLHistSubgraphBA"]:
+        if self.h.dataset_name in ["WLHistSubgraphBA"]:
             return os.path.join(self.dataset.key_dir, "sub2node")
         else:  # backward compatibility
             return f"{self.h.dataset_path}/{self.h.dataset_name.upper()}/sub2node/"
@@ -262,8 +262,6 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
     }
     if NAME == "WLHistSubgraphBA":
         MORE_KWARGS = {"ba_n": 10000, "ba_m": 5, "ba_seed": None, **MORE_KWARGS}
-    elif NAME == "WLHistSubgraphER":
-        MORE_KWARGS = {"er_n": 10000, "er_p": 0.002, "er_seed": None, **MORE_KWARGS}
     else:
         MORE_KWARGS = {"wl_num_color_clusters": None}
 
@@ -295,7 +293,7 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
 
 if __name__ == '__main__':
 
-    # WLHistSubgraphBA, WLHistSubgraphER
+    # WLHistSubgraphBA
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
     _sdm = get_subgraph_datamodule_for_test(

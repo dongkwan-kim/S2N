@@ -562,30 +562,6 @@ class WLHistSubgraphBA(WLHistSubgraph):
         super().process()
 
 
-class WLHistSubgraphER(WLHistSubgraph):
-
-    def __init__(self, root, name, embedding_type, ba_n, ba_m, ba_seed,
-                 num_subgraphs: int, subgraph_size: int, wl_hop_to_use: int, wl_max_hop: int,
-                 wl_x_type_for_hists: str = "color", wl_num_color_clusters: int = None,
-                 wl_num_slice_hist_by_std: int = 4, wl_num_hist_clusters: int = 2,
-                 val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 transform=None, pre_transform=None, **kwargs):
-
-        network_generator = "nx.barabasi_albert_graph"
-        network_args = [ba_n, ba_m, self.ba_seed_that_makes_balanced_datasets(ba_n, ba_m, ba_seed)]
-        super().__init__(root, name, embedding_type, network_generator, network_args,
-                         num_subgraphs, subgraph_size, wl_hop_to_use, wl_max_hop, wl_x_type_for_hists,
-                         wl_num_color_clusters, wl_num_slice_hist_by_std, wl_num_hist_clusters,
-                         val_ratio, test_ratio, save_directed_edges, debug, seed,
-                         transform, pre_transform, **kwargs)
-
-    def download(self):
-        super().download()
-
-    def process(self):
-        super().process()
-
-
 def find_seed_that_makes_balanced_datasets(seed_name="ba_seed", class_ratio_thres=0.66, **kwargs):
     min_of_max_vs, seed_at_min_of_max_vs = 999, None
     for seed in range(500):
@@ -618,7 +594,7 @@ if __name__ == '__main__':
     FIND_SEED = False  # NOTE: If True, find_seed_that_makes_balanced_datasets will be performed
 
     TYPE = "WLHistSubgraphBA"
-    # WLHistSubgraphBA, WLHistSubgraphER
+    # WLHistSubgraphBA
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
 
@@ -643,12 +619,6 @@ if __name__ == '__main__':
             "ba_n": 10000,
             "ba_m": 5,  # 5, 10, 15, 20
             "ba_seed": None,  # NOTE: Using None will use ba_seed_that_makes_balanced_datasets
-            **WL_HIST_KWARGS,
-        }
-    elif TYPE == "WLHistSubgraphER":
-        KWARGS = {
-            "er_n": 10000, "er_p": 0.003,  # 0.002, 0.003, 0.004
-            "er_seed": 42,
             **WL_HIST_KWARGS,
         }
     else:
