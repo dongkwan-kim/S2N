@@ -5,10 +5,12 @@ from typing import Optional, List, Dict, Any, Union
 
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 import torch
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_selection import VarianceThreshold
 from sklearn.preprocessing import StandardScaler, Normalizer
-from sklearn.cluster import KMeans
+from sklearn.cluster import KMeans, MiniBatchKMeans
 from termcolor import cprint
 from torch import Tensor
 from torch.nn.utils.rnn import pad_sequence
@@ -154,25 +156,24 @@ class WL4PatternConv(WLConv):
         color_to_pattern = {v: k for k, v in self.hashmap.items()}
         assert len(self.hashmap) == len(color_to_pattern)
 
-        self_patterns, neighbor_patterns = [], []
+        neighbor_patterns = []
         for c in color.tolist():
-            sp, *np = color_to_pattern[c]
-            self_patterns.append([sp])
-            neighbor_patterns.append(np)
+            sp, *nep = color_to_pattern[c]
+            neighbor_patterns.append(nep)
 
         if outtype == "bow":
-            vectorizer = CountVectorizer(preprocessor=lambda _: _, tokenizer=lambda _: _)
-            pattern_transformed = vectorizer.fit_transform(self_patterns + neighbor_patterns)
-            # print(vectorizer.get_feature_names_out())
-            N = color.size(0)
+            vectorizer = CountVectorizer(
+                preprocessor=lambda _: _, tokenizer=lambda _: _,
+                min_df=5e-5,  # Should be given when the number of colors is large. NOTE: Hard-coded
+            )
+            pattern_transformed = vectorizer.fit_transform(neighbor_patterns)
             pattern_vec = pattern_transformed.toarray()
-            sp_vec, np_vec = pattern_vec[:N, :], pattern_vec[N:, :]
+            pattern_vec = VarianceThreshold(
+                threshold=5e-4,  # NOTE: Hard-coded
+            ).fit_transform(pattern_vec)
             if preprocessor is not None:
-                sp_vec = eval(preprocessor)().fit_transform(sp_vec)
-                np_vec = eval(preprocessor)().fit_transform(np_vec)
-
-            return torch.cat([torch.from_numpy(sp_vec),
-                              torch.from_numpy(np_vec)], dim=-1)
+                pattern_vec = eval(preprocessor)().fit_transform(pattern_vec)
+            return torch.from_numpy(pattern_vec)
 
         else:
             raise NotImplementedError
@@ -219,7 +220,7 @@ class WL4PatternConv(WLConv):
 
     @staticmethod
     def to_cluster(x: Tensor, clustering_name="KMeans", **kwargs) -> Tensor:
-        assert clustering_name in ["KMeans"]
+        assert clustering_name in ["KMeans", "MiniBatchKMeans"]
         clustering = eval(clustering_name)(**kwargs).fit(x.numpy())
         return torch.from_numpy(clustering.labels_).long()
 
@@ -227,19 +228,22 @@ class WL4PatternConv(WLConv):
 class WL4PatternNet(torch.nn.Module):
 
     def __init__(self, num_layers, clustering_name="KMeans", x_type_for_hists="color",
-                 use_clustering_validation=False, **kwargs):
+                 use_clustering_validation=False, compute_last_only=True, **kwargs):
         super().__init__()
         self.convs = torch.nn.ModuleList([WL4PatternConv() for _ in range(num_layers)])
 
         self.clustering_name = clustering_name
         self.cluster_kwargs: Dict[str, Any] = {
-            "KMeans": {"n_clusters": 3, "pattern_preprocessor": None},
+            "KMeans": {"n_clusters": -1, "pattern_preprocessor": None},
+            "MiniBatchKMeans": {"n_clusters": -1, "pattern_preprocessor": None,
+                                "batch_size": 256 * 40, "max_iter": 100},
         }[clustering_name]
         self.cluster_kwargs.update(kwargs)
 
         self.x_type_for_hists = x_type_for_hists
         assert x_type_for_hists in ["color", "cluster", "all"]
         self.use_clustering_validation = use_clustering_validation
+        self.compute_last_only = compute_last_only
 
     def validate_clustering(self, color, cluster, memo=""):
         cprint(f"Validating clustering: ({memo})", "green")
@@ -264,16 +268,19 @@ class WL4PatternNet(torch.nn.Module):
             x = conv(x, edge_index)
 
             colors.append(x)
-            clusters.append(conv.color_pattern_cluster(x, **self.cluster_kwargs))
             if self.use_clustering_validation:
-                self.validate_clustering(colors[-1], clusters[-1], memo=f"{i+1}-step")
+                self.validate_clustering(colors[-1], clusters[-1], memo=f"{i + 1}-step")
 
             if self.x_type_for_hists in ["color", "all"]:
-                hists_colors.append(conv.subgraph_histogram(list(sub_x), colors[-1], norm=hist_norm,
-                                                            num_colors=len(conv.hashmap)))
+                if (self.compute_last_only and (i == len(convs) - 1)) or not self.compute_last_only:
+                    hists_colors.append(conv.subgraph_histogram(list(sub_x), colors[-1], norm=hist_norm,
+                                                                num_colors=len(conv.hashmap)))
             if self.x_type_for_hists in ["cluster", "all"]:
-                hists_clusters.append(conv.subgraph_histogram(list(sub_x), clusters[-1], norm=hist_norm,
-                                                              num_colors=self.cluster_kwargs["n_clusters"]))
+                if (self.compute_last_only and (i == len(convs) - 1)) or not self.compute_last_only:
+                    clusters.append(conv.color_pattern_cluster(x, clustering_name=self.clustering_name,
+                                                               **self.cluster_kwargs))
+                    hists_clusters.append(conv.subgraph_histogram(list(sub_x), clusters[-1], norm=hist_norm,
+                                                                  num_colors=self.cluster_kwargs["n_clusters"]))
 
         if self.x_type_for_hists == "all":
             hists_rets = {"hists_colors": hists_colors, "hists_clusters": hists_clusters}
@@ -284,6 +291,42 @@ class WL4PatternNet(torch.nn.Module):
             "clusters": clusters,
             **hists_rets,
         }
+
+
+def generate_random_k_hop_subgraph_batch_by_sampling_0_to_l_to_d(
+        global_data: Data, num_subgraphs, subgraph_size=None, k=1, l=2,
+) -> (Union[Tensor, List[Tensor]], List[Data]):
+    nodes_in_subgraphs: Union[Tensor, List[Tensor]] = generate_random_k_hop_subgraph(
+        global_data, num_subgraphs=num_subgraphs, subgraph_size=subgraph_size, k=k)
+
+    batch_list = []
+    hop_range = list(range(l + 1))
+    # hop_range = []
+    for ith_hop in tqdm(hop_range, desc="sampling_0_to_l_to_d"):
+        ith_data_list = []
+        for nodes in nodes_in_subgraphs:
+            ith_nodes, ith_edge_index, inv, _ = k_hop_subgraph(
+                nodes, ith_hop, global_data.edge_index,
+                relabel_nodes=True)
+            ith_data_list.append(Data(
+                edge_index=ith_edge_index,
+                num_nodes=ith_nodes.size(0),
+                initial_node_index=inv,  # index of 'nodes' in 'ith_nodes'.
+            ))
+        ith_batch = Batch.from_data_list(ith_data_list, follow_batch=["initial_node_index"])
+        # e.g., DataBatch(edge_index=[2, 1548380], num_nodes=419191, initial_node_index=[17014],
+        #                 initial_node_index_batch=[17014], batch=[419191], ptr=[1501])
+        batch_list.append(ith_batch)
+
+    # diameter
+    _diameter_batch = Batch.from_data_list([Data(x=nodes) for nodes in nodes_in_subgraphs])
+    batch_list.append(Data(
+        edge_index=global_data.edge_index,
+        num_nodes=global_data.num_nodes,
+        initial_node_index=_diameter_batch.x,
+        initial_node_index_batch=_diameter_batch.batch,
+    ))
+    return nodes_in_subgraphs, batch_list
 
 
 def generate_random_subgraph_by_walk(global_data: Data, num_subgraphs, subgraph_size):
@@ -309,8 +352,8 @@ def generate_random_subgraph_by_walk(global_data: Data, num_subgraphs, subgraph_
     return nodes_in_subgraphs
 
 
-def generate_random_subgraph_by_k_hop(global_data: Data, num_subgraphs,
-                                      subgraph_size=None, k=1) -> Union[Tensor, List[Tensor]]:
+def generate_random_k_hop_subgraph(global_data: Data, num_subgraphs,
+                                   subgraph_size=None, k=1) -> Union[Tensor, List[Tensor]]:
     N, E = global_data.num_nodes, global_data.num_edges
     nodes_in_subgraphs = []
     start = torch.randint(0, N, (num_subgraphs * 2,), dtype=torch.long).flatten()
@@ -366,7 +409,7 @@ def run_and_draw_examples(edge_index, num_layers):
     data = Data(x=torch.ones(maybe_num_nodes(edge_index)).long(),
                 edge_index=edge_index)
 
-    sub_x = generate_random_subgraph_by_k_hop(data, num_subgraphs=20, subgraph_size=5)
+    sub_x = generate_random_k_hop_subgraph(data, num_subgraphs=20, subgraph_size=5)
 
     wl = WL4PatternNet(
         num_layers=num_layers, x_type_for_hists="color",
@@ -404,7 +447,7 @@ def draw_subgraph_embeddings(edge_index, num_layers,
     data = Data(x=torch.ones(maybe_num_nodes(edge_index)).long(),
                 edge_index=edge_index)
 
-    sub_x = generate_random_subgraph_by_k_hop(
+    sub_x = generate_random_k_hop_subgraph(
         data, num_subgraphs=num_subgraphs, subgraph_size=None)
 
     wl = WL4PatternNet(

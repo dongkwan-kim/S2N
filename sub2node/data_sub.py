@@ -5,11 +5,12 @@ from typing import List, Dict, Tuple, Union
 import os
 
 import torch
+from sklearn.feature_selection import VarianceThreshold
 from sklearn.preprocessing import MultiLabelBinarizer
 from termcolor import cprint
 from torch import Tensor
-from torch_geometric.data import Data
-from torch_geometric.utils import subgraph, sort_edge_index, to_undirected, from_networkx
+from torch_geometric.data import Data, Batch
+from torch_geometric.utils import subgraph, k_hop_subgraph, sort_edge_index, to_undirected, from_networkx, to_networkx
 import networkx as nx
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 
@@ -18,8 +19,8 @@ from tqdm import tqdm
 from data_base import DatasetBase
 from data_sub_utils import save_subgraphs
 from dataset_wl import generate_random_subgraph_by_walk, WL4PatternNet, WL4PatternConv, \
-    generate_random_subgraph_by_k_hop
-from utils import from_networkx_customized_ordering, to_directed
+    generate_random_k_hop_subgraph, generate_random_k_hop_subgraph_batch_by_sampling_0_to_l_to_d
+from utils import from_networkx_customized_ordering, to_directed, unbatch
 
 
 def read_subgnn_data(edge_list_path, subgraph_path,
@@ -180,7 +181,7 @@ class SubgraphDataset(DatasetBase):
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
-        assert embedding_type in ["gin", "graphsaint_gcn", "no_embedding"]
+        assert embedding_type in ["gin", "graphsaint_gcn", "no_embedding", "glass"]
         self.embedding_type = embedding_type
         self.save_directed_edges = save_directed_edges
         super().__init__(
@@ -374,8 +375,7 @@ class WLHistSubgraph(SubgraphDataset):
                  network_generator: str, network_args: list,
                  num_subgraphs: int, subgraph_size: int,
                  wl_hop_to_use: int, wl_max_hop: int, wl_x_type_for_hists: str = "color",
-                 wl_num_color_clusters: int = None, wl_num_slice_hist_by_std: int = 4,
-                 wl_num_hist_clusters: int = 2,
+                 wl_num_color_clusters: int = None, wl_num_hist_clusters: int = 2,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
         """Params specific for WLHistSubgraph
@@ -401,7 +401,6 @@ class WLHistSubgraph(SubgraphDataset):
         self.wl_max_hop = wl_max_hop
         self.wl_x_type_for_hists = wl_x_type_for_hists
         self.wl_num_color_clusters = wl_num_color_clusters or self.wl_max_hop
-        self.wl_num_slice_hist_by_std = wl_num_slice_hist_by_std
         self.wl_num_hist_clusters = wl_num_hist_clusters
         assert self.wl_x_type_for_hists in ["cluster", "color"]
         assert network_generator.startswith("nx.")
@@ -474,7 +473,6 @@ class WLHistSubgraph(SubgraphDataset):
             "wl_max_hop": self.wl_max_hop,
             "wl_x_type_for_hists": self.wl_x_type_for_hists,
             "wl_num_hist_clusters": self.wl_num_hist_clusters,
-            "wl_num_slice_hist_by_std": self.wl_num_slice_hist_by_std,
         })
         if self.wl_x_type_for_hists == "cluster":
             ie["wl_num_color_clusters"] = self.wl_num_color_clusters
@@ -489,33 +487,42 @@ class WLHistSubgraph(SubgraphDataset):
         # dump to edge_list_path = raw_paths[0]
         nx.write_edgelist(g, self.raw_paths[0], data=False)
 
-        # dump to subgraph_path = raw_paths[1]
-        sub_x: Union[Tensor, List[Tensor]] = generate_random_subgraph_by_k_hop(
-            data, num_subgraphs=self.num_subgraphs, subgraph_size=self.subgraph_size, k=1)
-        wl = WL4PatternNet(
-            num_layers=self.wl_max_hop, x_type_for_hists=self.wl_x_type_for_hists,
-            clustering_name="KMeans", n_clusters=self.wl_num_color_clusters,  # clustering & kwargs
+        L = self.wl_max_hop
+        init_sub_x, batch_list = generate_random_k_hop_subgraph_batch_by_sampling_0_to_l_to_d(
+            data, num_subgraphs=self.num_subgraphs, subgraph_size=self.subgraph_size,
+            k=1, l=L,
         )
-        wl_rets = wl(sub_x, data.x, data.edge_index, hist_norm=True, use_tqdm=True)
-        colors, hists, clusters = wl_rets["colors"], wl_rets["hists"], wl_rets["clusters"]
-        hist_cluster_list = []
-        for wl_step, (co, hi, cl) in enumerate(zip(tqdm(colors, desc="WL4PatternConv.to_cluster"),
-                                                   hists, clusters)):
-            hi: Tensor  # [S, #colors]
-            if self.wl_num_slice_hist_by_std is not None and hi.size(1) > self.wl_num_slice_hist_by_std:
-                hi_std = torch.std(hi, dim=0)
-                topk_hi_std = torch.topk(hi_std, self.wl_num_slice_hist_by_std)
-                hi = hi[:, topk_hi_std.indices]  # [S, #cut]
+        assert len(batch_list) == (1 + L + 1)
 
-            _hist_cluster = WL4PatternConv.to_cluster(
-                hi, clustering_name="KMeans", n_clusters=self.wl_num_hist_clusters)
-            hist_cluster_list.append(_hist_cluster.view(-1, 1))  # (S, 1)
-        hist_cluster = torch.cat(hist_cluster_list, dim=-1)  # (S, C)
+        last_hist_cluster_list = []
+        for ith, i_hop_batch in enumerate(tqdm(batch_list, desc="WL-coloring-to-labels")):
+            wl = WL4PatternNet(
+                num_layers=self.wl_max_hop + 1,
+                x_type_for_hists=self.wl_x_type_for_hists,
+                clustering_name="MiniBatchKMeans",
+                n_clusters=self.wl_num_color_clusters,  # clustering & kwargs
+            )
+            sub_x = unbatch(i_hop_batch.initial_node_index, i_hop_batch.initial_node_index_batch)
+            x_as_colors = torch.ones(i_hop_batch.num_nodes).long()
+            wl_rets = wl(
+                sub_x, x_as_colors, i_hop_batch.edge_index, hist_norm=True, use_tqdm=False,
+            )
+            hists, colors, clusters = wl_rets["hists"], wl_rets["colors"], wl_rets["clusters"]
 
-        if isinstance(sub_x, list):
-            nodes_in_subgraphs = [nodes.tolist() for nodes in sub_x]
+            # Remove not used colors in the histogram. (S, #colors)
+            last_hist = torch.from_numpy(VarianceThreshold().fit_transform(
+                hists[-1].numpy()
+            ))
+            last_hist_cluster = WL4PatternConv.to_cluster(
+                last_hist, clustering_name="KMeans", n_clusters=self.wl_num_hist_clusters)
+            last_hist_cluster_list.append(last_hist_cluster.view(-1, 1))  # (S, 1)
+
+        hist_cluster = torch.cat(last_hist_cluster_list, dim=-1)  # (S, C)
+
+        if isinstance(init_sub_x, list):
+            nodes_in_subgraphs = [nodes.tolist() for nodes in init_sub_x]
         else:
-            nodes_in_subgraphs = sub_x.tolist()
+            nodes_in_subgraphs = init_sub_x.tolist()
 
         save_subgraphs(
             path=self.raw_paths[1],
@@ -533,7 +540,7 @@ class WLHistSubgraphBA(WLHistSubgraph):
     def __init__(self, root, name, embedding_type, ba_n, ba_m, ba_seed,
                  num_subgraphs: int, subgraph_size: int, wl_hop_to_use: int, wl_max_hop: int,
                  wl_x_type_for_hists: str = "color", wl_num_color_clusters: int = None,
-                 wl_num_slice_hist_by_std: int = 4, wl_num_hist_clusters: int = 2,
+                 wl_num_hist_clusters: int = 2,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
 
@@ -541,7 +548,7 @@ class WLHistSubgraphBA(WLHistSubgraph):
         network_args = [ba_n, ba_m, self.ba_seed_that_makes_balanced_datasets(ba_n, ba_m, ba_seed)]
         super().__init__(root, name, embedding_type, network_generator, network_args,
                          num_subgraphs, subgraph_size, wl_hop_to_use, wl_max_hop, wl_x_type_for_hists,
-                         wl_num_color_clusters, wl_num_slice_hist_by_std, wl_num_hist_clusters,
+                         wl_num_color_clusters, wl_num_hist_clusters,
                          val_ratio, test_ratio, save_directed_edges, debug, seed,
                          transform, pre_transform, **kwargs)
 
@@ -562,14 +569,14 @@ class WLHistSubgraphBA(WLHistSubgraph):
         super().process()
 
 
-def find_seed_that_makes_balanced_datasets(seed_name="ba_seed", class_ratio_thres=0.66, **kwargs):
+def find_seed_that_makes_balanced_datasets(seed_name="ba_seed", class_ratio_thres=0.8, **kwargs):
     min_of_max_vs, seed_at_min_of_max_vs = 999, None
     for seed in range(500):
         assert seed_name in kwargs
         kwargs[seed_name] = seed
-        trial_dataset: WLHistSubgraph = eval(TYPE)(
+        trial_dataset: WLHistSubgraph = eval(NAME)(
             root=PATH,
-            name=TYPE,
+            name=NAME,
             embedding_type=E_TYPE,
             debug=DEBUG,
             **kwargs,
@@ -591,49 +598,48 @@ def find_seed_that_makes_balanced_datasets(seed_name="ba_seed", class_ratio_thre
 
 if __name__ == '__main__':
 
-    FIND_SEED = False  # NOTE: If True, find_seed_that_makes_balanced_datasets will be performed
+    FIND_SEED = True  # NOTE: If True, find_seed_that_makes_balanced_datasets will be performed
 
-    TYPE = "WLHistSubgraphBA"
+    NAME = "WLHistSubgraphBA"
     # WLHistSubgraphBA
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
-    if TYPE.startswith("WL"):
+    if NAME.startswith("WL"):
         E_TYPE = "no_embedding"
     else:
-        E_TYPE = "gin"  # gin, graphsaint_gcn
+        E_TYPE = "gin"  # gin, graphsaint_gcn, glass
     DEBUG = False
-    WL_HIST_KWARGS = {
-        "num_subgraphs": 1500,
+    MORE_KWARGS = {
+        "num_subgraphs": 400,
         "subgraph_size": None,  # NOTE: Using None will use ego-graphs
         "wl_hop_to_use": None,
-        "wl_max_hop": 3,
+        "wl_max_hop": 2,
         "wl_x_type_for_hists": "cluster",  # color, cluster
-        "wl_num_color_clusters": 64,
-        "wl_num_slice_hist_by_std": 8,
+        "wl_num_color_clusters": 200,
         "wl_num_hist_clusters": 2,
     }
-    if TYPE == "WLHistSubgraphBA":
-        KWARGS = {
-            "ba_n": 10000,
-            "ba_m": 5,  # 5, 10, 15, 20
-            "ba_seed": None,  # NOTE: Using None will use ba_seed_that_makes_balanced_datasets
-            **WL_HIST_KWARGS,
+    if NAME == "WLHistSubgraphBA":
+        MORE_KWARGS = {
+            "ba_n": 4000,
+            "ba_m": 4,  # 5, 10, 15, 20
+            "ba_seed": 42,  # NOTE: Using None will use ba_seed_that_makes_balanced_datasets
+            **MORE_KWARGS,
         }
     else:
-        KWARGS = {}
+        MORE_KWARGS = {}
 
     if FIND_SEED:
-        find_seed_that_makes_balanced_datasets(**KWARGS)
+        find_seed_that_makes_balanced_datasets(**MORE_KWARGS)
         exit("Exit with success")
 
-    dts: SubgraphDataset = eval(TYPE)(
+    dts: SubgraphDataset = eval(NAME)(
         root=PATH,
-        name=TYPE,
+        name=NAME,
         embedding_type=E_TYPE,
         debug=DEBUG,
-        **KWARGS,
+        **MORE_KWARGS,
     )
 
     train_dts, val_dts, test_dts = dts.get_train_val_test()

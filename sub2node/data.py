@@ -251,17 +251,21 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
         WL4PATTERN_ARGS = None
 
     MORE_KWARGS = {
-        "num_subgraphs": 1500,
-        "subgraph_size": None,
+        "num_subgraphs": 400,
+        "subgraph_size": None,  # NOTE: Using None will use ego-graphs
         "wl_hop_to_use": None,
-        "wl_max_hop": 3,
+        "wl_max_hop": 2,
         "wl_x_type_for_hists": "cluster",  # color, cluster
-        "wl_num_color_clusters": 64,
-        "wl_num_slice_hist_by_std": 8,
+        "wl_num_color_clusters": 200,
         "wl_num_hist_clusters": 2,
     }
     if NAME == "WLHistSubgraphBA":
-        MORE_KWARGS = {"ba_n": 10000, "ba_m": 5, "ba_seed": None, **MORE_KWARGS}
+        MORE_KWARGS = {
+            "ba_n": 4000,
+            "ba_m": 4,  # 5, 10, 15, 20
+            "ba_seed": 42,  # NOTE: Using None will use ba_seed_that_makes_balanced_datasets
+            **MORE_KWARGS,
+        }
     else:
         MORE_KWARGS = {"wl_num_color_clusters": None}
 

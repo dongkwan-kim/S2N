@@ -1,19 +1,18 @@
 dataset_subname: "${datamodule.dataset_name}_${datamodule.ba_m}"
 
 # WL specific args
-num_subgraphs: 1500
+num_subgraphs: 400
 subgraph_size: null  # NOTE: important, should be null for using ego-graphs
 wl_hop_to_use: null  # NOTE: important, Instead, SliceYByIndex will handle this.
 s2n_transform: "SliceYByIndex"
 s2n_transform_args: [null]  # args for SliceYByIndex. NOTE: very important, should be given by command lines
-wl_max_hop: 3
+wl_max_hop: 2
 wl_x_type_for_hists: "cluster"  # color, cluster
-wl_num_color_clusters: 64
-wl_num_slice_hist_by_std: 8
+wl_num_color_clusters: 200
 wl_num_hist_clusters: 2
 
 # BA specific args
 ba_seed: null  # NOTE: very important, ba_seed_that_makes_balanced_datasets will assign this value
-ba_n: 10000
-ba_m: 5  # 4, 5, 6, 7, 8, 10, 15, 20
+ba_n: 4000
+ba_m: 4  # 4, 5, 6, 7, 8, 10, 15, 20
 num_channels_global: 64  # for wl_ba, wl_er, ...

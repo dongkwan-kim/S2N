@@ -1,27 +1,23 @@
 import itertools
-import time
 import random
+import time
 from collections import namedtuple
 from functools import reduce
 from pprint import pprint
 from typing import Dict, Any, List, Tuple, Optional, Callable, Union
 
+import networkx as nx
+import numpy as np
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch_geometric
 import torch_sparse
 from termcolor import cprint
 from torch import Tensor
-import torch.nn.functional as F
-import torch.nn as nn
-
-import torch_geometric
-from torch_geometric.utils import subgraph, to_undirected, dropout_adj, homophily
+from torch_geometric.utils import dropout_adj, to_dense_batch, softmax, degree
 from torch_geometric.utils.num_nodes import maybe_num_nodes
-from torch_geometric.utils import to_dense_batch, softmax
-
-from torch_scatter import scatter, scatter_mean
-
-import numpy as np
-import networkx as nx
+from torch_scatter import scatter_mean
 from torch_sparse import SparseTensor
 from tqdm import tqdm
 
@@ -477,6 +473,26 @@ def from_networkx_customized_ordering(G, ordering="default"):
     data = torch_geometric.data.Data.from_dict(data)
     data.num_nodes = G.number_of_nodes()
     return data
+
+
+def unbatch(src: Tensor, batch: Tensor, dim: int = 0) -> List[Tensor]:
+    r"""Splits :obj:`src` according to a :obj:`batch` vector along dimension
+    :obj:`dim`.
+
+    Args:
+        src (Tensor): The source tensor.
+        batch (LongTensor): The batch vector
+            :math:`\mathbf{b} \in {\{ 0, \ldots, B-1\}}^N`, which assigns each
+            entry in :obj:`src` to a specific example. Must be ordered.
+        dim (int, optional): The dimension along which to split the :obj:`src`
+            tensor. (default: :obj:`0`)
+
+    :rtype: :class:`List[Tensor]`
+
+    NOTE: Copied from https://pytorch-geometric.readthedocs.io/en/latest/modules/utils.html
+    """
+    sizes = degree(batch, dtype=torch.long).tolist()
+    return src.split(sizes, dim)
 
 
 if __name__ == '__main__':
