@@ -242,7 +242,7 @@ if __name__ == '__main__':
     # Density, CC, Coreness, CutRatio
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
-    E_TYPE = "graphsaint_gcn"  # gin, graphsaint_gcn
+    E_TYPE = "glass"  # gin, graphsaint_gcn, glass
 
     USE_S2N = True  # NOTE: important
     USE_SPARSE_TENSOR = False
