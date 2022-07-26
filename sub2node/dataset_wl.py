@@ -53,6 +53,7 @@ class ReplaceXWithWL4Pattern(BaseTransform):
             clustering_name=clustering_name,
             n_clusters=num_color_clusters or num_layers,  # clustering & kwargs
             use_clustering_validation=False,
+            compute_last_only=False,
             **kwargs,
         )
         self.cache_path = cache_path

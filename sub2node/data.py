@@ -174,7 +174,7 @@ class SubgraphDataModule(LightningDataModule):
                 assert self.h.wl4pattern_args is not None and len(self.h.wl4pattern_args) == 2
                 assert isinstance(self.h.wl4pattern_args[0], int) and isinstance(self.h.wl4pattern_args[1], str)
                 self.train_data, self.val_data, self.test_data = ReplaceXWithWL4Pattern(
-                    num_layers=3,  # NOTE: num_layer is hard-coded.
+                    num_layers=4,  # NOTE: num_layer is hard-coded.
                     wl_step_to_use=self.h.wl4pattern_args[0],
                     wl_type_to_use=self.h.wl4pattern_args[1],
                     num_color_clusters=self.h.wl_num_color_clusters,
@@ -263,7 +263,7 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
         MORE_KWARGS = {
             "ba_n": 4000,
             "ba_m": 4,  # 5, 10, 15, 20
-            "ba_seed": 42,  # NOTE: Using None will use ba_seed_that_makes_balanced_datasets
+            "ba_seed": None,  # NOTE: Using None will use ba_seed_that_makes_balanced_datasets
             **MORE_KWARGS,
         }
     else:

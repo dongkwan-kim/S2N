@@ -557,7 +557,7 @@ class WLHistSubgraphBA(WLHistSubgraph):
             return ba_seed
         else:
             return {
-                (10000, 5): 36,
+                (4000, 4): 28,
             }[(ba_n, ba_m)]
 
     def download(self):
@@ -598,7 +598,7 @@ def find_seed_that_makes_balanced_datasets(seed_name="ba_seed", class_ratio_thre
 
 if __name__ == '__main__':
 
-    FIND_SEED = True  # NOTE: If True, find_seed_that_makes_balanced_datasets will be performed
+    FIND_SEED = False  # NOTE: If True, find_seed_that_makes_balanced_datasets will be performed
 
     NAME = "WLHistSubgraphBA"
     # WLHistSubgraphBA
@@ -624,7 +624,7 @@ if __name__ == '__main__':
         MORE_KWARGS = {
             "ba_n": 4000,
             "ba_m": 4,  # 5, 10, 15, 20
-            "ba_seed": 42,  # NOTE: Using None will use ba_seed_that_makes_balanced_datasets
+            "ba_seed": None,  # NOTE: Using None will use ba_seed_that_makes_balanced_datasets
             **MORE_KWARGS,
         }
     else:
