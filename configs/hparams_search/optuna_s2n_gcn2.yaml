@@ -6,7 +6,7 @@
 # python run.py -m hparams_search=mnist_optuna experiment=example_simple logger=wandb
 
 defaults:
-  - optuna_tpe.yaml  # optuna_random, optuna_tpe
+  - tpe.yaml  # random, tpe
   - override /callbacks: checkpoint.yaml # If set no checkpoint, it cannot use the best model path
 
 # choose metric which will be optimized by Optuna
@@ -81,3 +81,18 @@ hydra:
         type: int
         low: 1
         high: 3
+      model.layer_kwargs.alpha:
+        type: float
+        low: 0.1
+        high: 0.9
+        step: 0.1
+      model.layer_kwargs.theta:
+        type: float
+        low: 0.1
+        high: 2.0
+        step: 0.1
+      model.layer_kwargs.shared_weights:
+        type: categorical
+        choices:
+          - True
+          - False

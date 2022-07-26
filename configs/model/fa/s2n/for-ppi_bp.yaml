@@ -16,7 +16,7 @@ layer_kwargs: {
 
 learning_rate: 0.001
 weight_decay: 0.000009863545918
-_gradient_clip_val: 0.3
+_gradient_clip_val: 0.0
 
 sub_node_num_layers: 1
 sub_node_encoder_aggr: "sum"
