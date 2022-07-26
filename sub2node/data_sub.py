@@ -30,7 +30,7 @@ def read_subgnn_data(edge_list_path, subgraph_path,
     Reference: https://github.com/mims-harvard/SubGNN/blob/main/SubGNN/SubGNN.py#L519
     """
     # read list of node ids for each subgraph & their labels
-    train_nodes, _train_ys, val_nodes, _val_ys, test_nodes, _test_ys = read_subgraphs(subgraph_path)
+    train_nodes, _train_ys, val_nodes, _val_ys, test_nodes, _test_ys, y_dtype = read_subgraphs(subgraph_path)
     cprint("Loaded subgraphs at {}".format(subgraph_path), "green")
 
     # check if the dataset is multilabel (e.g. HPO-NEURO)
@@ -38,15 +38,15 @@ def read_subgnn_data(edge_list_path, subgraph_path,
         all_labels = _train_ys + _val_ys + _test_ys
         mlb = MultiLabelBinarizer()
         mlb.fit(all_labels)
-        train_sub_ys = torch.Tensor(mlb.transform(_train_ys)).long()
-        val_sub_ys = torch.Tensor(mlb.transform(_val_ys)).long()
-        test_sub_ys = torch.Tensor(mlb.transform(_test_ys)).long()
+        train_sub_ys = torch.Tensor(mlb.transform(_train_ys))
+        val_sub_ys = torch.Tensor(mlb.transform(_val_ys))
+        test_sub_ys = torch.Tensor(mlb.transform(_test_ys))
     else:
         train_sub_ys, val_sub_ys, test_sub_ys = _train_ys, _val_ys, _test_ys
 
     # Initialize pretrained node embeddings
     try:
-        xs = torch.load(embedding_path)  # feature matrix should be initialized to the node embeddings
+        xs = torch.load(embedding_path).cpu()  # feature matrix should be initialized to the node embeddings
         # xs_with_zp = torch.cat([torch.zeros(1, xs.shape[1]), xs], 0)  # there's a zeros in the first index for padding
         cprint("Loaded embeddings at {}".format(embedding_path), "green")
     except (FileNotFoundError, AttributeError):
@@ -61,27 +61,31 @@ def read_subgnn_data(edge_list_path, subgraph_path,
     global_data.edge_index = sort_edge_index(global_data.edge_index)
     global_data.x = xs
 
-    train_data_list = get_data_list_from_subgraphs(global_data.edge_index, train_nodes, train_sub_ys,
-                                                   save_directed_edges=save_directed_edges, debug=debug)
+    train_data_list = get_data_list_from_subgraphs(
+        global_data.edge_index, train_nodes, train_sub_ys,
+        save_directed_edges=save_directed_edges, y_dtype=y_dtype, debug=debug)
     cprint("Converted train_subgraph to PyG format", "green")
-    val_data_list = get_data_list_from_subgraphs(global_data.edge_index, val_nodes, val_sub_ys,
-                                                 save_directed_edges=save_directed_edges, debug=debug)
+    val_data_list = get_data_list_from_subgraphs(
+        global_data.edge_index, val_nodes, val_sub_ys,
+        save_directed_edges=save_directed_edges, y_dtype=y_dtype, debug=debug)
     cprint("Converted val_subgraph to PyG format", "green")
-    test_data_list = get_data_list_from_subgraphs(global_data.edge_index, test_nodes, test_sub_ys,
-                                                  save_directed_edges=save_directed_edges, debug=debug)
+    test_data_list = get_data_list_from_subgraphs(
+        global_data.edge_index, test_nodes, test_sub_ys,
+        save_directed_edges=save_directed_edges, y_dtype=y_dtype, debug=debug)
     cprint("Converted test_subgraph to PyG format", "green")
     return global_data, train_data_list, val_data_list, test_data_list
 
 
 def get_data_list_from_subgraphs(global_edge_index, sub_nodes: List[List[int]], sub_ys,
-                                 save_directed_edges, debug=False):
+                                 save_directed_edges, y_dtype="long", debug=False):
     data_list = []
     for idx, (x_index, y) in enumerate(zip(sub_nodes, tqdm(sub_ys))):
         x_index = torch.Tensor(x_index).long().view(-1, 1)
-        if len(y.size()) == 0:
-            y = torch.Tensor([y]).long()
-        else:
-            y = y.view(1, -1).long()
+        if len(y.size()) == 0:  # single-label
+            y = torch.Tensor([y])
+        else:  # multi-label, or many-label
+            y = y.view(1, -1)
+        y = y.long() if y_dtype == "long" else y.float()
         edge_index, _ = subgraph(x_index, global_edge_index, relabel_nodes=False)
         if edge_index.size(1) <= 0:
             cprint("No edge graph: size of X is {}".format(x_index.size()), "red")
@@ -172,7 +176,8 @@ def read_subgraphs(subgraph_path):
     if len(val_mask) < len(test_mask):
         return train_sub_g, train_sub_y, test_sub_g, test_sub_y, val_sub_g, val_sub_y
 
-    return train_sub_g, train_sub_y, val_sub_g, val_sub_y, test_sub_g, test_sub_y
+    y_dtype = "float" if multilabel else "long"
+    return train_sub_g, train_sub_y, val_sub_g, val_sub_y, test_sub_g, test_sub_y, y_dtype
 
 
 class SubgraphDataset(DatasetBase):
