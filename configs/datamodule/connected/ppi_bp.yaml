@@ -4,7 +4,7 @@ defaults:
   - common_datamodule.yaml
 
 dataset_name: "PPIBP"
-embedding_type: "glass"  # gin, graphsaint_gcn, glass
+embedding_type: "gin"  # gin, graphsaint_gcn, glass
 
 subgraph_batching: "connected"
 use_s2n: False
