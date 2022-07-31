@@ -19,7 +19,7 @@ from tqdm import tqdm
 from data_base import DatasetBase
 from data_sub_utils import save_subgraphs
 from dataset_wl import generate_random_subgraph_by_walk, WL4PatternNet, WL4PatternConv, \
-    generate_random_k_hop_subgraph, generate_random_k_hop_subgraph_batch_by_sampling_0_to_l_to_d
+    generate_random_k_hop_subgraph, generate_random_subgraph_batch_by_sampling_0_to_l_to_d
 from utils import from_networkx_customized_ordering, to_directed, unbatch
 
 
@@ -493,7 +493,7 @@ class WLHistSubgraph(SubgraphDataset):
         nx.write_edgelist(g, self.raw_paths[0], data=False)
 
         L = self.wl_max_hop
-        init_sub_x, batch_list = generate_random_k_hop_subgraph_batch_by_sampling_0_to_l_to_d(
+        init_sub_x, batch_list = generate_random_subgraph_batch_by_sampling_0_to_l_to_d(
             data, num_subgraphs=self.num_subgraphs, subgraph_size=self.subgraph_size,
             k=1, l=L,
         )

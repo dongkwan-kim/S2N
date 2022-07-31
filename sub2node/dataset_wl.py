@@ -294,18 +294,34 @@ class WL4PatternNet(torch.nn.Module):
         }
 
 
-def generate_random_k_hop_subgraph_batch_by_sampling_0_to_l_to_d(
+def generate_random_subgraph_batch_by_sampling_0_to_l_to_d(
         global_data: Data, num_subgraphs, subgraph_size=None, k=1, l=2,
+        subgraph_generation_method="generate_random_k_hop_subgraph",
 ) -> (Union[Tensor, List[Tensor]], List[Data]):
-    nodes_in_subgraphs: Union[Tensor, List[Tensor]] = generate_random_k_hop_subgraph(
-        global_data, num_subgraphs=num_subgraphs, subgraph_size=subgraph_size, k=k)
+
+    if subgraph_generation_method == "generate_random_k_hop_subgraph":
+        nodes_in_subgraphs: Union[Tensor, List[Tensor]] = generate_random_k_hop_subgraph(
+            global_data, num_subgraphs=num_subgraphs, subgraph_size=subgraph_size, k=k)
+    elif subgraph_generation_method == "generate_random_subgraph_by_walk":
+        assert subgraph_size is not None
+        nodes_in_subgraphs: Tensor = generate_random_subgraph_by_walk(
+            global_data, num_subgraphs=num_subgraphs, subgraph_size=subgraph_size)
+    elif subgraph_generation_method == "hybrid":
+        assert subgraph_size is not None
+        nodes_in_subgraphs_1: Tensor = generate_random_k_hop_subgraph(
+            global_data, num_subgraphs=num_subgraphs // 2, subgraph_size=subgraph_size, k=k)
+        nodes_in_subgraphs_2: Tensor = generate_random_subgraph_by_walk(
+            global_data, num_subgraphs=num_subgraphs // 2, subgraph_size=subgraph_size)
+        nodes_in_subgraphs = torch.cat([nodes_in_subgraphs_1, nodes_in_subgraphs_2], dim=0)
+    else:
+        raise ValueError(f"Wrong subgraph_generation_method {subgraph_generation_method}")
 
     batch_list = []
     hop_range = list(range(l + 1))
     # hop_range = []
     for ith_hop in tqdm(hop_range, desc="sampling_0_to_l_to_d"):
         ith_data_list = []
-        for nodes in nodes_in_subgraphs:
+        for nodes in list(nodes_in_subgraphs):
             ith_nodes, ith_edge_index, inv, _ = k_hop_subgraph(
                 nodes, ith_hop, global_data.edge_index,
                 relabel_nodes=True)
