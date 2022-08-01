@@ -597,7 +597,7 @@ def find_seed_that_makes_balanced_datasets(seed_name="wl_seed", class_ratio_thre
         if max(mcrt_list) < class_ratio_thres:
             cprint(f"Good seed found: {seed} ({[round(v, 3) for v in mcrt_list]})",
                    "green")
-            good_seeds.append(max(mcrt_list))
+            good_seeds.append(seed)
         else:
             cprint(f"Bad seed: {seed} ({[round(v, 3) for v in mcrt_list]}), "
                    f"removing: {trial_dataset.key_dir}", "red")
