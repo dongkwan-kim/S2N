@@ -15,7 +15,7 @@ from torch_geometric.loader import DataLoader
 from torch_sparse import SparseTensor
 
 from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, SubgraphDataset
-from data_sub import WLHistSubgraphBA
+from data_sub import WLKSRandomTree
 from data_sub import Density, CC, Coreness, CutRatio
 from data_utils import AddSelfLoopsV2, RemoveAttrs
 from dataset_wl import SliceYByIndex, ReplaceXWithWL4Pattern
@@ -99,7 +99,7 @@ class SubgraphDataModule(LightningDataModule):
     def dataset_class(self):
         assert self.h.dataset_name in ["HPOMetab", "PPIBP", "HPONeuro", "EMUser",
                                        "Density", "CC", "Coreness", "CutRatio",
-                                       "WLHistSubgraphBA"]
+                                       "WLKSRandomTree"]
         return eval(self.h.dataset_name)
 
     def load_dataset(self):
@@ -118,7 +118,7 @@ class SubgraphDataModule(LightningDataModule):
 
     @property
     def s2n_path(self) -> str:
-        if self.h.dataset_name in ["WLHistSubgraphBA"]:
+        if self.h.dataset_name in ["WLKSRandomTree"]:
             return os.path.join(self.dataset.key_dir, "sub2node")
         else:  # backward compatibility
             return f"{self.h.dataset_path}/{self.h.dataset_name.upper()}/sub2node/"
@@ -244,26 +244,28 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
     if USE_S2N:
         REPLACE_X_WITH_WL4PATTERN = False
     else:
-        REPLACE_X_WITH_WL4PATTERN = True  # False
+        REPLACE_X_WITH_WL4PATTERN = False  # False
     if REPLACE_X_WITH_WL4PATTERN:
         WL4PATTERN_ARGS = [0, "color"]
     else:
         WL4PATTERN_ARGS = None
 
     MORE_KWARGS = {
-        "num_subgraphs": 400,
+        "num_subgraphs": 1000,
         "subgraph_size": None,  # NOTE: Using None will use ego-graphs
         "wl_hop_to_use": None,
         "wl_max_hop": 2,
-        "wl_x_type_for_hists": "cluster",  # color, cluster
-        "wl_num_color_clusters": 200,
+        "wl_x_type_for_hists": "color",  # color, cluster
+        "wl_num_color_clusters": None,
         "wl_num_hist_clusters": 2,
     }
-    if NAME == "WLHistSubgraphBA":
+    if NAME == "WLKSRandomTree":
         MORE_KWARGS = {
-            "ba_n": 4000,
-            "ba_m": 4,  # 5, 10, 15, 20
-            "ba_seed": None,  # NOTE: Using None will use ba_seed_that_makes_balanced_datasets
+            "num_nodes": 10000,
+            "num_branch": 4,
+            "height": 8,
+            "rewiring_ratio": 0.1,
+            "wl_seed": None,  # NOTE: Using None will use wl_seed_that_makes_balanced_datasets
             **MORE_KWARGS,
         }
     else:
@@ -297,11 +299,11 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
 
 if __name__ == '__main__':
 
-    # WLHistSubgraphBA
+    # WLKSRandomTree
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
     _sdm = get_subgraph_datamodule_for_test(
-        name="WLHistSubgraphBA",
+        name="WLKSRandomTree",
     )
 
     print(_sdm)

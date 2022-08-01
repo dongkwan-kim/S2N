@@ -305,6 +305,6 @@ def aggregate_csv_metrics(in_path, out_path,
 
 if __name__ == '__main__':
     aggregate_csv_metrics(
-        "../logs_multi_csv",  # e.g., ../logs_multi_csv/WLHistSubgraphBA_5
+        "../logs_multi_csv",  # e.g., ../logs_multi_csv/PPIBP
         "../_aggr_logs",
     )

@@ -1,0 +1,20 @@
+dataset_subname: "${datamodule.dataset_name}_${datamodule.num_branch}_${datamodule.height}_${datamodule.rewiring_ratio}"
+
+# WL specific args
+num_subgraphs: 1000
+subgraph_size: null  # NOTE: important, should be null for using ego-graphs
+wl_hop_to_use: null  # NOTE: important, Instead, SliceYByIndex will handle this.
+s2n_transform: "SliceYByIndex"
+s2n_transform_args: [null]  # args for SliceYByIndex. NOTE: very important, should be given by command lines
+wl_max_hop: 2
+wl_x_type_for_hists: "color"  # color, cluster
+wl_num_color_clusters: null
+wl_num_hist_clusters: 2
+
+# specific args
+num_nodes: 10000
+num_branch: 4
+height: 8
+rewiring_ratio: 0.1
+wl_seed: null  # NOTE: very important, wl_seed_that_makes_balanced_datasets will assign this value
+num_channels_global: 64  # for wlks, wl_er, ...

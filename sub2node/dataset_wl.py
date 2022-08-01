@@ -165,13 +165,10 @@ class WL4PatternConv(WLConv):
         if outtype == "bow":
             vectorizer = CountVectorizer(
                 preprocessor=lambda _: _, tokenizer=lambda _: _,
-                min_df=5e-5,  # Should be given when the number of colors is large. NOTE: Hard-coded
+                # min_df=5e-5,  # Should be given when the number of colors is large.
             )
             pattern_transformed = vectorizer.fit_transform(neighbor_patterns)
             pattern_vec = pattern_transformed.toarray()
-            pattern_vec = VarianceThreshold(
-                threshold=5e-4,  # NOTE: Hard-coded
-            ).fit_transform(pattern_vec)
             if preprocessor is not None:
                 pattern_vec = eval(preprocessor)().fit_transform(pattern_vec)
             return torch.from_numpy(pattern_vec)
@@ -298,7 +295,6 @@ def generate_random_subgraph_batch_by_sampling_0_to_l_to_d(
         global_data: Data, num_subgraphs, subgraph_size=None, k=1, l=2,
         subgraph_generation_method="generate_random_k_hop_subgraph",
 ) -> (Union[Tensor, List[Tensor]], List[Data]):
-
     if subgraph_generation_method == "generate_random_k_hop_subgraph":
         nodes_in_subgraphs: Union[Tensor, List[Tensor]] = generate_random_k_hop_subgraph(
             global_data, num_subgraphs=num_subgraphs, subgraph_size=subgraph_size, k=k)
@@ -397,6 +393,32 @@ def generate_random_k_hop_subgraph(global_data: Data, num_subgraphs,
         assert list(nodes_in_subgraphs.size()) == [num_subgraphs, subgraph_size]
 
     return nodes_in_subgraphs
+
+
+def nx_rewired_balanced_tree(num_nodes, num_branch, height, rewiring_ratio, seed):
+    # from https://frhyme.github.io/python-lib/random-tree-in-nx/
+    bg = nx.balanced_tree(num_branch, height - 1)
+    bg.remove_nodes_from(list(bg.nodes())[num_nodes:])
+    diameter = nx.diameter(bg)
+    print(f"depth: {1 + diameter / 2}, diameter: {diameter}")
+
+    level_node = [[0], ]
+    for i in tqdm(range(0, height - 1), desc="rbt.level_node_construction"):
+        left = sum([num_branch ** j for j in range(0, i + 1)])
+        right = sum([num_branch ** (j + 1) for j in range(0, i + 1)])
+        level_node.append([k for k in range(left, right + 1)])
+
+    for i in tqdm(range(1, len(level_node) - 1), desc="rbt.rewiring"):
+        num_edges_level = len([e for e in bg.edges()
+                               if e[0] in level_node[i] and e[1] in level_node[i + 1]])
+        for _ in range(int(num_edges_level * rewiring_ratio)):
+            edges = [e for e in bg.edges()
+                     if e[0] in level_node[i] and e[1] in level_node[i + 1]]
+            if len(edges) > 0:
+                r_e = edges[np.random.randint(0, len(edges))]
+                bg.remove_edge(r_e[0], r_e[1])
+                bg.add_edge(np.random.choice(level_node[i]), r_e[1])
+    return bg
 
 
 def draw_graph_with_coloring(data: Data,

@@ -2,9 +2,9 @@ _target_: data.SubgraphDataModule
 
 defaults:
   - common_datamodule.yaml
-  - common_wl_ba.yaml
+  - common_wlks.yaml
 
-dataset_name: "WLHistSubgraphBA"
+dataset_name: "WLKSRandomTree"
 embedding_type: "no_embedding"
 
 subgraph_batching: "separated"
