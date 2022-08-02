@@ -444,7 +444,8 @@ class WLKSubgraph(SubgraphDataset):
             major_class_ratio_all.append(max(class_counter_all.values()) / sum(class_counter_all.values()))
             major_class_ratio_test.append(max(class_counter_test.values()) / sum(class_counter_test.values()))
             if y_before is not None:
-                prev_diff_ratio.append((y_before != y_curr).sum().item() / y_curr.size(0))
+                pdr = (y_before != y_curr).sum().item() / y_curr.size(0)
+                prev_diff_ratio.append(pdr if pdr <= 0.5 else pdr - 0.5)
             y_before = y_curr
         return {
             "major_class_ratio_all": major_class_ratio_all,
