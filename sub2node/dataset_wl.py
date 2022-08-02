@@ -369,7 +369,9 @@ def generate_random_k_hop_subgraph(global_data: Data, num_subgraphs,
                                    subgraph_size=None, k=1) -> Union[Tensor, List[Tensor]]:
     N, E = global_data.num_nodes, global_data.num_edges
     nodes_in_subgraphs = []
-    start = torch.randint(0, N, (num_subgraphs * 2,), dtype=torch.long).flatten()
+    start = torch.unique(torch.randint(0, N, (num_subgraphs * 3,), dtype=torch.long).flatten(),
+                         sorted=False)
+    start = start[torch.randperm(start.size(0))]
     for n_idx in tqdm(start, desc="generate_random_subgraph_by_k_hop", total=num_subgraphs * 2):
         subset, _, idx_of_start_in_subset, _ = k_hop_subgraph([n_idx], k, global_data.edge_index, num_nodes=N)
         _S = subset.size(0)
