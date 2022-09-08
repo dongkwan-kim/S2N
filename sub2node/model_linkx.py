@@ -156,6 +156,7 @@ class InductiveLINKX(torch.nn.Module):
         self.num_train_nodes = num_train_nodes or num_nodes
         self.in_channels = in_channels
         self.out_channels = out_channels
+        self.num_layers = num_layers
         self.num_edge_layers = num_edge_layers
 
         self.edge_lin = SparseLinear(num_nodes, hidden_channels)
@@ -214,7 +215,8 @@ class InductiveLINKX(torch.nn.Module):
     def __repr__(self) -> str:
         return (f'{self.__class__.__name__}(num_nodes={self.num_nodes}, '
                 f'in_channels={self.in_channels}, '
-                f'out_channels={self.out_channels})')
+                f'out_channels={self.out_channels}, '
+                f'num_layers={self.num_layers})')
 
 
 if __name__ == '__main__':

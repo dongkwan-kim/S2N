@@ -237,14 +237,14 @@ if __name__ == '__main__':
         print(_kv_dict)
 
 
-    NAME = "PPIBP"
+    NAME = "HPOMetab"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
-    E_TYPE = "glass"  # gin, graphsaint_gcn, glass
+    E_TYPE = "gin"  # gin, graphsaint_gcn, glass
 
-    USE_S2N = True  # NOTE: important
+    USE_S2N = False  # NOTE: important
     USE_SPARSE_TENSOR = False
     PRE_ADD_SELF_LOOPS = False
     SUBGRAPH_BATCHING = None if USE_S2N else "separated"  # separated, connected
@@ -258,7 +258,7 @@ if __name__ == '__main__':
     else:
         WL4PATTERN_ARGS = None
 
-    ENCODER_NAME = "Linear"  # ["Linear", "GCNConv"]  # GATConv, LINKX, FAConv
+    ENCODER_NAME = "LINKX"  # ["Linear", "GCNConv"]  # GATConv, LINKX, FAConv
     NUM_LAYERS = 2
     if isinstance(ENCODER_NAME, list):
         NUM_LAYERS = [2, 3]
