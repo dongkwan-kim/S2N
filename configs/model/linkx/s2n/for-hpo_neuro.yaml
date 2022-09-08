@@ -21,4 +21,4 @@ _gradient_clip_val: 0.0
 sub_node_num_layers: 1
 sub_node_encoder_aggr: "sum"
 
-subname: ILINK-S2N
+subname: ILINKX-S2N
