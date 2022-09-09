@@ -1,18 +1,17 @@
 import inspect
+import math
 from copy import deepcopy
-from typing import Union, Tuple, Optional, List
+from typing import Union, Tuple, Optional, List, Callable
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-import math
-
 from termcolor import cprint
 from torch import Tensor
 from torch.nn import Linear
+from torch_geometric.nn import (GCNConv, SAGEConv, GATConv, FAConv, GCN2Conv, WLConv, GINConv, GraphNorm,
+                                GlobalAttention)
 from torch_geometric.nn.glob import global_mean_pool, global_max_pool, global_add_pool
-from torch_geometric.nn import GlobalAttention, GCNConv, SAGEConv, GATConv, FAConv, GCN2Conv, WLConv, GraphNorm
 from torch_geometric.typing import OptTensor, Adj
 from torch_scatter import scatter_add
 from torch_sparse import SparseTensor
@@ -68,6 +67,19 @@ class MyGATConv(GATConv):
         if self.edge_dim is None:
             edge_index, edge_attr = clear_edge_attr(self, edge_index, edge_attr, "edge_dim=None")
         return super().forward(x, edge_index, edge_attr, size, return_attention_weights)
+
+
+class MyGINConv(GINConv):
+
+    def __init__(self, in_channels, out_channels,
+                 nn: Callable = None, eps: float = 0., train_eps: bool = False, **kwargs):
+        if nn is None:
+            nn = MLP(2, in_channels, out_channels, out_channels, activation="relu")
+        super().__init__(nn, eps, train_eps, **kwargs)
+
+    def forward(self, x, edge_index, edge_attr, size=None):
+        edge_attr = None
+        return super().forward(x, edge_index, size=size)
 
 
 class MyFAConv(FAConv):
@@ -282,6 +294,7 @@ def get_gnn_conv_and_kwargs(gnn_name, **kwargs):
         "GCNConv": GCNConv,
         "SAGEConv": SAGEConv,
         "GATConv": MyGATConv,
+        "GINConv": MyGINConv,
         "FAConv": MyFAConv,
         "GCN2Conv": MyGCN2Conv,
         "Linear": MyLinear,
@@ -748,7 +761,7 @@ class GlobalAttentionHalf(GlobalAttention):
 
 if __name__ == '__main__':
 
-    MODE = "GraphEncoderSequential"
+    MODE = "GraphEncoder"
 
     from pytorch_lightning import seed_everything
 
@@ -802,6 +815,17 @@ if __name__ == '__main__':
         print(_ds(_x, _batch).size())
 
     elif MODE == "GraphEncoder":
+        enc = GraphEncoder(
+            layer_name="GINConv", num_layers=3, in_channels=32, hidden_channels=64, out_channels=128,
+            activation="relu", use_bn=False, use_gn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
+            activate_last=True,
+            train_eps=True,
+        )
+        cprint(enc, "green")
+        _x = torch.ones(10 * 32).view(10, -1)
+        _ei = torch.randint(0, 10, [2, 10])
+        print(enc(_x, _ei, _ei[0].float()).size())
+
         enc = GraphEncoder(
             layer_name="GCN2Conv", num_layers=3, in_channels=32, hidden_channels=64, out_channels=128,
             activation="relu", use_bn=False, use_gn=True, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,

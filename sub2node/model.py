@@ -258,7 +258,7 @@ if __name__ == '__main__':
     else:
         WL4PATTERN_ARGS = None
 
-    ENCODER_NAME = "LINKX"  # ["Linear", "GCNConv"]  # GATConv, LINKX, FAConv
+    ENCODER_NAME = "GINConv"  # ["Linear", "GCNConv"]  # GATConv, LINKX, FAConv, GINConv
     NUM_LAYERS = 2
     if isinstance(ENCODER_NAME, list):
         NUM_LAYERS = [2, 3]
@@ -276,6 +276,10 @@ if __name__ == '__main__':
     elif ENCODER_NAME == "FAConv":
         LAYER_KWARGS = {
             "eps": 0.2,
+        }
+    elif ENCODER_NAME == "GINConv":
+        LAYER_KWARGS = {
+            "train_eps": True,
         }
     else:
         LAYER_KWARGS = {}
