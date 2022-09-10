@@ -216,6 +216,12 @@ class SubgraphDataset(DatasetBase):
     def splits(self):
         return [self.num_train, self.num_train + self.num_val]
 
+    def set_num_train_and_val(self, num_train, num_val):
+        cprint(f"Set num_train and num_val to [{num_train}, {num_val}] "
+               f"(Defaults: [{self.num_train}, {self.num_val}])", "green")
+        self.num_train = num_train
+        self.num_val = num_val
+
     @property
     def raw_file_names(self):
         return ["edge_list.txt", "subgraphs.pth", f"{self.embedding_type}_embeddings.pth"]

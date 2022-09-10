@@ -190,7 +190,7 @@ class SubgraphToNode:
                               edge_normalize_args: Union[List, None] = None,
                               edge_thres: Union[float, Callable, List[float]] = 1.0,
                               use_consistent_processing=False,
-                              save=True) -> Tuple[Data, Data, Data]:
+                              save=True, load=True) -> Tuple[Data, Data, Data]:
         """
         :return: Data(x=[N, 1], edge_index=[2, E], edge_attr=[E], y=[C], batch=[N])
             - N is the number of subgraphs = batch.sum()
@@ -205,9 +205,10 @@ class SubgraphToNode:
         path = self.path / (f"{self.node_task_name}_node_task_data"
                             f"_et={str_et}_en={str_en}_ucp={use_consistent_processing}.pth")
         try:
-            self._node_task_data_list = torch.load(path)
-            cprint(f"Load: {self._node_task_data_list} at {path}", "green")
-            return self._node_task_data_list
+            if load:
+                self._node_task_data_list = torch.load(path)
+                cprint(f"Load: {self._node_task_data_list} at {path}", "green")
+                return self._node_task_data_list
         except FileNotFoundError:
             pass
 

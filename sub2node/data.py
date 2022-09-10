@@ -48,6 +48,7 @@ class SubgraphDataModule(LightningDataModule):
                  num_channels_global: int = None,
                  replace_x_with_wl4pattern=False,
                  wl4pattern_args=None,
+                 custom_splits: List[int] = None,
                  num_workers=0,
                  verbose=2,
                  prepare_data=False,
@@ -126,6 +127,9 @@ class SubgraphDataModule(LightningDataModule):
     def setup(self, stage: Optional[str] = None) -> None:
 
         self.dataset: SubgraphDataset = self.load_dataset()
+        is_customized_split = (self.h.custom_splits is not None)
+        if is_customized_split:
+            self.dataset.set_num_train_and_val(*self.h.custom_splits)  # [num_train, num_val]
 
         if self.h.use_s2n:
             s2n = SubgraphToNode(
@@ -144,6 +148,8 @@ class SubgraphDataModule(LightningDataModule):
                                      if getattr(self.h, f"edge_normalize_arg_{i}", None) is not None],
                 edge_thres=self.h.edge_thres,
                 use_consistent_processing=self.h.use_consistent_processing,
+                save=(not is_customized_split),
+                load=(not is_customized_split),
             )
             transform_list = []
             if not self.h.s2n_is_weighted:
@@ -290,6 +296,7 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
         pre_add_self_loops=False,
         replace_x_with_wl4pattern=REPLACE_X_WITH_WL4PATTERN,
         wl4pattern_args=WL4PATTERN_ARGS,
+        custom_splits=None,
         **MORE_KWARGS,
     )
     KWARGS.update(kwargs)
@@ -303,7 +310,8 @@ if __name__ == '__main__':
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
     _sdm = get_subgraph_datamodule_for_test(
-        name="WLKSRandomTree",
+        name="PPIBP",
+        # custom_splits=[1000, 100],
     )
 
     print(_sdm)
