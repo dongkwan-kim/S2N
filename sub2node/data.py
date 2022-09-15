@@ -257,7 +257,7 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
         WL4PATTERN_ARGS = None
 
     MORE_KWARGS = {
-        "num_subgraphs": 1000,
+        "num_subgraphs": 2000,
         "subgraph_size": None,  # NOTE: Using None will use ego-graphs
         "wl_hop_to_use": None,
         "wl_max_hop": 2,
@@ -270,7 +270,7 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
             "num_nodes": 10000,
             "num_branch": 4,
             "height": 8,
-            "rewiring_ratio": 0.1,
+            "rewiring_ratio": 0.05,  # 0.05, 0.025
             "wl_seed": None,  # NOTE: Using None will use wl_seed_that_makes_balanced_datasets
             **MORE_KWARGS,
         }

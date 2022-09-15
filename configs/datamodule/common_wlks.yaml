@@ -1,7 +1,7 @@
-dataset_subname: "${datamodule.dataset_name}_${datamodule.num_branch}_${datamodule.height}_${datamodule.rewiring_ratio}"
+dataset_subname: "${datamodule.dataset_name}_${datamodule.num_nodes}_${datamodule.num_subgraphs}_${datamodule.num_branch}_${datamodule.height}_${datamodule.rewiring_ratio}"
 
 # WL specific args
-num_subgraphs: 1000
+num_subgraphs: 2000
 subgraph_size: null  # NOTE: important, should be null for using ego-graphs
 wl_hop_to_use: null  # NOTE: important, Instead, SliceYByIndex will handle this.
 s2n_transform: "SliceYByIndex"
@@ -15,6 +15,6 @@ wl_num_hist_clusters: 2
 num_nodes: 10000
 num_branch: 4
 height: 8
-rewiring_ratio: 0.1
+rewiring_ratio: 0.05
 wl_seed: null  # NOTE: very important, wl_seed_that_makes_balanced_datasets will assign this value
 num_channels_global: 64  # for wlks, wl_er, ...

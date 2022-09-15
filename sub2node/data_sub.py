@@ -562,7 +562,7 @@ class WLKSRandomTree(WLKSubgraph):
         # num_nodes, num_branch, height, rewiring_ratio, seed
         network_generator = "nx_rewired_balanced_tree"
         network_args = [num_nodes, num_branch, height, rewiring_ratio]
-        network_args.append(self.seed_that_makes_balanced_datasets(wl_seed, *network_args))
+        network_args.append(self.seed_that_makes_balanced_datasets(wl_seed, num_subgraphs, *network_args))
         super().__init__(root, name, embedding_type, network_generator, network_args,
                          num_subgraphs, subgraph_size, wl_hop_to_use, wl_max_hop, wl_x_type_for_hists,
                          wl_num_color_clusters, wl_num_hist_clusters,
@@ -574,7 +574,8 @@ class WLKSRandomTree(WLKSubgraph):
             return wl_seed
         else:
             return {
-                (10000, 4, 8, 0.1): 0,
+                (2000, 10000, 4, 8, 0.05): 8,
+                (2000, 10000, 4, 8, 0.025): 3,
             }[args]
 
     def download(self):
@@ -589,7 +590,7 @@ class WLKSRandomTree(WLKSubgraph):
 def find_seed_that_makes_balanced_datasets(seed_name="wl_seed", class_ratio_thres=0.8, **kwargs):
     min_of_max_vs, seed_at_min_of_max_vs = 999, None
     good_seeds = []
-    for seed in range(500):
+    for seed in range(15):
         assert seed_name in kwargs
         kwargs[seed_name] = seed
         trial_dataset: WLKSubgraph = eval(NAME)(
@@ -633,7 +634,7 @@ if __name__ == '__main__':
         E_TYPE = "gin"  # gin, graphsaint_gcn, glass
     DEBUG = False
     MORE_KWARGS = {
-        "num_subgraphs": 1000,
+        "num_subgraphs": 2000,
         "subgraph_size": None,  # NOTE: Using None will use ego-graphs
         "wl_hop_to_use": None,
         "wl_max_hop": 2,
@@ -646,7 +647,7 @@ if __name__ == '__main__':
             "num_nodes": 10000,
             "num_branch": 4,
             "height": 8,
-            "rewiring_ratio": 0.1,
+            "rewiring_ratio": 0.05,  # 0.05, 0.025
             "wl_seed": None,  # NOTE: Using None will use wl_seed_that_makes_balanced_datasets
             **MORE_KWARGS,
         }
