@@ -49,6 +49,17 @@ def clear_edge_attr(self: nn.Module, edge_index, edge_weight, condition_str):
     return edge_index, edge_weight
 
 
+class MySAGEConv(SAGEConv):
+
+    def __init__(self, in_channels: Union[int, Tuple[int, int]], out_channels: int, normalize: bool = False,
+                 root_weight: bool = True, bias: bool = True, **kwargs):
+        super().__init__(in_channels, out_channels, normalize, root_weight, bias, **kwargs)
+
+    def forward(self, x, edge_index, edge_attr, size=None):
+        edge_attr = None
+        return super().forward(x, edge_index, size=size)
+
+
 class MyGATConv(GATConv):
 
     def __init__(self, in_channels: Union[int, Tuple[int, int]],
@@ -292,7 +303,7 @@ class Activation(nn.Module):
 def get_gnn_conv_and_kwargs(gnn_name, **kwargs):
     gnn_cls = {
         "GCNConv": GCNConv,
-        "SAGEConv": SAGEConv,
+        "SAGEConv": MySAGEConv,
         "GATConv": MyGATConv,
         "GINConv": MyGINConv,
         "FAConv": MyFAConv,
