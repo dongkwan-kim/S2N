@@ -216,7 +216,11 @@ class SubgraphDataset(DatasetBase):
     def splits(self):
         return [self.num_train, self.num_train + self.num_val]
 
-    def set_num_train_and_val(self, num_train, num_val):
+    def set_num_train_and_val(self, num_or_ratio_train: Union[int, float],
+                              num_or_ratio_val: Union[int, float]):
+        num_all = len(self)
+        num_train = int(num_all * num_or_ratio_train) if isinstance(num_or_ratio_train, float) else num_or_ratio_train
+        num_val = int(num_all * num_or_ratio_val) if isinstance(num_or_ratio_val, float) else num_or_ratio_val
         cprint(f"Set num_train and num_val to [{num_train}, {num_val}] "
                f"(Defaults: [{self.num_train}, {self.num_val}])", "green")
         self.num_train = num_train

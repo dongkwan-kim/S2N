@@ -20,3 +20,10 @@ subgraph_batching: null  # separated, connected
 # type of which is (int, str), e.g., (0, "color"), (1, "cluster")
 replace_x_with_wl4pattern: False
 wl4pattern_args: [null, null]
+
+# NOTE: for sensitivity analysis by a number of training samples
+# PPIBP: [1272, 1432], 1591
+# HPONeuro: [3204, 3604], 4000
+# HPOMetab: [1921, 2165], 2400
+# EMUser: [226, 275], 324
+custom_splits: null  # [num_train, num_val]
