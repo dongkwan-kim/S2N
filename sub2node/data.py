@@ -129,7 +129,7 @@ class SubgraphDataModule(LightningDataModule):
         self.dataset: SubgraphDataset = self.load_dataset()
         is_customized_split = (self.h.custom_splits is not None)
         if is_customized_split:
-            self.dataset.set_num_train_and_val(*self.h.custom_splits)  # [num_train, num_val]
+            self.dataset.set_num_start_train_val(*self.h.custom_splits)  # [num_start, num_train, num_val]
 
         if self.h.use_s2n:
             s2n = SubgraphToNode(
@@ -243,7 +243,7 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
     else:
         E_TYPE = "gin"  # gin, graphsaint_gcn
 
-    USE_S2N = False
+    USE_S2N = True
     USE_SPARSE_TENSOR = False
     SUBGRAPH_BATCHING = None if USE_S2N else "connected"  # separated, connected
 
@@ -311,7 +311,7 @@ if __name__ == '__main__':
     # Density, CC, Coreness, CutRatio
     _sdm = get_subgraph_datamodule_for_test(
         name="PPIBP",
-        # custom_splits=[1000, 100],
+        custom_splits=[0.5, 0.1, 0.1],
     )
 
     print(_sdm)

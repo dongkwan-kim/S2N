@@ -27,6 +27,7 @@ class DatasetBase(InMemoryDataset):
         self.debug = debug
         self.seed = seed
 
+        self.num_start = 0
         self.num_train = -1
         self.num_val = -1
         self.global_data: Optional[Data] = None
@@ -147,10 +148,11 @@ class DatasetBase(InMemoryDataset):
     def get_train_val_test(self) -> Tuple[List[Data], List[Data], List[Data]]:
         # Data example: Data(x=[10, 1], edge_index=[2, 18], y=[1, 4])
         data_list = self.tolist()
-        num_train_and_val = self.num_train + self.num_val
-        data_train = data_list[:self.num_train]
-        data_val = data_list[self.num_train:num_train_and_val]
-        data_test = data_list[num_train_and_val:]
+        num_until_train = self.num_start + self.num_train
+        num_until_val = num_until_train + self.num_val
+        data_train = data_list[self.num_start:num_until_train]
+        data_val = data_list[num_until_train:num_until_val]
+        data_test = data_list[num_until_val:]
         return data_train, data_val, data_test
 
     def get_data_list_with_split_attr(self) -> List[Data]:

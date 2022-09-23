@@ -209,6 +209,7 @@ class SubgraphDataset(DatasetBase):
         self.data, self.slices = torch.load(self.processed_paths[0])
         self.global_data = torch.load(self.processed_paths[1]).cpu()
         meta = torch.load(self.processed_paths[2])
+        self.num_start = 0
         self.num_train = int(meta[0])
         self.num_val = int(meta[1])
 
@@ -216,13 +217,17 @@ class SubgraphDataset(DatasetBase):
     def splits(self):
         return [self.num_train, self.num_train + self.num_val]
 
-    def set_num_train_and_val(self, num_or_ratio_train: Union[int, float],
-                              num_or_ratio_val: Union[int, float]):
+    def set_num_start_train_val(self,
+                                num_or_ratio_start: Union[int, float],
+                                num_or_ratio_train: Union[int, float],
+                                num_or_ratio_val: Union[int, float]):
         num_all = len(self)
+        num_start = int(num_all * num_or_ratio_start) if isinstance(num_or_ratio_start, float) else num_or_ratio_start
         num_train = int(num_all * num_or_ratio_train) if isinstance(num_or_ratio_train, float) else num_or_ratio_train
         num_val = int(num_all * num_or_ratio_val) if isinstance(num_or_ratio_val, float) else num_or_ratio_val
-        cprint(f"Set num_train and num_val to [{num_train}, {num_val}] "
-               f"(Defaults: [{self.num_train}, {self.num_val}])", "green")
+        cprint(f"Set num_start, num_train and num_val to [{num_start}, {num_train}, {num_val}] "
+               f"(Defaults: [{self.num_start}, {self.num_train}, {self.num_val}])", "green")
+        self.num_start = num_start
         self.num_train = num_train
         self.num_val = num_val
 

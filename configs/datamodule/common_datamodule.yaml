@@ -22,8 +22,12 @@ replace_x_with_wl4pattern: False
 wl4pattern_args: [null, null]
 
 # NOTE: for sensitivity analysis by a number of training samples
-# PPIBP: [1272, 1432], 1591
-# HPONeuro: [3204, 3604], 4000
-# HPOMetab: [1921, 2165], 2400
-# EMUser: [226, 275], 324
-custom_splits: null  # [num_train, num_val]
+# Splits:
+#   PPIBP: [0, 1272, 160], total=1591, test=0.1, train=0.8
+#   HPONeuro: [0, 3204, 400], total=4000, test=0.1, train=0.8
+#   HPOMetab: [0, 1921, 244], total=2400, test=0.1, train=0.8
+#   EMUser: [0, 226, 49], total=324, test=0.15, train=0.7
+# Recommended args:
+#   PPIBP, HPONeuro, HPOMetab: [0, 0.8, 0.1], [0.1, 0.7, 0.1], ..., [0.7, 0.1, 0.1]
+#   EMUser: [0, 0.7, 0.15], [0.1, 0.6, 0.15], ..., [0.6, 0.1, 0.15]
+custom_splits: null  # [num_start, num_train, num_val]
