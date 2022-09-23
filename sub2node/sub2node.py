@@ -28,6 +28,7 @@ class SubgraphToNode:
                  subgraph_data_list: List[Data],
                  name: str, path: str,
                  splits: List[int],
+                 num_start: int = 0,
                  target_matrix: str = "adjacent_no_self_loops",
                  edge_aggr: Union[Callable[[Tensor], Tensor], str] = None,
                  num_workers: int = None,
@@ -43,6 +44,7 @@ class SubgraphToNode:
         self.name: str = name
         self.path: Path = Path(path)
         self.splits = splits + [len(self.subgraph_data_list)]
+        self.num_start = num_start
 
         self.target_matrix = target_matrix
         self.edge_aggr = self.parse_edge_aggr(edge_aggr)
@@ -223,9 +225,11 @@ class SubgraphToNode:
         for i, (s, et) in enumerate(zip(self.splits, edge_thres)):
             x, y, batch, ptr = try_getattr(node_task_data_precursor,
                                            ["x", "y", "batch", "ptr"], as_dict=False)
-            sub_x = x[:ptr[s], :]
-            sub_batch = batch[:ptr[s]]
-            y = y[:s]
+            s_0, s_1 = self.num_start, self.num_start + s
+            sub_x = x[ptr[s_0]:ptr[s_1], :]
+            sub_batch = batch[ptr[s_0]:ptr[s_1]]
+            sub_batch = sub_batch - sub_batch.min()  # if ptr[s_0] is not 0, sub_batch can be > 0.
+            y = y[s_0:s_1]
 
             num_nodes = y.size(0)
             eval_mask = None

@@ -256,7 +256,7 @@ if __name__ == '__main__':
     else:
         WL4PATTERN_ARGS = None
 
-    ENCODER_NAME = "FAConv"  # ["Linear", "GCNConv"]  # GATConv, LINKX, FAConv, GINConv
+    ENCODER_NAME = "GCNConv"  # ["Linear", "GCNConv"]  # GATConv, LINKX, FAConv, GINConv
     NUM_LAYERS = 2
     if isinstance(ENCODER_NAME, list):
         NUM_LAYERS = [2, 3]
@@ -302,6 +302,7 @@ if __name__ == '__main__':
         pre_add_self_loops=False,
         replace_x_with_wl4pattern=REPLACE_X_WITH_WL4PATTERN,
         wl4pattern_args=WL4PATTERN_ARGS,
+        custom_splits=None,
     )
     _gnm = GraphNeuralModel(
         encoder_layer_name=ENCODER_NAME,
