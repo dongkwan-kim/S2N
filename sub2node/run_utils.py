@@ -204,6 +204,7 @@ def aggregate_csv_metrics(in_path, out_path,
     assert metric.startswith("test"), f"Wrong metric format: {metric}"
     key_hparams = key_hparams or [
         "datamodule/dataset_subname",
+        "datamodule/custom_splits",
         "datamodule/embedding_type",
         "model/subname",
         "datamodule/subgraph_batching",

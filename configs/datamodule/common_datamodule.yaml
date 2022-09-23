@@ -11,6 +11,8 @@ edge_thres: 0.0  # important
 use_consistent_processing: True
 s2n_target_matrix: "adjacent_no_self_loops"
 s2n_is_weighted: True
+edge_normalize_arg_1: null
+edge_normalize_arg_2: null
 
 # NOTE: common args when use_s2n=False
 batch_size: null

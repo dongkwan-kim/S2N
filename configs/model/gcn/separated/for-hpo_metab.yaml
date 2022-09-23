@@ -7,11 +7,11 @@ encoder_layer_name: ["Linear", "GCNConv"]
 num_layers: [2, 2]
 use_bn: True
 use_skip: False
-dropout_channels: 0.1
-dropout_edges: 0.0
+dropout_channels: 0.5
+dropout_edges: 0.5
 
-learning_rate: 0.001
-weight_decay: 0.00001
-_gradient_clip_val: 0.0
+learning_rate: 0.0005
+weight_decay: 0.00000000892635867432401
+_gradient_clip_val: 0.3
 
 subname: "GCN-${datamodule.subgraph_batching}"
