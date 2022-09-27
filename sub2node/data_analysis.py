@@ -34,22 +34,35 @@ def _analyze_node_properties(data: Data):
     return properties
 
 
-def analyze_node_properties(dataset_path, name_list, edge_thres_list, out_path=None, **kwargs):
+def analyze_node_properties(dataset_path, name_list, name_to_best_kwargs,
+                            out_path=None):
     list_of_pps = []
     for name in name_list:
-        for edge_thres in edge_thres_list:
-            sdm = SubgraphDataModule(
-                dataset_name=name,
-                dataset_path=dataset_path,
-                use_s2n=True,
-                edge_thres=edge_thres,
-                # embedding_type=E_TYPE,
-                # use_sparse_tensor=USE_SPARSE_TENSOR,
-                **kwargs,
-            )
-            pps_dict = _analyze_node_properties(sdm.test_data)
-            list_of_pps.append({"name": name, "edge_thres": edge_thres, **pps_dict})
-            pprint(list_of_pps)
+        sdm = SubgraphDataModule(
+            dataset_name=name,
+            dataset_path=dataset_path,
+            embedding_type="gin",
+            use_s2n=True,
+            edge_thres=0.0,
+            use_consistent_processing=True,
+            edge_normalize="standardize_then_trunc_thres_max_linear",
+            # edge_normalize_arg_1=0.75,
+            # edge_normalize_arg_2=1.0,
+            # s2n_target_matrix="adjacent_no_self_loops",
+            s2n_is_weighted=True,
+            subgraph_batching=None,
+            batch_size=None,
+            eval_batch_size=None,
+            use_sparse_tensor=USE_SPARSE_TENSOR,
+            pre_add_self_loops=False,
+            replace_x_with_wl4pattern=False,
+            wl4pattern_args=None,
+            custom_splits=None,
+            **name_to_best_kwargs[name],
+        )
+        pps_dict = _analyze_node_properties(sdm.test_data)
+        list_of_pps.append({"name": name, **pps_dict})
+        pprint(list_of_pps)
 
     if out_path is not None:
         with open(out_path, "w") as f:
@@ -63,23 +76,41 @@ def analyze_node_properties(dataset_path, name_list, edge_thres_list, out_path=N
 
 
 if __name__ == '__main__':
-    TARGETS = "ALL"  # SYNTHETIC, REAL_WORLD, ALL
-
-    if TARGETS == "SYNTHETIC":
-        NAME_LIST = ["Density", "CC", "Coreness", "CutRatio"]
-    elif TARGETS == "REAL_WORLD":
-        NAME_LIST = ["PPIBP", "HPOMetab", "HPONeuro", "EMUser"]
+    TARGETS = "REAL_WORLD"  # SYNTHETIC, REAL_WORLD, ALL
+    if TARGETS == "REAL_WORLD":
+        NAME_LIST = ["PPIBP", "HPONeuro", "HPOMetab", "EMUser"]
     else:
-        NAME_LIST = ["PPIBP", "HPOMetab", "HPONeuro", "EMUser",
-                     "Density", "CC", "Coreness", "CutRatio"]
+        raise ValueError(f"Wrong targets: {TARGETS}")
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
-    E_TYPE = "graphsaint_gcn"  # gin, graphsaint_gcn
+    E_TYPE = "gin"  # gin, graphsaint_gcn
     USE_SPARSE_TENSOR = False
+
+    NAME_TO_BEST_KWARGS = {
+        "PPIBP": dict(
+            edge_normalize_arg_1=0.0,
+            edge_normalize_arg_2=0.5,
+            s2n_target_matrix="adjacent_with_self_loops",
+        ),
+        "HPONeuro": dict(
+            edge_normalize_arg_1=2.25,
+            edge_normalize_arg_2=2.0,
+            s2n_target_matrix="adjacent_no_self_loops",
+        ),
+        "HPOMetab": dict(
+            edge_normalize_arg_1=3.25,
+            edge_normalize_arg_2=2.0,
+            s2n_target_matrix="adjacent_with_self_loops",
+        ),
+        "EMUser": dict(
+            edge_normalize_arg_1=0.75,
+            edge_normalize_arg_2=1.0,
+            s2n_target_matrix="adjacent_no_self_loops",
+        ),
+    }
 
     analyze_node_properties(
         dataset_path=PATH, out_path="./_data_analysis.csv",
         name_list=NAME_LIST,
-        edge_thres_list=[1.0, 0.5],
-        embedding_type=E_TYPE, use_sparse_tensor=USE_SPARSE_TENSOR,
+        name_to_best_kwargs=NAME_TO_BEST_KWARGS,
     )
