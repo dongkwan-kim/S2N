@@ -1,5 +1,5 @@
 dataset_path: ${dataset_path} # dataset_path is specified in config.yaml
-dataset_subname: "${datamodule.dataset_name}"
+dataset_subname: "${datamodule.dataset_name}-${datamodule.custom_splits}"
 
 use_sparse_tensor: False
 pre_add_self_loops: False  # for GATConv with SparseTensor
