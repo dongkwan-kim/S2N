@@ -1,12 +1,15 @@
 import csv
+from itertools import product
 from pprint import pprint
+from typing import List, Tuple, Any, Dict
 
+from omegaconf import OmegaConf
 from termcolor import cprint
 from torch_geometric.data import Data
 from torch_geometric.utils import homophily, remove_self_loops
 
 from data import SubgraphDataModule
-from utils import multi_label_homophily
+from utils import multi_label_homophily, try_get_from_dict
 
 
 def _analyze_node_properties(data: Data):
@@ -34,12 +37,12 @@ def _analyze_node_properties(data: Data):
     return properties
 
 
-def analyze_node_properties(dataset_path, name_list, name_to_best_kwargs,
+def analyze_node_properties(dataset_path, dataset_and_model_name_list: List[Tuple[str, str]],
                             out_path=None):
     list_of_pps = []
-    for name in name_list:
+    for (dataset_name, model_name) in dataset_and_model_name_list:
         sdm = SubgraphDataModule(
-            dataset_name=name,
+            dataset_name=dataset_name,
             dataset_path=dataset_path,
             embedding_type="gin",
             use_s2n=True,
@@ -58,10 +61,10 @@ def analyze_node_properties(dataset_path, name_list, name_to_best_kwargs,
             replace_x_with_wl4pattern=False,
             wl4pattern_args=None,
             custom_splits=None,
-            **name_to_best_kwargs[name],
+            **load_s2n_datamodule_kwargs(dataset_name, model_name),
         )
         pps_dict = _analyze_node_properties(sdm.test_data)
-        list_of_pps.append({"name": name, **pps_dict})
+        list_of_pps.append({"dataset_name": dataset_name, "model_name": model_name, **pps_dict})
         pprint(list_of_pps)
 
     if out_path is not None:
@@ -75,10 +78,26 @@ def analyze_node_properties(dataset_path, name_list, name_to_best_kwargs,
     return list_of_pps
 
 
+def load_s2n_datamodule_kwargs(dataset_name, model_name) -> Dict[str, Any]:
+    assert model_name in ["fa", "gat", "gcn", "gcn2", "gin", "linkx", "sage"]
+    dataset_name = {
+        "PPIBP": "ppi_bp",
+        "HPONeuro": "hpo_neuro",
+        "HPOMetab": "hpo_metab",
+        "EMUser": "em_user"
+    }[dataset_name]
+    yaml_name = f"../configs/datamodule/s2n/{dataset_name}/for-{model_name}.yaml"
+    cfg = OmegaConf.load(yaml_name)
+    cprint(f"Load: {yaml_name}", "green")
+    kwargs = try_get_from_dict(cfg, ["edge_normalize_arg_1", "edge_normalize_arg_2", "s2n_target_matrix"],
+                               as_dict=True)
+    return kwargs
+
+
 if __name__ == '__main__':
     TARGETS = "REAL_WORLD"  # SYNTHETIC, REAL_WORLD, ALL
     if TARGETS == "REAL_WORLD":
-        NAME_LIST = ["PPIBP", "HPONeuro", "HPOMetab", "EMUser"]
+        DATASET_NAME_LIST = ["PPIBP", "HPONeuro", "HPOMetab", "EMUser"]
     else:
         raise ValueError(f"Wrong targets: {TARGETS}")
 
@@ -86,31 +105,9 @@ if __name__ == '__main__':
     E_TYPE = "gin"  # gin, graphsaint_gcn
     USE_SPARSE_TENSOR = False
 
-    NAME_TO_BEST_KWARGS = {
-        "PPIBP": dict(
-            edge_normalize_arg_1=0.0,
-            edge_normalize_arg_2=0.5,
-            s2n_target_matrix="adjacent_with_self_loops",
-        ),
-        "HPONeuro": dict(
-            edge_normalize_arg_1=2.25,
-            edge_normalize_arg_2=2.0,
-            s2n_target_matrix="adjacent_no_self_loops",
-        ),
-        "HPOMetab": dict(
-            edge_normalize_arg_1=3.25,
-            edge_normalize_arg_2=2.0,
-            s2n_target_matrix="adjacent_with_self_loops",
-        ),
-        "EMUser": dict(
-            edge_normalize_arg_1=0.75,
-            edge_normalize_arg_2=1.0,
-            s2n_target_matrix="adjacent_no_self_loops",
-        ),
-    }
-
+    DM_NAME_LIST = list(product(DATASET_NAME_LIST,
+                                ["fa", "gat", "gcn", "gcn2", "gin", "linkx", "sage"]))
     analyze_node_properties(
         dataset_path=PATH, out_path="./_data_analysis.csv",
-        name_list=NAME_LIST,
-        name_to_best_kwargs=NAME_TO_BEST_KWARGS,
+        dataset_and_model_name_list=DM_NAME_LIST,
     )
