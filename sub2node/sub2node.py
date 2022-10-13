@@ -118,7 +118,7 @@ class SubgraphToNode:
         self._node_spl_mat = self.all_pairs_shortest_path_length_for_global_data()
         if save:
             torch.save(self._node_spl_mat, path)
-            cprint(f"Save: tensor of {self._node_spl_mat.size()} at {path}", "blue")
+            cprint(f"Saved: tensor of {self._node_spl_mat.size()} at {path}", "blue")
         return self._node_spl_mat
 
     def node_task_data_precursor(self, save=True):
@@ -143,7 +143,7 @@ class SubgraphToNode:
 
         if save:
             torch.save(self._node_task_data_precursor, path)
-            cprint(f"Save: {self._node_task_data_precursor} at {path}", "blue")
+            cprint(f"Saved: {self._node_task_data_precursor} at {path}", "blue")
 
         return self._node_task_data_precursor
 
@@ -259,7 +259,7 @@ class SubgraphToNode:
 
         if save:
             torch.save(self._node_task_data_list, path)
-            cprint(f"Save: {self._node_task_data_list} at {path}", "blue")
+            cprint(f"Saved: {self._node_task_data_list} at {path}", "blue")
 
         return tuple(self._node_task_data_list)
 

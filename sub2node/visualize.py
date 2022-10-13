@@ -86,5 +86,5 @@ def plot_scatter(xs, ys, xlabel, ylabel,
     path_and_name = "{}/fig_scatter_{}_{}.{}".format(path, key, plot_info, extension)
 
     plot.savefig(path_and_name, bbox_inches='tight')
-    cprint(f"Save at {path_and_name}", "blue")
+    cprint(f"Saved: {path_and_name}", "blue")
     plt.clf()

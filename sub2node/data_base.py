@@ -49,7 +49,7 @@ class DatasetBase(InMemoryDataset):
                 self.global_data.edge_index.max() + 1, self.global_data.edge_index.size(),
                 self.num_train, self.num_val, len(self) - self.num_train - self.num_val)
             + "Loaded from: {} \n".format(self.processed_dir),
-            "blue",
+            "green",
         )
 
     @property

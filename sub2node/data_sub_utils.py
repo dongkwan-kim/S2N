@@ -57,4 +57,4 @@ def save_subgraphs(path: str, nodes_in_subgraphs: List[List[int]], labels: List[
                 fout.write("\t".join(["-".join(g), str(l), "val", "\n"]))
             elif m == 2:
                 fout.write("\t".join(["-".join(g), str(l), "test", "\n"]))
-    cprint(f"Save {len(labels)} subgraphs in {path}", "green")
+    cprint(f"Saved: {len(labels)} subgraphs in {path}", "blue")

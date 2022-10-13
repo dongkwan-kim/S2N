@@ -255,9 +255,9 @@ class SubgraphDataset(DatasetBase):
             cprint("Pre-transformed: {}".format(self.pre_transform), "green")
 
         torch.save(self.collate(data_total), self.processed_paths[0])
-        cprint("Saved data at {}".format(self.processed_paths[0]), "green")
+        cprint("Saved data at {}".format(self.processed_paths[0]), "blue")
         torch.save(global_data, self.processed_paths[1])
-        cprint("Saved global_data at {}".format(self.processed_paths[1]), "green")
+        cprint("Saved global_data at {}".format(self.processed_paths[1]), "blue")
 
         self.num_train = len(data_train)
         self.num_val = len(data_val)

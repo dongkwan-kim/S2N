@@ -103,7 +103,7 @@ class ReplaceXWithWL4Pattern(BaseTransform):
 
             if self.cache_path is not None:
                 torch.save((data_ptr, hists_colors, hists_clusters), self.cache_path)
-                cprint(f"Save (data_ptr, hists_colors, hists_clusters) at {self.cache_path}", "blue")
+                cprint(f"Saved: (data_ptr, hists_colors, hists_clusters) at {self.cache_path}", "blue")
 
         for data_idx, data in enumerate(data_list):
             p1, p2 = data_ptr[data_idx], data_ptr[data_idx + 1]
