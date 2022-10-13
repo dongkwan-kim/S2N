@@ -6,6 +6,8 @@ pre_add_self_loops: False  # for GATConv with SparseTensor
 verbose: 2
 num_workers: 0
 
+embedding_type: "gin"  # gin, graphsaint_gcn, glass
+
 # NOTE: common args when use_s2n=True
 edge_thres: 0.0  # important
 use_consistent_processing: True

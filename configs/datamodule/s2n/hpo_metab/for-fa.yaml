@@ -3,14 +3,14 @@ _target_: data.SubgraphDataModule
 defaults:
   - common_datamodule.yaml
 
-dataset_name: "EMUser"
+dataset_name: "HPOMetab"
 
 use_s2n: True
 s2n_target_matrix: "adjacent_no_self_loops"
 edge_normalize: "standardize_then_trunc_thres_max_linear"
-edge_normalize_arg_1: 0.75
+edge_normalize_arg_1: 3.0
 edge_normalize_arg_2: 1.0
 
 # Will be inherited to the trainer, model
-_max_epochs: 1200
+_max_epochs: 2500
 _is_multi_labels: False

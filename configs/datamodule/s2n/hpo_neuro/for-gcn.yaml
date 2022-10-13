@@ -4,7 +4,6 @@ defaults:
   - common_datamodule.yaml
 
 dataset_name: "HPONeuro"
-embedding_type: "gin"  # gin, graphsaint_gcn, glass
 
 use_s2n: True
 s2n_target_matrix: "adjacent_no_self_loops"
