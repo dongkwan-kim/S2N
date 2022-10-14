@@ -3,6 +3,7 @@ from itertools import product
 from pprint import pprint
 from typing import List, Tuple, Any, Dict
 
+import pandas as pd
 from omegaconf import OmegaConf
 from termcolor import cprint
 from torch_geometric.data import Data
@@ -10,10 +11,33 @@ from torch_geometric.utils import homophily, remove_self_loops
 
 from data import SubgraphDataModule
 from utils import multi_label_homophily, try_get_from_dict
+from visualize import plot_scatter
+
+try:
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+except ImportError:
+    pass
+
+
+def to_dataset_repr(dataset_name, repr_format):
+    if repr_format == "filename":
+        return {
+            "PPIBP": "ppi_bp",
+            "HPONeuro": "hpo_neuro",
+            "HPOMetab": "hpo_metab",
+            "EMUser": "em_user"
+        }[dataset_name]
+    elif repr_format == "paper":
+        return {
+            "PPIBP": "PPI-BP",
+            "HPONeuro": "HPO-Neuro",
+            "HPOMetab": "HPO-Metab",
+            "EMUser": "EM-User"
+        }[dataset_name]
 
 
 def _analyze_node_properties(data: Data):
-
     N = data.num_nodes
 
     properties = dict()
@@ -37,8 +61,8 @@ def _analyze_node_properties(data: Data):
     return properties
 
 
-def analyze_node_properties(dataset_path, dataset_and_model_name_list: List[Tuple[str, str]],
-                            out_path=None):
+def analyze_s2n_properties(dataset_path, dataset_and_model_name_list: List[Tuple[str, str]],
+                           out_path=None):
     list_of_pps = []
     for (dataset_name, model_name) in dataset_and_model_name_list:
         sdm = SubgraphDataModule(
@@ -64,7 +88,8 @@ def analyze_node_properties(dataset_path, dataset_and_model_name_list: List[Tupl
             **load_s2n_datamodule_kwargs(dataset_name, model_name),
         )
         pps_dict = _analyze_node_properties(sdm.test_data)
-        list_of_pps.append({"dataset_name": dataset_name, "model_name": model_name, **pps_dict})
+        list_of_pps.append({"dataset_name": to_dataset_repr(dataset_name, "paper"),
+                            "model_name": model_name, **pps_dict})
         pprint(list_of_pps)
 
     if out_path is not None:
@@ -94,7 +119,66 @@ def load_s2n_datamodule_kwargs(dataset_name, model_name) -> Dict[str, Any]:
     return kwargs
 
 
+def visualize_2d_s2n_properties(dataset_path, out_path, dataset_and_model_name_list,
+                                run_analysis=False, extension="png"):
+    if run_analysis:
+        analyze_s2n_properties(
+            dataset_path=dataset_path, out_path=out_path,
+            dataset_and_model_name_list=dataset_and_model_name_list,
+        )
+    df = pd.read_csv(out_path)
+
+    plot_scatter(
+        xs=df["# nodes"].to_numpy(),
+        ys=df["# edges"].to_numpy(),
+        xlabel="# Nodes (Log)",
+        ylabel="# Edges (Log)",
+        path="../_figures",
+        key="s2n_properties",
+        extension=extension,
+
+        hues=df["Data structure"].to_numpy(), hue_name="Data structure",
+        styles=df["dataset_name"].to_numpy(), style_name="Dataset",
+        scales_kws={"yscale": "log", "xscale": "log"},
+        xticks=[1e2, 1e3, 1e4, 1e5],
+        yticks=[1e2, 1e3, 1e4, 1e5, 1e6, 1e7],
+        alpha=0.8,
+        s=200,
+    )
+
+    """
+    # scatter plot of Node homophily and Density
+    df = df[df["Data structure"] == "S2N"]
+    plot_scatter(
+        xs=df["Node homophily"].to_numpy(),
+        ys=df["Density"].to_numpy(),
+        xlabel="Node homophily",
+        ylabel="Density",
+        path="../_figures",
+        key="s2n_properties",
+        extension=extension,
+
+        hues=df["dataset_name"].to_numpy(), hue_name="Dataset",
+        styles=df["dataset_name"].to_numpy(), style_name="Dataset",
+        scales_kws={"yscale": "log"},
+        yticks=[0.001, 0.01, 0.1],
+        alpha=0.8,
+        s=200,
+    )
+    """
+
+
 if __name__ == '__main__':
+
+    try:
+        sns.set(style="whitegrid")
+        sns.set_context("talk")
+    except NameError:
+        pass
+
+    # analyze_s2n_properties, visualize_2d_s2n_properties
+    METHOD = "visualize_2d_s2n_properties"
+
     TARGETS = "REAL_WORLD"  # SYNTHETIC, REAL_WORLD, ALL
     if TARGETS == "REAL_WORLD":
         DATASET_NAME_LIST = ["PPIBP", "HPONeuro", "HPOMetab", "EMUser"]
@@ -107,7 +191,15 @@ if __name__ == '__main__':
 
     DM_NAME_LIST = list(product(DATASET_NAME_LIST,
                                 ["fa", "gat", "gcn", "gcn2", "gin", "linkx", "sage"]))
-    analyze_node_properties(
-        dataset_path=PATH, out_path="./_data_analysis.csv",
-        dataset_and_model_name_list=DM_NAME_LIST,
-    )
+    if METHOD == "analyze_s2n_properties":
+        analyze_s2n_properties(
+            dataset_path=PATH, out_path="./_data_analysis.csv",
+            dataset_and_model_name_list=DM_NAME_LIST,
+        )
+    elif METHOD == "visualize_2d_s2n_properties":
+        visualize_2d_s2n_properties(
+            dataset_path=PATH, out_path="./_data_analysis_w_original.csv",
+            dataset_and_model_name_list=DM_NAME_LIST,
+            extension="pdf",
+            run_analysis=False,  # NOTE: True to run analyze_s2n_properties
+        )

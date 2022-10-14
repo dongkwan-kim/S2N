@@ -53,7 +53,7 @@ def plot_scatter(xs, ys, xlabel, ylabel,
                  cols=None, col_name=None,
                  label_kws: Dict[str, Any] = None,
                  scales_kws: Dict[str, Any] = None,
-                 yticks=None,
+                 xticks=None, yticks=None,
                  **kwargs):
     data = {
         xlabel: xs,
@@ -80,8 +80,11 @@ def plot_scatter(xs, ys, xlabel, ylabel,
         plot.set(**scales_kws)  # e.g., xscale="log", yscale="log"
     if yticks is not None:
         plt.yticks(yticks)
+    if xticks is not None:
+        plt.xticks(xticks)
 
-    plot_info = "_".join([k for k in [xlabel, ylabel, hue_name, style_name]])
+    plot_info = "_".join([k for k in [xlabel, ylabel, hue_name, style_name]
+                          if k is not None])
     plot_info = plot_info.replace("/", "|").replace("#", "Num")
     path_and_name = "{}/fig_scatter_{}_{}.{}".format(path, key, plot_info, extension)
 
