@@ -14,7 +14,6 @@ import numpy as np
 
 def plot_data_points_by_tsne(xs: np.ndarray, ys: np.ndarray,
                              path=None, key=None, extension="png", **kwargs):
-
     def plot_for_one_y(_ys, _key, _title=None):
         df = pd.DataFrame({
             "coord_1": x_embed[:, 0],
@@ -44,6 +43,53 @@ def plot_data_points_by_tsne(xs: np.ndarray, ys: np.ndarray,
     elif len(ys.shape) == 2:  # [N, C]
         for y_idx in range(ys.shape[1]):
             plot_for_one_y(ys[:, y_idx], _key=f"{key}_y{y_idx}", _title=f"TSNE: {key} of y={y_idx}")
+
+
+def plot_box(xs, ys, xlabel, ylabel,
+             path, key, extension="pdf",
+             orient="v",
+             hues=None, hue_name=None,
+             cols=None, col_name=None,
+             label_kws: Dict[str, Any] = None,
+             scales_kws: Dict[str, Any] = None,
+             xticks=None, yticks=None,
+             **kwargs):
+    data = {
+        xlabel: xs,
+        ylabel: ys,
+        **{obj_name: obj for obj_name, obj in zip([hue_name, col_name],
+                                                  [hues, cols])
+           if obj_name is not None}
+    }
+    df = pd.DataFrame(data)
+
+    plot = sns.catplot(
+        kind="box",
+        data=df, orient=orient,
+        x=xlabel, y=ylabel, hue=hue_name,
+        **kwargs,
+    )
+    if "legend" in kwargs and kwargs["legend"] is not False:
+        for lh in plot._legend.legendHandles:
+            lh.set_sizes([kwargs["s"]])
+
+    if label_kws is not None:
+        plot.set(**label_kws)  # e.g., xlabel=None
+    if scales_kws is not None:
+        plot.set(**scales_kws)  # e.g., xscale="log", yscale="log"
+    if yticks is not None:
+        plt.yticks(yticks)
+    if xticks is not None:
+        plt.xticks(xticks)
+
+    plot_info = "_".join([k for k in [xlabel, ylabel, hue_name]
+                          if k is not None])
+    plot_info = plot_info.replace("/", "|").replace("#", "Num")
+    path_and_name = "{}/fig_box_{}_{}.{}".format(path, key, plot_info, extension)
+
+    plot.savefig(path_and_name, bbox_inches='tight')
+    cprint(f"Saved: {path_and_name}", "blue")
+    plt.clf()
 
 
 def plot_scatter(xs, ys, xlabel, ylabel,

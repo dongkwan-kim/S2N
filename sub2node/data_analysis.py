@@ -11,7 +11,7 @@ from torch_geometric.utils import homophily, remove_self_loops
 
 from data import SubgraphDataModule
 from utils import multi_label_homophily, try_get_from_dict
-from visualize import plot_scatter
+from visualize import plot_scatter, plot_box
 
 try:
     import seaborn as sns
@@ -119,14 +119,29 @@ def load_s2n_datamodule_kwargs(dataset_name, model_name) -> Dict[str, Any]:
     return kwargs
 
 
-def visualize_2d_s2n_properties(dataset_path, out_path, dataset_and_model_name_list,
-                                run_analysis=False, extension="png"):
+def visualize_s2n_properties(dataset_path, out_path, dataset_and_model_name_list,
+                             run_analysis=False, extension="png"):
     if run_analysis:
         analyze_s2n_properties(
             dataset_path=dataset_path, out_path=out_path,
             dataset_and_model_name_list=dataset_and_model_name_list,
         )
     df = pd.read_csv(out_path)
+
+    df_s2n = df[df["Data structure"] == "S2N"]
+    plot_box(
+        xs=df_s2n["dataset_name"].to_numpy(),
+        ys=df_s2n["Node homophily"].to_numpy(),
+        xlabel="Dataset",
+        ylabel="Node homophily",
+        path="../_figures",
+        key="s2n_properties",
+        extension=extension,
+
+        yticks=[0.0, 0.1, 0.2, 0.3, 0.4],
+        orient="v", width=0.5,
+        aspect=1.45,
+    )
 
     plot_scatter(
         xs=df["# nodes"].to_numpy(),
@@ -176,8 +191,8 @@ if __name__ == '__main__':
     except NameError:
         pass
 
-    # analyze_s2n_properties, visualize_2d_s2n_properties
-    METHOD = "visualize_2d_s2n_properties"
+    # analyze_s2n_properties, visualize_s2n_properties
+    METHOD = "visualize_s2n_properties"
 
     TARGETS = "REAL_WORLD"  # SYNTHETIC, REAL_WORLD, ALL
     if TARGETS == "REAL_WORLD":
@@ -196,8 +211,8 @@ if __name__ == '__main__':
             dataset_path=PATH, out_path="./_data_analysis.csv",
             dataset_and_model_name_list=DM_NAME_LIST,
         )
-    elif METHOD == "visualize_2d_s2n_properties":
-        visualize_2d_s2n_properties(
+    elif METHOD == "visualize_s2n_properties":
+        visualize_s2n_properties(
             dataset_path=PATH, out_path="./_data_analysis_w_original.csv",
             dataset_and_model_name_list=DM_NAME_LIST,
             extension="pdf",
