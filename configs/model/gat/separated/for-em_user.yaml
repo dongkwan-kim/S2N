@@ -1,21 +1,20 @@
 _target_: model.GraphNeuralModel
-
 defaults:
-  - common_model.yaml
-
-encoder_layer_name: ["Linear", "GATConv"]
-num_layers: [2, 2]
-use_bn: True
-use_skip: False
-dropout_channels: 0.1
-dropout_edges: 0.0
-layer_kwargs: {
-  heads: 1,
-  dropout: "${model.dropout_channels}",
-}
-
-learning_rate: 0.001
-weight_decay: 0.00001
+- common_model.yaml
+encoder_layer_name:
+- Linear
+- GATConv
+num_layers:
+- 2
+- 2
+use_bn: true
+use_skip: false
+dropout_channels: 0.30000000000000004
+dropout_edges: 0.4
+layer_kwargs:
+  heads: 1
+  dropout: 0.30000000000000004
+learning_rate: 0.0005
+weight_decay: 1.4631728606025663e-09
 _gradient_clip_val: 0.0
-
-subname: "GAT-${datamodule.subgraph_batching}"
+subname: GAT-${datamodule.subgraph_batching}

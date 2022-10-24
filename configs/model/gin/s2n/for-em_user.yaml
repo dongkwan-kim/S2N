@@ -1,23 +1,17 @@
 _target_: model.GraphNeuralModel
-
 defaults:
-  - common_model.yaml
-
+- common_model.yaml
 encoder_layer_name: GINConv
 num_layers: 2
-use_bn: True
-use_skip: False
-dropout_channels: 0.1
-dropout_edges: 0.0
-layer_kwargs: {
-  train_eps: True,
-}
-
-learning_rate: 0.001
-weight_decay: 0.00000318656047431034
+use_bn: true
+use_skip: false
+dropout_channels: 0.4
+dropout_edges: 0.5
+layer_kwargs:
+  train_eps: true
+learning_rate: 0.0005
+weight_decay: 4.1215043705454267e-07
 _gradient_clip_val: 0.0
-
 sub_node_num_layers: 1
-sub_node_encoder_aggr: "sum"
-
+sub_node_encoder_aggr: mean
 subname: GIN-S2N
