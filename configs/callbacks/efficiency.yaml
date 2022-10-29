@@ -1,0 +1,3 @@
+efficiency:
+  _target_: utils_pl.EfficiencyCallback
+  stop_epochs: 50

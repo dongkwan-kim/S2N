@@ -1,12 +1,22 @@
 import time
 
+import numpy as np
+import torch
 from pytorch_lightning.callbacks import Callback
 from termcolor import cprint
-import numpy as np
+
+from utils import count_parameters
 
 
-class TimerCallback(Callback):
-
+class EfficiencyCallback(Callback):
+    """Compute various efficiency metrics, specifically,
+        - num_parameters
+        - max_memory_alloc
+        - time / train_epoch
+        - time / train_batch
+        - time / valid_epoch
+        - time / valid_batch
+    """
     time_init_start = None
     time_fit_start = None
 
@@ -23,7 +33,7 @@ class TimerCallback(Callback):
     valid_batch_count = 0
 
     def __init__(self, stop_epochs=5):
-        super(TimerCallback, self).__init__()
+        super(EfficiencyCallback, self).__init__()
         self.stop_epochs = stop_epochs
 
     def on_init_start(self, trainer):
@@ -67,6 +77,7 @@ class TimerCallback(Callback):
     def on_validation_end(self, trainer, pl_module):
 
         if self.total_epoch_count == self.stop_epochs:
+            # Time for throughput & latency
             total_end = time.time()
             dt_init_start = total_end - self.time_init_start
             dt_fit_start = total_end - self.time_fit_start
@@ -93,10 +104,14 @@ class TimerCallback(Callback):
             cprint(f"- time / valid_epoch: {dt_valid_epoch}", "yellow")
             cprint(f"- time / valid_batch: {dt_valid_batch}", "yellow")
 
-            cprint("Summary as Table ------------------", "yellow")
+            # Memory and parameters
+            num_parameters = count_parameters(pl_module)
+            max_memory_reserved = torch.cuda.max_memory_reserved()
+            max_memory_allocated = torch.cuda.max_memory_allocated()
+            cprint(f"\nSummary as Table --- {pl_module.h.subname}", "yellow")
             print("\t".join(str(t) for t in [
-                dt_init_start,
-                self.total_epoch_count,
+                num_parameters, max_memory_reserved, max_memory_allocated,
+                dt_init_start, self.total_epoch_count,
                 total_train_time, dt_train_epoch, dt_train_batch,
                 total_valid_time, dt_valid_epoch, dt_valid_batch,
             ]))

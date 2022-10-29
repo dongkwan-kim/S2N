@@ -1,3 +1,0 @@
-timer:
-  _target_: utils_pl.TimerCallback
-  stop_epochs: 50

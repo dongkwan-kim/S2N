@@ -28,9 +28,9 @@ python run_main.py --multirun hparams_search=optuna_s2n trainer.gpus="[1]" datam
 # Examples by a number of training subgraphs
 python run_main.py trainer.gpus="[2]" datamodule=connected/ppi_bp model=gcn/connected/for-ppi_bp datamodule.custom_splits="[0.7, 0.1, 0.1]"
 
-# To compute time: callbacks=timer
-python run_main.py datamodule=${batching_type}/${dataset} model=${model}/${batching_type}/for-${dataset} callbacks=timer
-python run_main.py datamodule=s2n/${dataset}/for-${model} model=${model}/s2n/for-${dataset} callbacks=timer
-python run_main.py trainer.gpus="[2]" datamodule=connected/ppi_bp model=gcn/connected/for-ppi_bp callbacks=timer
-python run_main.py trainer.gpus="[2]" datamodule=s2n/ppi_bp/for-gcn model=gcn/s2n/for-ppi_bp callbacks=timer
+# To compute time & memory: callbacks=efficiency
+python run_main.py datamodule=${batching_type}/${dataset} model=${model}/${batching_type}/for-${dataset} callbacks=efficiency
+python run_main.py datamodule=s2n/${dataset}/for-${model} model=${model}/s2n/for-${dataset} callbacks=efficiency
+python run_main.py trainer.gpus="[2]" datamodule=connected/ppi_bp model=gcn/connected/for-ppi_bp callbacks=efficiency
+python run_main.py trainer.gpus="[2]" datamodule=s2n/ppi_bp/for-gcn model=gcn/s2n/for-ppi_bp callbacks=efficiency
 ```
