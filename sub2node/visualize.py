@@ -97,6 +97,7 @@ def plot_scatter(xs, ys, xlabel, ylabel,
                  hues=None, hue_name=None,
                  styles=None, style_name=None,
                  cols=None, col_name=None,
+                 elm_sizes=None, elm_size_name=None,
                  label_kws: Dict[str, Any] = None,
                  scales_kws: Dict[str, Any] = None,
                  xticks=None, yticks=None,
@@ -104,15 +105,15 @@ def plot_scatter(xs, ys, xlabel, ylabel,
     data = {
         xlabel: xs,
         ylabel: ys,
-        **{obj_name: obj for obj_name, obj in zip([hue_name, style_name, col_name],
-                                                  [hues, styles, cols])
+        **{obj_name: obj for obj_name, obj in zip([hue_name, style_name, col_name, elm_size_name],
+                                                  [hues, styles, cols, elm_sizes])
            if obj_name is not None}
     }
     df = pd.DataFrame(data)
 
     plot = sns.relplot(
         kind="scatter",
-        x=xlabel, y=ylabel, hue=hue_name, style=style_name, col=col_name,
+        x=xlabel, y=ylabel, hue=hue_name, style=style_name, col=col_name, size=elm_size_name,
         data=df,
         **kwargs,
     )
