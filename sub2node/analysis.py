@@ -20,6 +20,9 @@ except ImportError:
     pass
 
 
+FIGURE_PATH = "../_figures"
+
+
 def to_dataset_repr(dataset_name, repr_format):
     if repr_format == "filename":
         return {
@@ -119,14 +122,14 @@ def load_s2n_datamodule_kwargs(dataset_name, model_name) -> Dict[str, Any]:
     return kwargs
 
 
-def visualize_s2n_properties(dataset_path, out_path, dataset_and_model_name_list,
+def visualize_s2n_properties(dataset_path, csv_path, dataset_and_model_name_list,
                              run_analysis=False, extension="png"):
     if run_analysis:
         analyze_s2n_properties(
-            dataset_path=dataset_path, out_path=out_path,
+            dataset_path=dataset_path, out_path=csv_path,
             dataset_and_model_name_list=dataset_and_model_name_list,
         )
-    df = pd.read_csv(out_path)
+    df = pd.read_csv(csv_path)
 
     df_s2n = df[df["Data structure"] == "S2N"]
     plot_box(
@@ -134,7 +137,7 @@ def visualize_s2n_properties(dataset_path, out_path, dataset_and_model_name_list
         ys=df_s2n["Node homophily"].to_numpy(),
         xlabel="Dataset",
         ylabel="Node homophily",
-        path="../_figures",
+        path=FIGURE_PATH,
         key="s2n_properties",
         extension=extension,
 
@@ -148,7 +151,7 @@ def visualize_s2n_properties(dataset_path, out_path, dataset_and_model_name_list
         ys=df["# edges"].to_numpy(),
         xlabel="# Nodes (Log)",
         ylabel="# Edges (Log)",
-        path="../_figures",
+        path=FIGURE_PATH,
         key="s2n_properties",
         extension=extension,
 
@@ -169,7 +172,7 @@ def visualize_s2n_properties(dataset_path, out_path, dataset_and_model_name_list
         ys=df["Density"].to_numpy(),
         xlabel="Node homophily",
         ylabel="Density",
-        path="../_figures",
+        path=FIGURE_PATH,
         key="s2n_properties",
         extension=extension,
 
@@ -183,6 +186,112 @@ def visualize_s2n_properties(dataset_path, out_path, dataset_and_model_name_list
     """
 
 
+def visualize_efficiency(csv_path,  extension="png"):
+    df = pd.read_csv(csv_path)
+    df = df.dropna(subset=["Performance", "Throughput (Train)"])
+
+    plot_scatter(
+        xs=df["# parameters"].to_numpy(),
+        xlabel="# Parameters (Log)",
+        ys=df["Max Allocated GPU Memory (MB)"].to_numpy(),
+        ylabel="Max Allocated VRAM (MB, Log)",
+        path=FIGURE_PATH,
+        key="efficiency",
+        extension=extension,
+
+        hues=df["Data structure"].to_numpy(), hue_name="Data structure",
+        styles=df["Model"].to_numpy(), style_name="Model",
+        cols=df["Dataset"].to_numpy(), col_name="Dataset",
+        # elm_sizes=df["Performance"].to_numpy(), elm_size_name="Performance",
+        scales_kws={"yscale": "log", "xscale": "log"},
+        xticks=[1e6, 1e7],
+        yticks=[1e2, 1e3, 1e4],
+        alpha=0.7,
+        s=200,
+    )
+
+    plot_scatter(
+        xs=df["Throughput (Train)"].to_numpy(),
+        xlabel="Train Throughput (#/s, Log)",
+        ys=df["Throughput (Eval)"].to_numpy(),
+        ylabel="Eval Throughput (#/s, Log)",
+        path=FIGURE_PATH,
+        key="efficiency",
+        extension=extension,
+
+        hues=df["Data structure"].to_numpy(), hue_name="Data structure",
+        styles=df["Model"].to_numpy(), style_name="Model",
+        cols=df["Dataset"].to_numpy(), col_name="Dataset",
+        # elm_sizes=df["Performance"].to_numpy(), elm_size_name="Performance",
+        scales_kws={"yscale": "log", "xscale": "log"},
+        xticks=[1e1, 1e2, 1e3, 1e4, 1e5],
+        yticks=[1e1, 1e2, 1e3, 1e4, 1e5],
+        alpha=0.8,
+        s=200,
+    )
+
+    plot_scatter(
+        xs=df["Latency (Train)"].to_numpy(),
+        xlabel="Train Latency (s/forward)",
+        ys=df["Latency (Eval)"].to_numpy(),
+        ylabel="Eval Latency (s/forward)",
+        path=FIGURE_PATH,
+        key="efficiency",
+        extension=extension,
+
+        hues=df["Data structure"].to_numpy(), hue_name="Data structure",
+        styles=df["Model"].to_numpy(), style_name="Model",
+        cols=df["Dataset"].to_numpy(), col_name="Dataset",
+        # elm_sizes=df["Performance"].to_numpy(), elm_size_name="Performance",
+        # scales_kws={"yscale": "log", "xscale": "log"},
+        xticks=[0.0, 0.1, 0.2, 0.3, 0.4],
+        yticks=[0.0, 0.05, 0.1, 0.15],
+        alpha=0.8,
+        s=200,
+    )
+
+    """
+    plot_scatter(
+        xs=df["Throughput (Train)"].to_numpy(),
+        xlabel="Throughput (Train)",
+        ys=df["Throughput (Eval)"].to_numpy(),
+        ylabel="Throughput (Eval)",
+        path=FIGURE_PATH,
+        key="efficiency_w_perf",
+        extension=extension,
+
+        hues=df["Data structure"].to_numpy(), hue_name="Data structure",
+        styles=df["Model"].to_numpy(), style_name="Model",
+        cols=df["Dataset"].to_numpy(), col_name="Dataset",
+        elm_sizes=df["Performance"].to_numpy(), elm_size_name="Performance",
+        scales_kws={"yscale": "log", "xscale": "log"},
+        xticks=[1e2, 1e3, 1e4, 1e5],
+        yticks=[1e2, 1e3, 1e4, 1e5],
+        alpha=0.8,
+        s=140,
+    )
+
+    plot_scatter(
+        xs=df["Throughput (Train)"].to_numpy(),
+        xlabel="Throughput (Train)",
+        ys=df["Performance"].to_numpy(),
+        ylabel="Performance",
+        path=FIGURE_PATH,
+        key="efficiency",
+        extension=extension,
+
+        hues=df["Data structure"].to_numpy(), hue_name="Data structure",
+        styles=df["Model"].to_numpy(), style_name="Model",
+        cols=df["Dataset"].to_numpy(), col_name="Dataset",
+        scales_kws={"xscale": "log"},
+        xticks=[1e2, 1e3, 1e4, 1e5],
+        yticks=[0.5, 0.6, 0.7, 0.8, 0.9],
+        alpha=0.8,
+        s=140,
+    )
+    """
+
+
 if __name__ == '__main__':
 
     try:
@@ -191,8 +300,8 @@ if __name__ == '__main__':
     except NameError:
         pass
 
-    # analyze_s2n_properties, visualize_s2n_properties
-    METHOD = "visualize_s2n_properties"
+    # analyze_s2n_properties, visualize_s2n_properties, visualize_efficiency
+    METHOD = "visualize_efficiency"
 
     TARGETS = "REAL_WORLD"  # SYNTHETIC, REAL_WORLD, ALL
     if TARGETS == "REAL_WORLD":
@@ -208,13 +317,20 @@ if __name__ == '__main__':
                                 ["fa", "gat", "gcn", "gcn2", "gin", "linkx", "sage"]))
     if METHOD == "analyze_s2n_properties":
         analyze_s2n_properties(
-            dataset_path=PATH, out_path="./_data_analysis.csv",
+            dataset_path=PATH,
+            out_path="./_data_analysis.csv",
             dataset_and_model_name_list=DM_NAME_LIST,
         )
     elif METHOD == "visualize_s2n_properties":
         visualize_s2n_properties(
-            dataset_path=PATH, out_path="./_data_analysis_w_original.csv",
+            dataset_path=PATH,
+            csv_path="./_data_analysis_w_original.csv",
             dataset_and_model_name_list=DM_NAME_LIST,
             extension="pdf",
             run_analysis=False,  # NOTE: True to run analyze_s2n_properties
+        )
+    elif METHOD == "visualize_efficiency":
+        visualize_efficiency(
+            csv_path="./_sub2node Table (new) - tab_efficiency.csv",
+            extension="pdf",
         )
