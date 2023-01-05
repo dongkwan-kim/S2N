@@ -202,6 +202,12 @@ def print_time(method):  # Decorator
     return timed
 
 
+def replace_all(s: str, old_to_new_values: Dict[str, str]):
+    for old_value, new_value in old_to_new_values.items():
+        s = s.replace(old_value, new_value)
+    return s
+
+
 # PyTorch/PyTorch Geometric related methods
 
 
