@@ -121,11 +121,12 @@ if __name__ == '__main__':
 
         IDX = 0  # 0, 1, 2, 3
 
+        # Prefix: a ratio of not used samples
         prefix_settings = {
-            "PPIBP": [0.1, 0.3, 0.5, 0.7],
-            "HPOMetab": [0.1, 0.3, 0.5, 0.7],
-            "HPONeuro": [0.1, 0.3, 0.5, 0.7],
-            "EMUser": [0.15, 0.3, 0.45, 0.6],
+            "PPIBP": [0.7, 0.5, 0.3, 0.1],
+            "HPOMetab": [0.7, 0.5, 0.3, 0.1],
+            "HPONeuro": [0.7, 0.5, 0.3, 0.1],
+            "EMUser": [0.6, 0.45, 0.3, 0.15],
         }
         for _dataset_name, _prefix_list in prefix_settings.items():
             _dataset_name_w_prefix = f"{_dataset_name}-[{_prefix_list[IDX]}"
