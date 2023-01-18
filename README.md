@@ -33,4 +33,5 @@ python run_main.py datamodule=${batching_type}/${dataset} model=${model}/${batch
 python run_main.py datamodule=s2n/${dataset}/for-${model} model=${model}/s2n/for-${dataset} callbacks=efficiency
 python run_main.py trainer.gpus="[2]" datamodule=connected/ppi_bp model=gcn/connected/for-ppi_bp callbacks=efficiency
 python run_main.py trainer.gpus="[2]" datamodule=s2n/ppi_bp/for-gcn model=gcn/s2n/for-ppi_bp callbacks=efficiency
+python run_main.py trainer.gpus="[2]" datamodule=connected/ppi_bp model=gcn2/connected/for-ppi_bp callbacks=efficiency datamodule.custom_splits="[0.7, 0.1, 0.1]"
 ```
