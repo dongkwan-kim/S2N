@@ -92,7 +92,8 @@ def plot_box(xs, ys, xlabel, ylabel,
     plt.clf()
 
 
-def plot_scatter(xs, ys, xlabel, ylabel,
+def plot_relplot(kind,
+                 xs, ys, xlabel, ylabel,
                  path, key, extension="pdf",
                  hues=None, hue_name=None,
                  styles=None, style_name=None,
@@ -102,6 +103,9 @@ def plot_scatter(xs, ys, xlabel, ylabel,
                  scales_kws: Dict[str, Any] = None,
                  xticks=None, yticks=None,
                  **kwargs):
+
+    assert kind in ["scatter", "line"]
+
     data = {
         xlabel: xs,
         ylabel: ys,
@@ -112,7 +116,7 @@ def plot_scatter(xs, ys, xlabel, ylabel,
     df = pd.DataFrame(data)
 
     plot = sns.relplot(
-        kind="scatter",
+        kind=kind,
         x=xlabel, y=ylabel, hue=hue_name, style=style_name, col=col_name, size=elm_size_name,
         data=df,
         **kwargs,
@@ -133,8 +137,52 @@ def plot_scatter(xs, ys, xlabel, ylabel,
     plot_info = "_".join([k for k in [xlabel, ylabel, hue_name, style_name]
                           if k is not None])
     plot_info = plot_info.replace("/", "|").replace("#", "Num")
-    path_and_name = "{}/fig_scatter_{}_{}.{}".format(path, key, plot_info, extension)
+    path_and_name = f"{path}/fig_{kind}_{key}_{plot_info}.{extension}"
 
     plot.savefig(path_and_name, bbox_inches='tight')
     cprint(f"Saved: {path_and_name}", "blue")
     plt.clf()
+
+
+def plot_scatter(xs, ys, xlabel, ylabel,
+                 path, key, extension="pdf",
+                 hues=None, hue_name=None,
+                 styles=None, style_name=None,
+                 cols=None, col_name=None,
+                 elm_sizes=None, elm_size_name=None,
+                 label_kws: Dict[str, Any] = None,
+                 scales_kws: Dict[str, Any] = None,
+                 xticks=None, yticks=None,
+                 **kwargs):
+    plot_relplot("scatter", xs=xs, ys=ys, xlabel=xlabel, ylabel=ylabel,
+                 path=path, key=key, extension=extension,
+                 hues=hues, hue_name=hue_name,
+                 styles=styles, style_name=style_name,
+                 cols=cols, col_name=col_name,
+                 elm_sizes=elm_sizes, elm_size_name=elm_size_name,
+                 label_kws= label_kws,
+                 scales_kws = scales_kws,
+                 xticks=xticks, yticks=yticks,
+                 **kwargs)
+
+
+def plot_line(xs, ys, xlabel, ylabel,
+              path, key, extension="pdf",
+              hues=None, hue_name=None,
+              styles=None, style_name=None,
+              cols=None, col_name=None,
+              elm_sizes=None, elm_size_name=None,
+              label_kws: Dict[str, Any] = None,
+              scales_kws: Dict[str, Any] = None,
+              xticks=None, yticks=None,
+              **kwargs):
+    plot_relplot("line", xs=xs, ys=ys, xlabel=xlabel, ylabel=ylabel,
+                 path=path, key=key, extension=extension,
+                 hues=hues, hue_name=hue_name,
+                 styles=styles, style_name=style_name,
+                 cols=cols, col_name=col_name,
+                 elm_sizes=elm_sizes, elm_size_name=elm_size_name,
+                 label_kws= label_kws,
+                 scales_kws = scales_kws,
+                 xticks=xticks, yticks=yticks,
+                 **kwargs)
