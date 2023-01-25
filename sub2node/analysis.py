@@ -11,7 +11,7 @@ from torch_geometric.utils import homophily, remove_self_loops
 
 from data import SubgraphDataModule
 from utils import multi_label_homophily, try_get_from_dict
-from visualize import plot_scatter, plot_box
+from visualize import plot_scatter, plot_box, plot_line
 
 try:
     import seaborn as sns
@@ -292,6 +292,130 @@ def visualize_efficiency(csv_path,  extension="png"):
     """
 
 
+def visualize_efficiency_by_num_training(csv_path,  extension="png", dataset=None):
+    df = pd.read_csv(csv_path)
+    df = df.dropna(subset=["Performance", "Throughput (Train)"])
+
+    if dataset != "all":  # dataset name
+        df = df[df.Dataset == dataset]
+
+        kws = dict(
+            path=FIGURE_PATH,
+            key=f"efficiency_{dataset.replace('-', '_')}",
+            extension=extension,
+            markers=True, dashes=False,
+            aspect=1.0,
+            markersize=13, alpha=0.8,
+            hues=df["Data structure"].to_numpy(), hue_name="Data structure",
+            styles=df["Data structure"].to_numpy(), style_name="Data structure",
+        )
+        plot_line(
+            xs=df["r_train"].to_numpy(),
+            xlabel="Training set ratio",
+            ys=df["Performance"].to_numpy(),
+            ylabel="Performance",
+
+            yticks=[0.4, 0.5, 0.6],
+            legend=False,
+            **kws,
+        )
+        plot_line(
+            xs=df["r_train"].to_numpy(),
+            xlabel="Training set ratio",
+            ys=df["Max Allocated GPU Memory (MB)"].to_numpy(),
+            ylabel="Max Allocated VRAM (MB, Log)",
+
+            scales_kws={"yscale": "log"},
+            yticks=[1e1, 1e2, 1e3, 1e4],
+            # legend=False,  NOTE: # is necessary
+            **kws,
+        )
+        plot_line(
+            xs=df["r_train"].to_numpy(),
+            xlabel="Training set ratio",
+            ys=df["Throughput (Train)"].to_numpy(),
+            ylabel="Train Throughput (#/s, Log)",
+
+            scales_kws={"yscale": "log"},
+            yticks=[1e3, 1e4, 1e5],
+            legend=False,
+            **kws,
+        )
+        plot_line(
+            xs=df["r_train"].to_numpy(),
+            xlabel="Training set ratio",
+            ys=df["Throughput (Eval)"].to_numpy(),
+            ylabel="Eval Throughput (#/s, Log)",
+
+            scales_kws={"yscale": "log"},
+            yticks=[1e3, 1e4, 1e5],
+            legend=False,
+            **kws,
+        )
+        plot_line(
+            xs=df["r_train"].to_numpy(),
+            xlabel="Training set ratio",
+            ys=df["Latency (Train)"].to_numpy(),
+            ylabel="Train Latency (s/forward)",
+
+            # scales_kws={"yscale": "log"},
+            yticks=[0.0, 0.1, 0.2],
+            legend=False,
+            **kws,
+        )
+
+    else:
+        kws = dict(
+            path=FIGURE_PATH,
+            key="efficiency",
+            extension=extension,
+            markers=True, dashes=False,
+            aspect=1.2,
+            markersize=13, alpha=0.8,
+            hues=df["Data structure"].to_numpy(), hue_name="Data structure",
+            styles=df["Data structure"].to_numpy(), style_name="Data structure",
+            cols=df["Dataset"].to_numpy(), col_name="Dataset",
+        )
+        plot_line(
+            xs=df["r_train"].to_numpy(),
+            xlabel="Training set ratio",
+            ys=df["Performance"].to_numpy(),
+            ylabel="Performance",
+
+            yticks=[0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+            **kws,
+        )
+        plot_line(
+            xs=df["r_train"].to_numpy(),
+            xlabel="Training set ratio",
+            ys=df["Max Allocated GPU Memory (MB)"].to_numpy(),
+            ylabel="Max Allocated VRAM (MB, Log)",
+
+            scales_kws={"yscale": "log"},
+            yticks=[1e2, 1e3, 1e4],
+            **kws,
+        )
+        plot_line(
+            xs=df["r_train"].to_numpy(),
+            xlabel="Training set ratio",
+            ys=df["Throughput (Train)"].to_numpy(),
+            ylabel="Train Throughput (#/s, Log)",
+
+            scales_kws={"yscale": "log"},
+            yticks=[1e2, 1e3, 1e4, 1e5],
+            **kws,
+        )
+        plot_line(
+            xs=df["r_train"].to_numpy(),
+            xlabel="Training set ratio",
+            ys=df["Latency (Train)"].to_numpy(),
+            ylabel="Train Latency (s/forward)",
+
+            # yticks=[1e2, 1e3, 1e4, 1e5],
+            **kws,
+        )
+
+
 if __name__ == '__main__':
 
     try:
@@ -300,8 +424,9 @@ if __name__ == '__main__':
     except NameError:
         pass
 
-    # analyze_s2n_properties, visualize_s2n_properties, visualize_efficiency
-    METHOD = "visualize_efficiency"
+    # analyze_s2n_properties, visualize_s2n_properties,
+    # visualize_efficiency, visualize_efficiency_by_num_training
+    METHOD = "visualize_efficiency_by_num_training"
 
     TARGETS = "REAL_WORLD"  # SYNTHETIC, REAL_WORLD, ALL
     if TARGETS == "REAL_WORLD":
@@ -333,4 +458,10 @@ if __name__ == '__main__':
         visualize_efficiency(
             csv_path="./_sub2node Table (new) - tab_efficiency.csv",
             extension="pdf",
+        )
+    elif METHOD == "visualize_efficiency_by_num_training":
+        visualize_efficiency_by_num_training(
+            csv_path="./_sub2node Table (new) - tab_efficiency_by_num_training.csv",
+            extension="pdf",
+            dataset="HPO-Metab",
         )
