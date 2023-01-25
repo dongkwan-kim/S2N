@@ -146,6 +146,7 @@ def visualize_s2n_properties(dataset_path, csv_path, dataset_and_model_name_list
         aspect=1.45,
     )
 
+    df["Data structure"] = df["Data structure"].replace(["Connected"], "Original")
     plot_scatter(
         xs=df["# nodes"].to_numpy(),
         ys=df["# edges"].to_numpy(),
@@ -190,14 +191,18 @@ def visualize_efficiency(csv_path,  extension="png"):
     df = pd.read_csv(csv_path)
     df = df.dropna(subset=["Performance", "Throughput (Train)"])
 
+    kws = dict(
+        path=FIGURE_PATH,
+        key="efficiency",
+        extension=extension,
+        alpha=0.65, s=300,
+    )
+
     plot_scatter(
         xs=df["# parameters"].to_numpy(),
         xlabel="# Parameters (Log)",
         ys=df["Max Allocated GPU Memory (MB)"].to_numpy(),
         ylabel="Max Allocated VRAM (MB, Log)",
-        path=FIGURE_PATH,
-        key="efficiency",
-        extension=extension,
 
         hues=df["Data structure"].to_numpy(), hue_name="Data structure",
         styles=df["Model"].to_numpy(), style_name="Model",
@@ -206,8 +211,8 @@ def visualize_efficiency(csv_path,  extension="png"):
         scales_kws={"yscale": "log", "xscale": "log"},
         xticks=[1e6, 1e7],
         yticks=[1e2, 1e3, 1e4],
-        alpha=0.7,
-        s=200,
+        legend=False,
+        **kws,
     )
 
     plot_scatter(
@@ -215,9 +220,6 @@ def visualize_efficiency(csv_path,  extension="png"):
         xlabel="Train Throughput (#/s, Log)",
         ys=df["Throughput (Eval)"].to_numpy(),
         ylabel="Eval Throughput (#/s, Log)",
-        path=FIGURE_PATH,
-        key="efficiency",
-        extension=extension,
 
         hues=df["Data structure"].to_numpy(), hue_name="Data structure",
         styles=df["Model"].to_numpy(), style_name="Model",
@@ -226,8 +228,8 @@ def visualize_efficiency(csv_path,  extension="png"):
         scales_kws={"yscale": "log", "xscale": "log"},
         xticks=[1e1, 1e2, 1e3, 1e4, 1e5],
         yticks=[1e1, 1e2, 1e3, 1e4, 1e5],
-        alpha=0.8,
-        s=200,
+        legend=False,
+        **kws,
     )
 
     plot_scatter(
@@ -235,9 +237,6 @@ def visualize_efficiency(csv_path,  extension="png"):
         xlabel="Train Latency (s/forward)",
         ys=df["Latency (Eval)"].to_numpy(),
         ylabel="Eval Latency (s/forward)",
-        path=FIGURE_PATH,
-        key="efficiency",
-        extension=extension,
 
         hues=df["Data structure"].to_numpy(), hue_name="Data structure",
         styles=df["Model"].to_numpy(), style_name="Model",
@@ -246,50 +245,9 @@ def visualize_efficiency(csv_path,  extension="png"):
         # scales_kws={"yscale": "log", "xscale": "log"},
         xticks=[0.0, 0.1, 0.2, 0.3, 0.4],
         yticks=[0.0, 0.05, 0.1, 0.15],
-        alpha=0.8,
-        s=200,
+        legend=False,
+        **kws,
     )
-
-    """
-    plot_scatter(
-        xs=df["Throughput (Train)"].to_numpy(),
-        xlabel="Throughput (Train)",
-        ys=df["Throughput (Eval)"].to_numpy(),
-        ylabel="Throughput (Eval)",
-        path=FIGURE_PATH,
-        key="efficiency_w_perf",
-        extension=extension,
-
-        hues=df["Data structure"].to_numpy(), hue_name="Data structure",
-        styles=df["Model"].to_numpy(), style_name="Model",
-        cols=df["Dataset"].to_numpy(), col_name="Dataset",
-        elm_sizes=df["Performance"].to_numpy(), elm_size_name="Performance",
-        scales_kws={"yscale": "log", "xscale": "log"},
-        xticks=[1e2, 1e3, 1e4, 1e5],
-        yticks=[1e2, 1e3, 1e4, 1e5],
-        alpha=0.8,
-        s=140,
-    )
-
-    plot_scatter(
-        xs=df["Throughput (Train)"].to_numpy(),
-        xlabel="Throughput (Train)",
-        ys=df["Performance"].to_numpy(),
-        ylabel="Performance",
-        path=FIGURE_PATH,
-        key="efficiency",
-        extension=extension,
-
-        hues=df["Data structure"].to_numpy(), hue_name="Data structure",
-        styles=df["Model"].to_numpy(), style_name="Model",
-        cols=df["Dataset"].to_numpy(), col_name="Dataset",
-        scales_kws={"xscale": "log"},
-        xticks=[1e2, 1e3, 1e4, 1e5],
-        yticks=[0.5, 0.6, 0.7, 0.8, 0.9],
-        alpha=0.8,
-        s=140,
-    )
-    """
 
 
 def visualize_efficiency_by_num_training(csv_path,  extension="png", dataset=None):
@@ -426,7 +384,7 @@ if __name__ == '__main__':
 
     # analyze_s2n_properties, visualize_s2n_properties,
     # visualize_efficiency, visualize_efficiency_by_num_training
-    METHOD = "visualize_efficiency_by_num_training"
+    METHOD = "visualize_efficiency"
 
     TARGETS = "REAL_WORLD"  # SYNTHETIC, REAL_WORLD, ALL
     if TARGETS == "REAL_WORLD":
