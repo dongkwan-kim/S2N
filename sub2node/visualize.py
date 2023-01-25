@@ -102,6 +102,7 @@ def plot_relplot(kind,
                  label_kws: Dict[str, Any] = None,
                  scales_kws: Dict[str, Any] = None,
                  xticks=None, yticks=None,
+                 tight_layout_kwargs: dict = None,
                  **kwargs):
 
     assert kind in ["scatter", "line"]
@@ -134,6 +135,10 @@ def plot_relplot(kind,
     if xticks is not None:
         plt.xticks(xticks)
 
+    if tight_layout_kwargs is not None:
+        # e.g., rect=[0, 0, 0.8, 1]
+        plt.tight_layout(**tight_layout_kwargs)
+
     plot_info = "_".join([k for k in [xlabel, ylabel, hue_name, style_name]
                           if k is not None])
     plot_info = plot_info.replace("/", "|").replace("#", "Num")
@@ -153,6 +158,7 @@ def plot_scatter(xs, ys, xlabel, ylabel,
                  label_kws: Dict[str, Any] = None,
                  scales_kws: Dict[str, Any] = None,
                  xticks=None, yticks=None,
+                 tight_layout_kwargs: dict = None,
                  **kwargs):
     plot_relplot("scatter", xs=xs, ys=ys, xlabel=xlabel, ylabel=ylabel,
                  path=path, key=key, extension=extension,
@@ -163,6 +169,7 @@ def plot_scatter(xs, ys, xlabel, ylabel,
                  label_kws= label_kws,
                  scales_kws = scales_kws,
                  xticks=xticks, yticks=yticks,
+                 tight_layout_kwargs=tight_layout_kwargs,
                  **kwargs)
 
 
@@ -175,6 +182,7 @@ def plot_line(xs, ys, xlabel, ylabel,
               label_kws: Dict[str, Any] = None,
               scales_kws: Dict[str, Any] = None,
               xticks=None, yticks=None,
+              tight_layout_kwargs: dict = None,
               **kwargs):
     plot_relplot("line", xs=xs, ys=ys, xlabel=xlabel, ylabel=ylabel,
                  path=path, key=key, extension=extension,
@@ -185,4 +193,5 @@ def plot_line(xs, ys, xlabel, ylabel,
                  label_kws= label_kws,
                  scales_kws = scales_kws,
                  xticks=xticks, yticks=yticks,
+                 tight_layout_kwargs=tight_layout_kwargs,
                  **kwargs)
