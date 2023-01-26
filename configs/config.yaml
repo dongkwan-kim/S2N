@@ -5,9 +5,9 @@ defaults:
   - config_sub.yaml  # args that can be overridden by below yamls
   - datamodule: s2n/wlks.yaml
     # s2n, separated, connected
-    # ppi_bp, hpo_metab, hpo_neuro, em_user, wlks, wl_er, density, cc, coreness, cut_ratio
+    # ppi_bp, hpo_metab, hpo_neuro, em_user, wlks
   - model: gcn/s2n/for-wlks.yaml
-    # gcn, gat, fa, gcn2, linkx, mlp
+    # fa, gat, gcn, gcn2, gin, linkx, sage
     # s2n, separated, connected
   - callbacks: checkpoint.yaml # set this to null if you don't want to use callbacks
     # checkpoint, efficiency
