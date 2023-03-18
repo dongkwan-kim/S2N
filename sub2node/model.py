@@ -10,7 +10,7 @@ from torch_geometric.data import Data
 from data import SubgraphDataModule
 from evaluator import Evaluator
 from model_linkx import InductiveLINKX
-from model_utils import GraphEncoder, VersatileEmbedding, MLP, DeepSets, Readout, GraphEncoderSequential
+from model_utils import GraphEncoder, VersatileEmbedding, MLP, DeepSets, Readout, GraphEncoderSequential, MyIdentity
 from run_utils import get_logger
 from utils import try_getattr, ld_to_dl, try_get_from_dict
 
@@ -68,7 +68,7 @@ class GraphNeuralModel(LightningModule):
         )
         if self.h.use_s2n:
             if self.h.sub_node_num_layers == 0:
-                encoder, decoder = nn.Identity(), nn.Identity()
+                encoder, decoder = MyIdentity(), MyIdentity()
                 in_channels = self.node_emb.num_channels
             else:
                 kws = dict(num_layers=self.h.sub_node_num_layers,
@@ -313,7 +313,7 @@ if __name__ == '__main__':
         weight_decay=1e-6,
         is_multi_labels=(NAME == "HPONeuro"),
         use_s2n=USE_S2N,
-        sub_node_num_layers=1,
+        sub_node_num_layers=0,
         use_bn=False,
         use_gn=True,
         use_skip=False,

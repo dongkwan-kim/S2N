@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from termcolor import cprint
 from torch import Tensor
-from torch.nn import Linear
+from torch.nn import Linear, Identity
 from torch_geometric.nn import (GCNConv, SAGEConv, GATConv, FAConv, GCN2Conv, WLConv, GINConv, GraphNorm,
                                 GlobalAttention)
 from torch_geometric.nn.glob import global_mean_pool, global_max_pool, global_add_pool
@@ -27,6 +27,15 @@ class EPSILON(object):
 
     def __radd__(self, other):
         return self.__add__(other)
+
+
+class MyIdentity(Identity):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def forward(self, x, *args, **kwargs):
+        return super(MyIdentity, self).forward(x)
 
 
 class MyLinear(Linear):
