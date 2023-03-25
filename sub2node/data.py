@@ -35,7 +35,7 @@ class SubgraphDataModule(LightningDataModule):
                  embedding_type: str,
                  use_s2n: bool,
                  edge_thres: Union[float, Callable, List[float]] = None,
-                 edge_normalize: Union[str, Callable, None] = None,
+                 post_edge_normalize: Union[str, Callable, None] = None,
                  s2n_target_matrix: str = None,
                  s2n_edge_aggr: Union[Callable[[Tensor], Tensor], str] = None,
                  s2n_is_weighted: bool = True,
@@ -144,9 +144,9 @@ class SubgraphDataModule(LightningDataModule):
                 undirected=True,
             )
             data_list = s2n.node_task_data_splits(
-                edge_normalize=self.h.edge_normalize,
-                edge_normalize_args=[getattr(self.h, f"edge_normalize_arg_{i}") for i in range(1, 3)
-                                     if getattr(self.h, f"edge_normalize_arg_{i}", None) is not None],
+                post_edge_normalize=self.h.post_edge_normalize,
+                post_edge_normalize_args=[getattr(self.h, f"post_edge_normalize_arg_{i}") for i in range(1, 3)
+                                          if getattr(self.h, f"post_edge_normalize_arg_{i}", None) is not None],
                 edge_thres=self.h.edge_thres,
                 use_consistent_processing=self.h.use_consistent_processing,
                 save=(not is_customized_split),
@@ -285,9 +285,9 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
         use_s2n=USE_S2N,
         edge_thres=0.0,
         use_consistent_processing=True,
-        edge_normalize="standardize_then_trunc_thres_max_linear",
-        edge_normalize_arg_1=0.0,
-        edge_normalize_arg_2=2.0,
+        post_edge_normalize="standardize_then_trunc_thres_max_linear",
+        post_edge_normalize_arg_1=0.0,
+        post_edge_normalize_arg_2=2.0,
         s2n_target_matrix="adjacent_no_self_loops",
         s2n_is_weighted=False,
         subgraph_batching=SUBGRAPH_BATCHING,

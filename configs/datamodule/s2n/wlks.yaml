@@ -8,9 +8,9 @@ dataset_name: "WLKSRandomTree"
 embedding_type: "no_embedding"
 
 use_s2n: True
-edge_normalize: "standardize_then_trunc_thres_max_linear"
-edge_normalize_arg_1: 0.000
-edge_normalize_arg_2: null
+post_edge_normalize: "standardize_then_trunc_thres_max_linear"
+post_edge_normalize_arg_1: 0.000
+post_edge_normalize_arg_2: null
 
 # Will be inherited to the trainer, model
 _max_epochs: 500

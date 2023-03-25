@@ -188,8 +188,8 @@ class SubgraphToNode:
         return 1 / (sub_spl_mat + 1)
 
     def node_task_data_splits(self,
-                              edge_normalize: Union[str, Callable, None] = None,
-                              edge_normalize_args: Union[List, None] = None,
+                              post_edge_normalize: Union[str, Callable, None] = None,
+                              post_edge_normalize_args: Union[List, None] = None,
                               edge_thres: Union[float, Callable, List[float]] = 1.0,
                               use_consistent_processing=False,
                               save=True, load=True) -> Tuple[Data, Data, Data]:
@@ -198,12 +198,14 @@ class SubgraphToNode:
             - N is the number of subgraphs = batch.sum()
             - edge_attr >= edge_thres
         """
-        edge_normalize_args = edge_normalize_args or []
-        if isinstance(edge_normalize, str):
-            edge_normalize = func_normalize(edge_normalize, *edge_normalize_args)
+        post_edge_normalize_args = post_edge_normalize_args or []
+        if isinstance(post_edge_normalize, str):
+            post_edge_normalize = func_normalize(post_edge_normalize, *post_edge_normalize_args)
         str_et = edge_thres.__name__ if isinstance(edge_thres, Callable) else edge_thres
-        str_en = '-'.join([edge_normalize.__name__ if isinstance(edge_normalize, Callable) else edge_normalize] +
-                          [str(round(a, 3)) for a in edge_normalize_args])  # todo: general repr for args
+        str_en = '-'.join(
+            [post_edge_normalize.__name__ if isinstance(post_edge_normalize, Callable) else post_edge_normalize] +
+            [str(round(a, 3)) for a in post_edge_normalize_args]  # todo: general repr for args
+        )
         path = self.path / (f"{self.node_task_name}_node_task_data"
                             f"_et={str_et}_en={str_en}_ucp={use_consistent_processing}.pth")
         try:
@@ -240,11 +242,11 @@ class SubgraphToNode:
                 self.print_mat_stat(ew_mat, "Summarizing edge_weight_matrix")
 
             ew_mat_s_by_s = ew_mat.clone()[:s, :s]
-            if edge_normalize is not None:
+            if post_edge_normalize is not None:
                 if use_consistent_processing:
-                    ew_mat_s_by_s, edge_norm_kws = edge_normalize(ew_mat_s_by_s, **edge_norm_kws)
+                    ew_mat_s_by_s, edge_norm_kws = post_edge_normalize(ew_mat_s_by_s, **edge_norm_kws)
                 else:
-                    ew_mat_s_by_s, edge_norm_kws = edge_normalize(ew_mat_s_by_s)
+                    ew_mat_s_by_s, edge_norm_kws = post_edge_normalize(ew_mat_s_by_s)
             # Remove ew_mat below than edge_thres
             et = et(ew_mat_s_by_s) if isinstance(et, Callable) else et
             ew_mat_s_by_s[ew_mat_s_by_s < et] = 0
@@ -382,8 +384,8 @@ if __name__ == '__main__':
             for i in [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75,
                       2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
                 ntds = s2n.node_task_data_splits(
-                    edge_normalize="standardize_then_thres_max_linear",
-                    edge_normalize_args=[i],
+                    post_edge_normalize="standardize_then_thres_max_linear",
+                    post_edge_normalize_args=[i],
                     edge_thres=0.0,
                     use_consistent_processing=True,
                     save=True,
@@ -397,8 +399,8 @@ if __name__ == '__main__':
                       2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
                 for j in [0.5, 1.0, 1.5, 2.0]:
                     ntds = s2n.node_task_data_splits(
-                        edge_normalize="standardize_then_trunc_thres_max_linear",
-                        edge_normalize_args=[i, j],
+                        post_edge_normalize="standardize_then_trunc_thres_max_linear",
+                        post_edge_normalize_args=[i, j],
                         edge_thres=0.0,
                         use_consistent_processing=True,
                         save=True,
@@ -408,8 +410,8 @@ if __name__ == '__main__':
                     s2n._node_task_data_list = []  # flush
         elif PURPOSE == "ONCE":
             ntds = s2n.node_task_data_splits(
-                edge_normalize="standardize_then_thres_max_linear",
-                edge_normalize_args=[0.314],
+                post_edge_normalize="standardize_then_thres_max_linear",
+                post_edge_normalize_args=[0.314],
                 edge_thres=0.0,
                 use_consistent_processing=False,
                 save=True,

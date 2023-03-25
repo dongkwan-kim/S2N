@@ -75,7 +75,7 @@ def analyze_s2n_properties(dataset_path, dataset_and_model_name_list: List[Tuple
             use_s2n=True,
             edge_thres=0.0,
             use_consistent_processing=True,
-            edge_normalize="standardize_then_trunc_thres_max_linear",
+            post_edge_normalize="standardize_then_trunc_thres_max_linear",
             # edge_normalize_arg_1=0.75,
             # edge_normalize_arg_2=1.0,
             # s2n_target_matrix="adjacent_no_self_loops",

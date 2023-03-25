@@ -42,12 +42,12 @@ hydra:
     # https://hydra.cc/docs/plugins/optuna_sweeper/
     # https://github.com/facebookresearch/hydra/blob/02495f9c781615e2fe7ae5588e16f596fcec010c/plugins/hydra_optuna_sweeper/tests/test_optuna_sweeper_plugin.py#L49
     search_space:
-      datamodule.edge_normalize_arg_1:
+      datamodule.post_edge_normalize_arg_1:
         type: float
         low: 0.0
         high: 4.0
         step: 0.25
-      datamodule.edge_normalize_arg_2:
+      datamodule.post_edge_normalize_arg_2:
         type: float
         low: 0.5
         high: 2.0
