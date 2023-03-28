@@ -34,6 +34,7 @@ class SubgraphDataModule(LightningDataModule):
                  dataset_path: str,
                  embedding_type: str,
                  use_s2n: bool,
+                 s2n_mapping_matrix_type: str = None,
                  edge_thres: Union[float, Callable, List[float]] = None,
                  post_edge_normalize: Union[str, Callable, None] = None,
                  s2n_target_matrix: str = None,
@@ -144,6 +145,7 @@ class SubgraphDataModule(LightningDataModule):
                 undirected=True,
             )
             data_list = s2n.node_task_data_splits(
+                mapping_matrix_type=self.h.s2n_mapping_matrix_type,
                 post_edge_normalize=self.h.post_edge_normalize,
                 post_edge_normalize_args=[getattr(self.h, f"post_edge_normalize_arg_{i}") for i in range(1, 3)
                                           if getattr(self.h, f"post_edge_normalize_arg_{i}", None) is not None],
@@ -283,11 +285,12 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
         dataset_path=PATH,
         embedding_type=E_TYPE,
         use_s2n=USE_S2N,
+        s2n_mapping_matrix_type="sqrt_d_node_div_d_sub",
         edge_thres=0.0,
         use_consistent_processing=True,
-        post_edge_normalize="standardize_then_trunc_thres_max_linear",
-        post_edge_normalize_arg_1=0.0,
-        post_edge_normalize_arg_2=2.0,
+        post_edge_normalize="clamp_1",
+        # post_edge_normalize_arg_1=0.0,
+        # post_edge_normalize_arg_2=2.0,
         s2n_target_matrix="adjacent_no_self_loops",
         s2n_is_weighted=False,
         subgraph_batching=SUBGRAPH_BATCHING,
@@ -312,7 +315,7 @@ if __name__ == '__main__':
     # Density, CC, Coreness, CutRatio
     _sdm = get_subgraph_datamodule_for_test(
         name="PPIBP",
-        custom_splits=[0.5, 0.1, 0.1],
+        # custom_splits=[0.5, 0.1, 0.1],
     )
 
     print(_sdm)
