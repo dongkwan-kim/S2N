@@ -122,76 +122,6 @@ class SubgraphToNode:
             cprint(f"Saved: tensor of {self._node_spl_mat.size()} at {path}", "blue")
         return self._node_spl_mat
 
-    def node_task_data_precursor(self, matrix_type=None, save=True):
-        path = self.path / f"{self.node_task_name}_node_task_data_mmt={matrix_type}_precursor.pth"
-        try:
-            self._node_task_data_precursor = torch.load(path)
-            cprint(f"Load: {self._node_task_data_precursor} at {path}", "green")
-            return self._node_task_data_precursor
-        except FileNotFoundError:
-            pass
-
-        # Node aggregation: x, y, batch, ...
-        # DataBatch(x=[16236, 1], y=[1591], split=[1591], batch=[16236], ptr=[1592])
-        self._node_task_data_precursor = Batch.from_data_list(self.subgraph_data_list)
-        del self._node_task_data_precursor.edge_index
-
-        # Edge aggregation
-        if self.target_matrix.startswith("adjacent"):
-            self._node_task_data_precursor.edge_weight_matrix = self.get_ewmat_by_multiplying_adj(matrix_type)
-        elif self.target_matrix == "shortest_path":
-            self._node_task_data_precursor.edge_weight_matrix = self.get_ewmat_by_aggregating_sub_spl_mat(save)
-
-        if save:
-            torch.save(self._node_task_data_precursor, path)
-            cprint(f"Saved: {self._node_task_data_precursor} at {path}", "blue")
-
-        return self._node_task_data_precursor
-
-    def get_ewmat_by_multiplying_adj(self, matrix_type):
-        # Adjacent matrix A (nxn)
-        if self.target_matrix == "adjacent_with_self_loops":
-            a_index, _ = add_remaining_self_loops(self.global_data.edge_index)
-        elif self.target_matrix == "adjacent_no_self_loops":
-            a_index, _ = remove_self_loops(self.global_data.edge_index)
-        else:
-            a_index = self.global_data.edge_index
-
-        a_value = torch.ones(a_index.size(1))
-
-        # Mapping matrix M (sxn) construction
-        # batch = subgraph ids, x = node ids
-        m_index, m_value = self.get_sparse_mapping_matrix_sxn(
-            matrix_type=matrix_type,
-            sub_x=self._node_task_data_precursor.x.squeeze(-1),
-            sub_batch=self._node_task_data_precursor.batch,
-            global_edge_index=a_index,
-        )
-
-        # unnormalized_ewmat = M * A * M^T
-        unnorm_ewmat_index, unnorm_ewmat_value = spspmm_quad(
-            m_index, m_value, a_index, a_value, self.S, self.N, coalesced=True)
-        dense_unnorm_ewmat = to_dense_adj(
-            unnorm_ewmat_index, edge_attr=unnorm_ewmat_value).squeeze()
-        return dense_unnorm_ewmat
-
-    def get_ewmat_by_aggregating_sub_spl_mat(self, save):
-        # sub_spl_ij = min { d_uv | u \in S_i, v in S_j }
-        node_spl_mat = self.node_spl_mat(save).float()
-        sub_spl_mat = torch.full((self.S, self.S), fill_value=-1)
-        for i, sub_data_i in enumerate(tqdm(self.subgraph_data_list,
-                                            desc="get_ewmat_by_aggregating_sub_spl_mat")):
-            for j, sub_data_j in enumerate(self.subgraph_data_list):
-                if self.undirected and i <= j:
-                    x_i = sub_data_i.x.squeeze(-1)
-                    x_j = sub_data_j.x.squeeze(-1)
-                    sub_spl = self.edge_aggr(node_spl_mat[x_i, :][:, x_j])
-                    sub_spl_mat[i, j] = sub_spl
-                    sub_spl_mat[j, i] = sub_spl
-
-        # edge = 1 / (spl + 1) where 0 <= spl, then 0 < edge <= 1
-        return 1 / (sub_spl_mat + 1)
-
     def get_sparse_mapping_matrix_sxn(self,
                                       matrix_type: str,
                                       sub_x, sub_batch,
@@ -252,6 +182,76 @@ class SubgraphToNode:
 
         else:
             raise ValueError(f"Wrong matrix_type: {matrix_type}")
+
+    def get_ewmat_by_multiplying_adj(self, matrix_type):
+        # Adjacent matrix A (nxn)
+        if self.target_matrix == "adjacent_with_self_loops":
+            a_index, _ = add_remaining_self_loops(self.global_data.edge_index)
+        elif self.target_matrix == "adjacent_no_self_loops":
+            a_index, _ = remove_self_loops(self.global_data.edge_index)
+        else:
+            a_index = self.global_data.edge_index
+
+        a_value = torch.ones(a_index.size(1))
+
+        # Mapping matrix M (sxn) construction
+        # batch = subgraph ids, x = node ids
+        m_index, m_value = self.get_sparse_mapping_matrix_sxn(
+            matrix_type=matrix_type,
+            sub_x=self._node_task_data_precursor.x.squeeze(-1),
+            sub_batch=self._node_task_data_precursor.batch,
+            global_edge_index=a_index,
+        )
+
+        # unnormalized_ewmat = M * A * M^T
+        unnorm_ewmat_index, unnorm_ewmat_value = spspmm_quad(
+            m_index, m_value, a_index, a_value, self.S, self.N, coalesced=True)
+        dense_unnorm_ewmat = to_dense_adj(
+            unnorm_ewmat_index, edge_attr=unnorm_ewmat_value).squeeze()
+        return dense_unnorm_ewmat
+
+    def get_ewmat_by_aggregating_sub_spl_mat(self, save):
+        # sub_spl_ij = min { d_uv | u \in S_i, v in S_j }
+        node_spl_mat = self.node_spl_mat(save).float()
+        sub_spl_mat = torch.full((self.S, self.S), fill_value=-1)
+        for i, sub_data_i in enumerate(tqdm(self.subgraph_data_list,
+                                            desc="get_ewmat_by_aggregating_sub_spl_mat")):
+            for j, sub_data_j in enumerate(self.subgraph_data_list):
+                if self.undirected and i <= j:
+                    x_i = sub_data_i.x.squeeze(-1)
+                    x_j = sub_data_j.x.squeeze(-1)
+                    sub_spl = self.edge_aggr(node_spl_mat[x_i, :][:, x_j])
+                    sub_spl_mat[i, j] = sub_spl
+                    sub_spl_mat[j, i] = sub_spl
+
+        # edge = 1 / (spl + 1) where 0 <= spl, then 0 < edge <= 1
+        return 1 / (sub_spl_mat + 1)
+
+    def node_task_data_precursor(self, matrix_type=None, save=True):
+        path = self.path / f"{self.node_task_name}_node_task_data_mmt={matrix_type}_precursor.pth"
+        try:
+            self._node_task_data_precursor = torch.load(path)
+            cprint(f"Load: {self._node_task_data_precursor} at {path}", "green")
+            return self._node_task_data_precursor
+        except FileNotFoundError:
+            pass
+
+        # Node aggregation: x, y, batch, ...
+        # DataBatch(x=[16236, 1], y=[1591], split=[1591], batch=[16236], ptr=[1592])
+        self._node_task_data_precursor = Batch.from_data_list(self.subgraph_data_list)
+        del self._node_task_data_precursor.edge_index
+
+        # Edge aggregation
+        if self.target_matrix.startswith("adjacent"):
+            self._node_task_data_precursor.edge_weight_matrix = self.get_ewmat_by_multiplying_adj(matrix_type)
+        elif self.target_matrix == "shortest_path":
+            self._node_task_data_precursor.edge_weight_matrix = self.get_ewmat_by_aggregating_sub_spl_mat(save)
+
+        if save:
+            torch.save(self._node_task_data_precursor, path)
+            cprint(f"Saved: {self._node_task_data_precursor} at {path}", "blue")
+
+        return self._node_task_data_precursor
 
     def node_task_data_splits(self,
                               mapping_matrix_type: str = None,
