@@ -6,13 +6,14 @@ from pprint import pprint
 from typing import List, Callable, Union, Tuple, Dict
 
 import numpy as np
+import torch_sparse
 from termcolor import cprint
 import networkx as nx
 import torch
 from torch import Tensor
 from torch_geometric.data import Data, Batch
 from torch_geometric.utils import (to_networkx, from_networkx, is_undirected, dense_to_sparse,
-                                   add_remaining_self_loops, remove_self_loops, to_dense_adj)
+                                   add_remaining_self_loops, remove_self_loops, to_dense_adj, degree)
 from tqdm import tqdm
 
 from utils import to_symmetric_matrix, try_getattr, spspmm_quad
@@ -121,8 +122,8 @@ class SubgraphToNode:
             cprint(f"Saved: tensor of {self._node_spl_mat.size()} at {path}", "blue")
         return self._node_spl_mat
 
-    def node_task_data_precursor(self, save=True):
-        path = self.path / f"{self.node_task_name}_node_task_data_precursor.pth"
+    def node_task_data_precursor(self, matrix_type=None, save=True):
+        path = self.path / f"{self.node_task_name}_node_task_data_mmt={matrix_type}_precursor.pth"
         try:
             self._node_task_data_precursor = torch.load(path)
             cprint(f"Load: {self._node_task_data_precursor} at {path}", "green")
@@ -137,7 +138,7 @@ class SubgraphToNode:
 
         # Edge aggregation
         if self.target_matrix.startswith("adjacent"):
-            self._node_task_data_precursor.edge_weight_matrix = self.get_ewmat_by_multiplying_adj()
+            self._node_task_data_precursor.edge_weight_matrix = self.get_ewmat_by_multiplying_adj(matrix_type)
         elif self.target_matrix == "shortest_path":
             self._node_task_data_precursor.edge_weight_matrix = self.get_ewmat_by_aggregating_sub_spl_mat(save)
 
@@ -147,11 +148,7 @@ class SubgraphToNode:
 
         return self._node_task_data_precursor
 
-    def get_ewmat_by_multiplying_adj(self):
-        # Mapping matrix M (sxn) construction
-        # batch = subgraph ids, x = node ids
-        m_index = torch.stack([self._node_task_data_precursor.batch,
-                               self._node_task_data_precursor.x.squeeze(-1)]).long()
+    def get_ewmat_by_multiplying_adj(self, matrix_type):
         # Adjacent matrix A (nxn)
         if self.target_matrix == "adjacent_with_self_loops":
             a_index, _ = add_remaining_self_loops(self.global_data.edge_index)
@@ -160,8 +157,16 @@ class SubgraphToNode:
         else:
             a_index = self.global_data.edge_index
 
-        m_value = torch.ones(m_index.size(1))
         a_value = torch.ones(a_index.size(1))
+
+        # Mapping matrix M (sxn) construction
+        # batch = subgraph ids, x = node ids
+        m_index, m_value = self.get_sparse_mapping_matrix_sxn(
+            matrix_type=matrix_type,
+            sub_x=self._node_task_data_precursor.x.squeeze(-1),
+            sub_batch=self._node_task_data_precursor.batch,
+            global_edge_index=a_index,
+        )
 
         # unnormalized_ewmat = M * A * M^T
         unnorm_ewmat_index, unnorm_ewmat_value = spspmm_quad(
@@ -187,7 +192,69 @@ class SubgraphToNode:
         # edge = 1 / (spl + 1) where 0 <= spl, then 0 < edge <= 1
         return 1 / (sub_spl_mat + 1)
 
+    def get_sparse_mapping_matrix_sxn(self,
+                                      matrix_type: str,
+                                      sub_x, sub_batch,
+                                      global_edge_index=None,
+                                      summarized_edge_index=None):
+        """
+        :param matrix_type: See if clauses.
+        :param sub_x: x_ids of all subgraphs as a Tensor of [sum |V_i|, 1]
+        :param sub_batch: subgraph_ids of x_ids in a batch form as a Tensor of [sum |V_i|, 1]
+        :param global_edge_index: edge_index of global graph as a Tensor of [2, E]
+        :param summarized_edge_index: edge_index of summarized graph as a Tensor of [2, E_s]
+        :return: an index and value tensor tuple of a sparse matrix where the size is [S, N]
+        """
+        # Originally,
+        # Mapping matrix M (sxn) construction
+        # batch = subgraph ids, x = node ids
+        # m_index = torch.stack([self._node_task_data_precursor.batch,
+        #                        self._node_task_data_precursor.x.squeeze(-1)]).long()
+        m_index = torch.stack([sub_batch, sub_x]).long()
+        m_value = torch.ones(m_index.size(1))
+
+        if matrix_type == "unnormalized":
+            return m_index, m_value
+
+        # M[s, n] = sqrt( d_n / d_s )
+        elif matrix_type == "sqrt_d_node_div_d_sub":
+            if summarized_edge_index is None:
+                global_edge_value = torch.ones(global_edge_index.size(1))
+                summarized_edge_index, _ = spspmm_quad(
+                    m_index, m_value, global_edge_index, global_edge_value, self.S, self.N, coalesced=True)
+
+            d_index_s = torch.stack([torch.arange(self.S), torch.arange(self.S)])
+            d_index_n = torch.stack([torch.arange(self.N), torch.arange(self.N)])
+            d_value_s = 1 / torch.sqrt(degree(summarized_edge_index[0], num_nodes=self.S))
+            d_value_n = torch.sqrt(degree(global_edge_index[0], num_nodes=self.N))
+
+            # (s, s) * (s, n) --> (s, n)
+            dsm_index, dsm_value = torch_sparse.spspmm(
+                d_index_s, d_value_s, m_index, m_value, self.S, self.S, self.N, coalesced=True)
+
+            # (s, n) * (n, n) --> (s, n)
+            dsmdn_index, dsmdn_value = torch_sparse.spspmm(
+                dsm_index, dsm_value, d_index_n, d_value_n, self.S, self.N, self.N, coalesced=True)
+
+            return dsmdn_index, dsmdn_value
+
+        # M[s, n] = 1 / #nodes_s
+        elif matrix_type == "1_div_sqrt_num_nodes_in_sub":
+            # num_nodes_per_subgraph
+            nps_index_s = torch.stack([torch.arange(self.S), torch.arange(self.S)])
+            nps_value_s = 1 / torch.sqrt(degree(sub_batch, num_nodes=self.S))
+
+            # (s, s) * (s, n) --> (s, n)
+            npsm_index, npsm_value = torch_sparse.spspmm(
+                nps_index_s, nps_value_s, m_index, m_value, self.S, self.S, self.N, coalesced=True)
+
+            return npsm_index, npsm_value
+
+        else:
+            raise ValueError(f"Wrong matrix_type: {matrix_type}")
+
     def node_task_data_splits(self,
+                              mapping_matrix_type: str = None,
                               post_edge_normalize: Union[str, Callable, None] = None,
                               post_edge_normalize_args: Union[List, None] = None,
                               edge_thres: Union[float, Callable, List[float]] = 1.0,
@@ -205,9 +272,10 @@ class SubgraphToNode:
         str_en = '-'.join(
             [post_edge_normalize.__name__ if isinstance(post_edge_normalize, Callable) else post_edge_normalize] +
             [str(round(a, 3)) for a in post_edge_normalize_args]  # todo: general repr for args
-        )
+        ) if post_edge_normalize is not None else None
+
         path = self.path / (f"{self.node_task_name}_node_task_data"
-                            f"_et={str_et}_en={str_en}_ucp={use_consistent_processing}.pth")
+                            f"_mmt={mapping_matrix_type}_et={str_et}_en={str_en}_ucp={use_consistent_processing}.pth")
         try:
             if load:
                 self._node_task_data_list = torch.load(path)
@@ -220,7 +288,7 @@ class SubgraphToNode:
             edge_thres = [edge_thres, edge_thres, edge_thres]
         assert len(edge_thres) == len(self.splits)
 
-        node_task_data_precursor = self.node_task_data_precursor(save)
+        node_task_data_precursor = self.node_task_data_precursor(mapping_matrix_type, save)
         ew_mat = node_task_data_precursor.edge_weight_matrix
 
         edge_norm_kws = {}
@@ -334,6 +402,8 @@ def func_normalize(normalize_type: str, *args):
             thres, p = args[0], args[1]
             matrix = (matrix - kws["mean"]) / kws["std"]
             matrix = (matrix.relu_() ** p - thres ** p) / (kws["max"] ** p - thres ** p)
+        elif normalize_type == "clamp_1":
+            matrix[matrix >= 1.] = 1.
         else:
             raise ValueError(f"Wrong type: {normalize_type}")
         return matrix, kws
@@ -347,7 +417,7 @@ if __name__ == '__main__':
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, CC, Coreness, CutRatio
 
-    MODE = "EMUser"
+    MODE = "PPIBP"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
     PURPOSE = "MANY_2"
@@ -384,6 +454,7 @@ if __name__ == '__main__':
             for i in [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75,
                       2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
                 ntds = s2n.node_task_data_splits(
+                    mapping_matrix_type=None,
                     post_edge_normalize="standardize_then_thres_max_linear",
                     post_edge_normalize_args=[i],
                     edge_thres=0.0,
@@ -399,7 +470,8 @@ if __name__ == '__main__':
                       2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
                 for j in [0.5, 1.0, 1.5, 2.0]:
                     ntds = s2n.node_task_data_splits(
-                        post_edge_normalize="standardize_then_trunc_thres_max_linear",
+                        mapping_matrix_type="sqrt_d_node_div_d_sub",
+                        post_edge_normalize="clamp_1",
                         post_edge_normalize_args=[i, j],
                         edge_thres=0.0,
                         use_consistent_processing=True,
@@ -410,6 +482,7 @@ if __name__ == '__main__':
                     s2n._node_task_data_list = []  # flush
         elif PURPOSE == "ONCE":
             ntds = s2n.node_task_data_splits(
+                mapping_matrix_type=None,
                 post_edge_normalize="standardize_then_thres_max_linear",
                 post_edge_normalize_args=[0.314],
                 edge_thres=0.0,
@@ -420,39 +493,3 @@ if __name__ == '__main__':
                 print(_d, "density", _d.edge_index.size(1) / (_d.num_nodes ** 2))
         else:
             raise ValueError(f"Wrong purpose: {PURPOSE}")
-
-    elif MODE == "TEST":
-        # Probably deprecated snippets
-        _global_data = from_networkx(nx.path_graph(10))
-        _subgraph_data_list = [
-            Data(x=torch.Tensor([0, 1]).long().view(-1, 1),
-                 edge_index=torch.Tensor([[0, 1],
-                                          [1, 0]]).long(),
-                 y=torch.Tensor([0])),
-            Data(x=torch.Tensor([1, 2, 4, 5]).long().view(-1, 1),
-                 edge_index=torch.Tensor([[1, 2, 4, 5],
-                                          [2, 1, 5, 4]]).long(),
-                 y=torch.Tensor([1])),
-            Data(x=torch.Tensor([8, 9]).long().view(-1, 1),
-                 edge_index=torch.Tensor([[8, 9], [9, 8]]).long(),
-                 y=torch.Tensor([2])),
-        ]
-
-        s2n = SubgraphToNode(
-            _global_data, _subgraph_data_list,
-            name="test",
-            path="./",
-            undirected=True,
-            splits=[1, 2],
-            edge_aggr=torch.mean,
-        )
-        ntds = s2n.node_task_data_splits(
-            # 0.25,
-            func_topk_thres(0.25),
-            save=False,
-        )
-        pprint(ntds)
-        print(ntds[-2].eval_mask)
-        print(ntds[-1].eval_mask)
-        for _d in ntds:
-            print(_d, "density", _d.edge_index.size(1) / (_d.num_nodes ** 2))
