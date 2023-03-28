@@ -168,7 +168,7 @@ class SubgraphToNode:
 
             return dsmdn_index, dsmdn_value
 
-        # M[s, n] = 1 / #nodes_s
+        # M[s, n] = 1 / sqrt( #nodes_s )
         elif matrix_type == "1_div_sqrt_num_nodes_in_sub":
             # num_nodes_per_subgraph
             nps_index_s = torch.stack([torch.arange(self.S), torch.arange(self.S)])
