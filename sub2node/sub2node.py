@@ -13,7 +13,7 @@ import torch
 from torch import Tensor
 from torch_geometric.data import Data, Batch
 from torch_geometric.utils import (to_networkx, from_networkx, is_undirected, dense_to_sparse,
-                                   add_remaining_self_loops, remove_self_loops, to_dense_adj, degree)
+                                   add_remaining_self_loops, remove_self_loops, to_dense_adj, degree, coalesce)
 from tqdm import tqdm
 
 from utils import to_symmetric_matrix, try_getattr, spspmm_quad
@@ -61,6 +61,7 @@ class SubgraphToNode:
         assert len(self.splits) == 3
         self.path.mkdir(exist_ok=True)
         self._node_task_data_list: List[Data] = []
+        self._mapping_matrix_value = None
 
     def __repr__(self):
         return f"{self.__class__.__name__}(name='{self.node_task_name}', path='{self.path}')"
@@ -202,6 +203,8 @@ class SubgraphToNode:
             sub_batch=self._node_task_data_precursor.batch,
             global_edge_index=a_index,
         )
+        if matrix_type != "unnormalized":
+            self._mapping_matrix_value = m_value
 
         # unnormalized_ewmat = M * A * M^T
         unnorm_ewmat_index, unnorm_ewmat_value = spspmm_quad(
@@ -240,6 +243,10 @@ class SubgraphToNode:
         # DataBatch(x=[16236, 1], y=[1591], split=[1591], batch=[16236], ptr=[1592])
         self._node_task_data_precursor = Batch.from_data_list(self.subgraph_data_list)
         del self._node_task_data_precursor.edge_index
+        # Row-wise sorting for using mapping_matrix_values without indices.
+        batch, x = coalesce(torch.stack([self._node_task_data_precursor.batch,
+                                         self._node_task_data_precursor.x.squeeze()]))
+        self._node_task_data_precursor.batch, self._node_task_data_precursor.x = batch, x.unsqueeze(1)
 
         # Edge aggregation
         if self.target_matrix.startswith("adjacent"):
@@ -292,6 +299,7 @@ class SubgraphToNode:
         ew_mat = node_task_data_precursor.edge_weight_matrix
 
         edge_norm_kws = {}
+        sub_x_weight = None
         for i, (s, et) in enumerate(zip(self.splits, edge_thres)):
             x, y, batch, ptr = try_getattr(node_task_data_precursor,
                                            ["x", "y", "batch", "ptr"], as_dict=False)
@@ -300,6 +308,8 @@ class SubgraphToNode:
             sub_batch = batch[ptr[s_0]:ptr[s_1]]
             sub_batch = sub_batch - sub_batch.min()  # if ptr[s_0] is not 0, sub_batch can be > 0.
             y = y[s_0:s_1]
+            if self._mapping_matrix_value is not None:
+                sub_x_weight = self._mapping_matrix_value[ptr[s_0]:ptr[s_1]]
 
             num_nodes = y.size(0)
             eval_mask = None
@@ -322,7 +332,8 @@ class SubgraphToNode:
 
             edge_index, edge_attr = dense_to_sparse(ew_mat_s_by_s)
             self._node_task_data_list.append(Data(
-                sub_x=sub_x, sub_batch=sub_batch, y=y, eval_mask=eval_mask,
+                sub_x=sub_x, sub_batch=sub_batch, sub_x_weight=sub_x_weight,
+                y=y, eval_mask=eval_mask,
                 edge_index=edge_index, edge_attr=edge_attr.view(-1, 1),
                 num_nodes=num_nodes,
             ))

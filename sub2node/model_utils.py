@@ -679,8 +679,10 @@ class DeepSets(nn.Module):
         else:
             return self.att(x, batch)
 
-    def forward(self, x, batch=None, *args, **kwargs):
+    def forward(self, x, batch=None, x_weight=None, *args, **kwargs):
         x = self.encoder(x, batch)
+        if x_weight is not None:
+            x = torch.einsum("n,nf->nf", x_weight, x)
         x = self.aggregate(x, batch)
         x = self.decoder(x)  # batch is not matched for decoder.
         return x

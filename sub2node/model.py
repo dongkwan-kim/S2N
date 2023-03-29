@@ -1,3 +1,4 @@
+from pprint import pprint
 from typing import Dict, Union, Any, List
 
 import torch
@@ -150,7 +151,7 @@ class GraphNeuralModel(LightningModule):
             self.loss = nn.BCEWithLogitsLoss()
         self.evaluator = Evaluator(self.h.metrics, self.h.is_multi_labels)
 
-    def forward(self, x=None, batch=None, sub_x=None, sub_batch=None,
+    def forward(self, x=None, batch=None, sub_x=None, sub_batch=None, sub_x_weight=None,
                 edge_index=None, edge_attr=None, adj_t=None, x_to_xs=None):
 
         if self.dh.replace_x_with_wl4pattern:
@@ -158,7 +159,7 @@ class GraphNeuralModel(LightningModule):
 
         if sub_x is not None:
             sub_x = self.node_emb(sub_x)
-            x = self.sub_node_encoder(sub_x, sub_batch)
+            x = self.sub_node_encoder(sub_x, sub_batch, sub_x_weight)
         else:
             x = self.node_emb(x)
 
@@ -173,7 +174,8 @@ class GraphNeuralModel(LightningModule):
 
     def step(self, batch: Data, batch_idx: int):
         step_kws = try_getattr(
-            batch, ["x", "batch", "sub_x", "sub_batch", "edge_index", "edge_attr", "adj_t", "x_to_xs"])
+            batch, ["x", "batch", "sub_x", "sub_batch", "sub_x_weight",
+                    "edge_index", "edge_attr", "adj_t", "x_to_xs"])
         logits = self.forward(**step_kws)
 
         eval_mask = getattr(batch, "eval_mask", None)
@@ -235,7 +237,7 @@ if __name__ == '__main__':
         print(_kv_dict)
 
 
-    NAME = "PPIBP"
+    NAME = "EMUser"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
 
@@ -288,11 +290,12 @@ if __name__ == '__main__':
         dataset_path=PATH,
         embedding_type=E_TYPE,
         use_s2n=USE_S2N,
+        s2n_mapping_matrix_type="sqrt_d_node_div_d_sub",
         edge_thres=0.0,
         use_consistent_processing=True,
-        post_edge_normalize="standardize_then_trunc_thres_max_linear",
-        post_edge_normalize_arg_1=0.0,
-        post_edge_normalize_arg_2=2.0,
+        post_edge_normalize="clamp_1",
+        # post_edge_normalize_arg_1=0.0,
+        # post_edge_normalize_arg_2=2.0,
         s2n_target_matrix="adjacent_no_self_loops",
         s2n_is_weighted=True,
         subgraph_batching=SUBGRAPH_BATCHING,
