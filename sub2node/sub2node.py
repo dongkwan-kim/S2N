@@ -394,6 +394,8 @@ def func_normalize(normalize_type: str, *args):
         if len(kws) == 0:
             kws = {"mean": torch.mean(matrix),
                    "std": torch.std(matrix),
+                   "mean_pos": torch.mean(matrix[matrix > 0]),
+                   "std_pos": torch.std(matrix[matrix > 0]),
                    "max": torch.max(matrix)}
         if normalize_type == "standardize_then_thres_max_linear":
             assert len(args) == 1, f"Wrong args: {args}"
@@ -415,6 +417,11 @@ def func_normalize(normalize_type: str, *args):
             matrix = (matrix.relu_() ** p - thres ** p) / (kws["max"] ** p - thres ** p)
         elif normalize_type == "clamp_1":
             matrix[matrix >= 1.] = 1.
+        elif normalize_type == "cut_mean_pos_k_std_pos_and_clamp_1":
+            k = args[0]
+            mean_k_std = kws["mean_pos"] + k * kws["std_pos"]
+            matrix[matrix <= mean_k_std] = 0.
+            matrix[matrix >= 1.] = 1.
         else:
             raise ValueError(f"Wrong type: {normalize_type}")
         return matrix, kws
@@ -428,10 +435,10 @@ if __name__ == '__main__':
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, CC, Coreness, CutRatio
 
-    MODE = "PPIBP"
+    MODE = "HPONeuro"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
-    PURPOSE = "MANY_2"
+    PURPOSE = "MANY_3"
     # MANY, ONCE
     TARGET_MATRIX = "adjacent_with_self_loops"
     # adjacent_with_self_loops, adjacent_no_self_loops
@@ -465,7 +472,7 @@ if __name__ == '__main__':
             for i in [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75,
                       2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
                 ntds = s2n.node_task_data_splits(
-                    mapping_matrix_type=None,
+                    mapping_matrix_type="unnormalized",
                     post_edge_normalize="standardize_then_thres_max_linear",
                     post_edge_normalize_args=[i],
                     edge_thres=0.0,
@@ -481,8 +488,8 @@ if __name__ == '__main__':
                       2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
                 for j in [0.5, 1.0, 1.5, 2.0]:
                     ntds = s2n.node_task_data_splits(
-                        mapping_matrix_type="sqrt_d_node_div_d_sub",
-                        post_edge_normalize="clamp_1",
+                        mapping_matrix_type="unnormalized",
+                        post_edge_normalize="standardize_then_trunc_thres_max_linear",
                         post_edge_normalize_args=[i, j],
                         edge_thres=0.0,
                         use_consistent_processing=True,
@@ -491,16 +498,21 @@ if __name__ == '__main__':
                     for _d in ntds:
                         print(_d, "density", _d.edge_index.size(1) / (_d.num_nodes ** 2))
                     s2n._node_task_data_list = []  # flush
-        elif PURPOSE == "ONCE":
-            ntds = s2n.node_task_data_splits(
-                mapping_matrix_type=None,
-                post_edge_normalize="standardize_then_thres_max_linear",
-                post_edge_normalize_args=[0.314],
-                edge_thres=0.0,
-                use_consistent_processing=False,
-                save=True,
-            )
-            for _d in ntds:
-                print(_d, "density", _d.edge_index.size(1) / (_d.num_nodes ** 2))
+        elif PURPOSE == "MANY_3":
+            # cut_mean_pos_k_std_pos_and_clamp_1
+            # sqrt_d_node_div_d_sub, 1_div_sqrt_num_nodes_in_sub
+            for i in [3.0, 2.0, 1.0, 0.0]:
+                ntds = s2n.node_task_data_splits(
+                    mapping_matrix_type="1_div_sqrt_num_nodes_in_sub",
+                    post_edge_normalize="cut_mean_pos_k_std_pos_and_clamp_1",
+                    post_edge_normalize_args=[i],
+                    edge_thres=0.0,
+                    use_consistent_processing=True,
+                    save=True,
+                )
+                for _d in ntds:
+                    print(_d, "density", _d.edge_index.size(1) / (_d.num_nodes ** 2))
+                s2n._node_task_data_list = []  # flush
+
         else:
             raise ValueError(f"Wrong purpose: {PURPOSE}")
