@@ -156,7 +156,7 @@ class SubgraphToNode:
 
             d_index_s = torch.stack([torch.arange(self.S), torch.arange(self.S)])
             d_index_n = torch.stack([torch.arange(self.N), torch.arange(self.N)])
-            d_value_s = 1 / torch.sqrt(degree(summarized_edge_index[0], num_nodes=self.S))
+            d_value_s = 1 / torch.sqrt(degree(summarized_edge_index[0], num_nodes=self.S) + 1)
             d_value_n = torch.sqrt(degree(global_edge_index[0], num_nodes=self.N))
 
             # (s, s) * (s, n) --> (s, n)
