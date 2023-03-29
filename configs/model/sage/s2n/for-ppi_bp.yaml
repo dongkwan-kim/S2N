@@ -10,6 +10,6 @@ dropout_edges: 0.4
 learning_rate: 0.005
 weight_decay: 5.601277015918745e-09
 _gradient_clip_val: 0.4
-sub_node_num_layers: 1
+sub_node_num_layers: 0
 sub_node_encoder_aggr: sum
 subname: SAGE-S2N

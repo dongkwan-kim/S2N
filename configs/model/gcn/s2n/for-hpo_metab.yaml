@@ -10,6 +10,6 @@ dropout_edges: 0.1
 learning_rate: 0.0005
 weight_decay: 3.209180174807717e-08
 _gradient_clip_val: 0.1
-sub_node_num_layers: 1
+sub_node_num_layers: 0
 sub_node_encoder_aggr: sum
 subname: GCN-S2N

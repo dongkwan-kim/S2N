@@ -12,6 +12,6 @@ layer_kwargs:
 learning_rate: 0.001
 weight_decay: 2.1827969521910524e-09
 _gradient_clip_val: 0.0
-sub_node_num_layers: 1
+sub_node_num_layers: 0
 sub_node_encoder_aggr: mean
 subname: GIN-S2N

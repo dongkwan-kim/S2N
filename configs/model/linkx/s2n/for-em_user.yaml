@@ -13,6 +13,6 @@ layer_kwargs:
 learning_rate: 0.001
 weight_decay: 2.1004702888360674e-07
 _gradient_clip_val: 0.0
-sub_node_num_layers: 1
+sub_node_num_layers: 0
 sub_node_encoder_aggr: sum
 subname: ILINKX-S2N

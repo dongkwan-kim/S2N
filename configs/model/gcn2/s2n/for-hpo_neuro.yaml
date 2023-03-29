@@ -14,6 +14,6 @@ layer_kwargs:
 learning_rate: 0.005
 weight_decay: 2.9389071251544597e-08
 _gradient_clip_val: 0.0
-sub_node_num_layers: 1
+sub_node_num_layers: 0
 sub_node_encoder_aggr: sum
 subname: GCNII-S2N
