@@ -16,7 +16,7 @@ from torch_geometric.utils import (to_networkx, from_networkx, is_undirected, de
                                    add_remaining_self_loops, remove_self_loops, to_dense_adj, degree, coalesce)
 from tqdm import tqdm
 
-from utils import to_symmetric_matrix, try_getattr, spspmm_quad
+from utils import to_symmetric_matrix, try_getattr, spspmm_quad, repr_kvs
 
 
 class SubgraphToNode:
@@ -282,9 +282,9 @@ class SubgraphToNode:
             [str(round(a, 3)) for a in post_edge_normalize_args]  # todo: general repr for args
         ) if post_edge_normalize is not None else None
 
-        # todo: set_sub_x_weight
-        path = self.path / (f"{self.node_task_name}_node_task_data"
-                            f"_mmt={mapping_matrix_type}_et={str_et}_en={str_en}_ucp={use_consistent_processing}.pth")
+        name_key = repr_kvs(mmt=mapping_matrix_type, xw=set_sub_x_weight,
+                            et=str_et, en=str_en, ucp=use_consistent_processing)
+        path = self.path / f"{self.node_task_name}_node_task_data_{name_key}.pth"
         try:
             if load:
                 self._node_task_data_list = torch.load(path)

@@ -208,6 +208,13 @@ def replace_all(s: str, old_to_new_values: Dict[str, str]):
     return s
 
 
+def repr_kvs(**kwargs):
+    kvs = []
+    for k, v in kwargs.items():
+        kvs.append(f"{k}={v}")
+    return "_".join(kvs)
+
+
 # PyTorch/PyTorch Geometric related methods
 
 
@@ -503,7 +510,7 @@ def unbatch(src: Tensor, batch: Tensor, dim: int = 0) -> List[Tensor]:
 
 if __name__ == '__main__':
 
-    METHOD = "multi_label_node_homophily"
+    METHOD = "repr_kvs"
 
     from pytorch_lightning import seed_everything
 
@@ -575,7 +582,6 @@ if __name__ == '__main__':
         )
         print(_mlnh)
 
-
     elif METHOD == "ld_to_dl":
         print(ld_to_dl([{}]))
         print(ld_to_dl([{"x": 1}, {"x": 2}]))
@@ -628,6 +634,9 @@ if __name__ == '__main__':
         for _emt_pi in _pi:
             print(_emt_pi)
         print("len", len(_pi))
+
+    elif METHOD == "repr_kvs":
+        print(repr_kvs(mmt="string", en=123, ucp=True))
 
     else:
         raise ValueError("Wrong method: {}".format(METHOD))
