@@ -262,6 +262,7 @@ class SubgraphToNode:
 
     def node_task_data_splits(self,
                               mapping_matrix_type: str = None,
+                              set_sub_x_weight: str = "follow_mapping_matrix",
                               post_edge_normalize: Union[str, Callable, None] = None,
                               post_edge_normalize_args: Union[List, None] = None,
                               edge_thres: Union[float, Callable, List[float]] = 1.0,
@@ -281,6 +282,7 @@ class SubgraphToNode:
             [str(round(a, 3)) for a in post_edge_normalize_args]  # todo: general repr for args
         ) if post_edge_normalize is not None else None
 
+        # todo: set_sub_x_weight
         path = self.path / (f"{self.node_task_name}_node_task_data"
                             f"_mmt={mapping_matrix_type}_et={str_et}_en={str_en}_ucp={use_consistent_processing}.pth")
         try:
@@ -299,7 +301,6 @@ class SubgraphToNode:
         ew_mat = node_task_data_precursor.edge_weight_matrix
 
         edge_norm_kws = {}
-        sub_x_weight = None
         for i, (s, et) in enumerate(zip(self.splits, edge_thres)):
             x, y, batch, ptr = try_getattr(node_task_data_precursor,
                                            ["x", "y", "batch", "ptr"], as_dict=False)
@@ -308,8 +309,6 @@ class SubgraphToNode:
             sub_batch = batch[ptr[s_0]:ptr[s_1]]
             sub_batch = sub_batch - sub_batch.min()  # if ptr[s_0] is not 0, sub_batch can be > 0.
             y = y[s_0:s_1]
-            if self._mapping_matrix_value is not None:
-                sub_x_weight = self._mapping_matrix_value[ptr[s_0]:ptr[s_1]]
 
             num_nodes = y.size(0)
             eval_mask = None
@@ -331,6 +330,20 @@ class SubgraphToNode:
             self.print_mat_stat(ew_mat_s_by_s, f"Summarizing processed edge_weight_matrix ({i})")
 
             edge_index, edge_attr = dense_to_sparse(ew_mat_s_by_s)
+
+            sub_x_weight = None
+            if (self._mapping_matrix_value is not None) and set_sub_x_weight == "follow_mapping_matrix":
+                sub_x_weight = self._mapping_matrix_value[ptr[s_0]:ptr[s_1]]
+            elif set_sub_x_weight == "sqrt_d_node_div_d_sub":
+                a_index, _ = add_remaining_self_loops(self.global_data.edge_index)
+                _, sub_x_weight = self.get_sparse_mapping_matrix_sxn(
+                    matrix_type="sqrt_d_node_div_d_sub",
+                    sub_x=sub_x.squeeze(),
+                    sub_batch=sub_batch,
+                    global_edge_index=a_index,
+                    summarized_edge_index=edge_index,
+                )
+
             self._node_task_data_list.append(Data(
                 sub_x=sub_x, sub_batch=sub_batch, sub_x_weight=sub_x_weight,
                 y=y, eval_mask=eval_mask,
@@ -438,7 +451,7 @@ if __name__ == '__main__':
     MODE = "HPONeuro"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
-    PURPOSE = "MANY_3"
+    PURPOSE = "MANY_4"
     # MANY, ONCE
     TARGET_MATRIX = "adjacent_with_self_loops"
     # adjacent_with_self_loops, adjacent_no_self_loops
@@ -499,8 +512,8 @@ if __name__ == '__main__':
                         print(_d, "density", _d.edge_index.size(1) / (_d.num_nodes ** 2))
                     s2n._node_task_data_list = []  # flush
         elif PURPOSE == "MANY_3":
+            # unnormalized, sqrt_d_node_div_d_sub, 1_div_sqrt_num_nodes_in_sub
             # cut_mean_pos_k_std_pos_and_clamp_1
-            # sqrt_d_node_div_d_sub, 1_div_sqrt_num_nodes_in_sub
             for i in [3.0, 2.0, 1.0, 0.0]:
                 ntds = s2n.node_task_data_splits(
                     mapping_matrix_type="1_div_sqrt_num_nodes_in_sub",
@@ -513,6 +526,25 @@ if __name__ == '__main__':
                 for _d in ntds:
                     print(_d, "density", _d.edge_index.size(1) / (_d.num_nodes ** 2))
                 s2n._node_task_data_list = []  # flush
+
+        elif PURPOSE == "MANY_4":
+            # unnormalized, sqrt_d_node_div_d_sub
+            # standardize_then_trunc_thres_max_linear
+            for i in [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75,
+                      2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
+                for j in [0.5, 1.0, 1.5, 2.0]:
+                    ntds = s2n.node_task_data_splits(
+                        mapping_matrix_type="unnormalized",
+                        set_sub_x_weight="sqrt_d_node_div_d_sub",
+                        post_edge_normalize="standardize_then_trunc_thres_max_linear",
+                        post_edge_normalize_args=[i, j],
+                        edge_thres=0.0,
+                        use_consistent_processing=True,
+                        save=True,
+                    )
+                    for _d in ntds:
+                        print(_d, "density", _d.edge_index.size(1) / (_d.num_nodes ** 2))
+                    s2n._node_task_data_list = []  # flush
 
         else:
             raise ValueError(f"Wrong purpose: {PURPOSE}")

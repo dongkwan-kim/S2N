@@ -35,6 +35,7 @@ class SubgraphDataModule(LightningDataModule):
                  embedding_type: str,
                  use_s2n: bool,
                  s2n_mapping_matrix_type: str = None,
+                 s2n_set_sub_x_weight: str = "follow_mapping_matrix",
                  edge_thres: Union[float, Callable, List[float]] = None,
                  post_edge_normalize: Union[str, Callable, None] = None,
                  s2n_target_matrix: str = None,
@@ -146,6 +147,7 @@ class SubgraphDataModule(LightningDataModule):
             )
             data_list = s2n.node_task_data_splits(
                 mapping_matrix_type=self.h.s2n_mapping_matrix_type,
+                set_sub_x_weight=self.h.s2n_set_sub_x_weight,
                 post_edge_normalize=self.h.post_edge_normalize,
                 post_edge_normalize_args=[getattr(self.h, f"post_edge_normalize_arg_{i}") for i in range(1, 3)
                                           if getattr(self.h, f"post_edge_normalize_arg_{i}", None) is not None],
