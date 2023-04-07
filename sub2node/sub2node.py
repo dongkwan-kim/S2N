@@ -334,14 +334,22 @@ class SubgraphToNode:
             sub_x_weight = None
             if (self._mapping_matrix_value is not None) and set_sub_x_weight == "follow_mapping_matrix":
                 sub_x_weight = self._mapping_matrix_value[ptr[s_0]:ptr[s_1]]
-            elif set_sub_x_weight == "sqrt_d_node_div_d_sub":
+
+            elif "sqrt_d_node_div_d_sub" in set_sub_x_weight:
+                if set_sub_x_weight == "sparse_sqrt_d_node_div_d_sub":
+                    s_index = edge_index
+                elif set_sub_x_weight == "original_sqrt_d_node_div_d_sub":
+                    s_index, _ = dense_to_sparse(ew_mat[:s, :s])
+                else:
+                    raise ValueError(f"Wrong set_sub_x_weight: {set_sub_x_weight}")
+
                 a_index, _ = add_remaining_self_loops(self.global_data.edge_index)
                 _, sub_x_weight = self.get_sparse_mapping_matrix_sxn(
                     matrix_type="sqrt_d_node_div_d_sub",
                     sub_x=sub_x.squeeze(),
                     sub_batch=sub_batch,
                     global_edge_index=a_index,
-                    summarized_edge_index=edge_index,
+                    summarized_edge_index=s_index,
                 )
 
             self._node_task_data_list.append(Data(
@@ -448,7 +456,7 @@ if __name__ == '__main__':
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, CC, Coreness, CutRatio
 
-    MODE = "HPONeuro"
+    MODE = "EMUser"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
     PURPOSE = "MANY_4"
@@ -528,14 +536,14 @@ if __name__ == '__main__':
                 s2n._node_task_data_list = []  # flush
 
         elif PURPOSE == "MANY_4":
-            # unnormalized, sqrt_d_node_div_d_sub
+            # unnormalized, sqrt_d_node_div_d_sub, original_sqrt_d_node_div_d_sub
             # standardize_then_trunc_thres_max_linear
             for i in [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75,
                       2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
                 for j in [0.5, 1.0, 1.5, 2.0]:
                     ntds = s2n.node_task_data_splits(
                         mapping_matrix_type="unnormalized",
-                        set_sub_x_weight="sqrt_d_node_div_d_sub",
+                        set_sub_x_weight="original_sqrt_d_node_div_d_sub",
                         post_edge_normalize="standardize_then_trunc_thres_max_linear",
                         post_edge_normalize_args=[i, j],
                         edge_thres=0.0,
@@ -543,7 +551,12 @@ if __name__ == '__main__':
                         save=True,
                     )
                     for _d in ntds:
-                        print(_d, "density", _d.edge_index.size(1) / (_d.num_nodes ** 2))
+                        print(_d)
+                        print(f"\t- density: {_d.edge_index.size(1) / (_d.num_nodes ** 2)}")
+                        _sub_x_weight_stats = repr_kvs(
+                            min=torch.min(_d.sub_x_weight), max=torch.max(_d.sub_x_weight),
+                            avg=torch.mean(_d.sub_x_weight), std=torch.std(_d.sub_x_weight), sep=", ")
+                        print(f"\t- sub_x_weight: {_sub_x_weight_stats}")
                     s2n._node_task_data_list = []  # flush
 
         else:

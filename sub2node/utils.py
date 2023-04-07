@@ -208,11 +208,11 @@ def replace_all(s: str, old_to_new_values: Dict[str, str]):
     return s
 
 
-def repr_kvs(**kwargs):
+def repr_kvs(sep="_", **kwargs):
     kvs = []
     for k, v in kwargs.items():
         kvs.append(f"{k}={v}")
-    return "_".join(kvs)
+    return sep.join(kvs)
 
 
 # PyTorch/PyTorch Geometric related methods
@@ -636,7 +636,7 @@ if __name__ == '__main__':
         print("len", len(_pi))
 
     elif METHOD == "repr_kvs":
-        print(repr_kvs(mmt="string", en=123, ucp=True))
+        print(repr_kvs(mmt="string", en=123, ucp=True, sep=", "))
 
     else:
         raise ValueError("Wrong method: {}".format(METHOD))
