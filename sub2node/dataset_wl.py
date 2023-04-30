@@ -47,18 +47,22 @@ class ReplaceXWithWL4Pattern(BaseTransform):
 
     def __init__(self, num_layers, wl_step_to_use, wl_type_to_use,
                  num_color_clusters=None, clustering_name="KMeans",
-                 cache_path=None, **kwargs):
+                 cache_path=None, cumcat=False, num_pca_features=None,
+                 **kwargs):
         self.wl = WL4PatternNet(
-            num_layers=num_layers, x_type_for_hists="all",
+            num_layers=num_layers,
+            x_type_for_hists="all",  # todo: replace by wl_type_to_use
             clustering_name=clustering_name,
             n_clusters=num_color_clusters or num_layers,  # clustering & kwargs
             use_clustering_validation=False,
             compute_last_only=False,
             **kwargs,
         )
-        self.cache_path = cache_path
         self.wl_step_to_use = wl_step_to_use
         self.wl_type_to_use = wl_type_to_use
+        self.cache_path = cache_path
+        self.cumcat = cumcat  # cumulative cat for separated
+        self.num_pca_features = num_pca_features
 
     def __call__(self, data: Union[Data, List[Data], List[List[Data]]]):
         # TODO: Functionally, it is working, but refactoring is needed, but some other day...
@@ -116,8 +120,12 @@ class ReplaceXWithWL4Pattern(BaseTransform):
         if num_split_list is not None:  # separated
             assert len(data_list) == 1
             data = data_list[0]
-            data_list = [Data(x=data.x[prev:curr, :], y=data.y[prev:curr])
-                         for prev, curr in zip(num_split_list, num_split_list[1:])]
+            if not self.cumcat:
+                data_list = [Data(x=data.x[prev:curr, :], y=data.y[prev:curr])
+                             for prev, curr in zip(num_split_list, num_split_list[1:])]
+            else:
+                data_list = [Data(x=data.x[:curr, :], y=data.y[:curr])
+                             for _, curr in zip(num_split_list, num_split_list[1:])]
         # The output will be a List of Data(x=[S, F], y=[S])
         return data_list
 

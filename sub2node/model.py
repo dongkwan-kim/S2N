@@ -1,4 +1,3 @@
-from pprint import pprint
 from typing import Dict, Union, Any, List
 
 import torch
@@ -84,6 +83,10 @@ class GraphNeuralModel(LightningModule):
                 decoder = MLP(in_channels=self.h.hidden_channels * num_aggr, **kws)
                 in_channels = self.h.hidden_channels
 
+            # in_channels += self.given_datamodule.num_channels_wl
+            if self.given_datamodule.num_channels_wl > 0:
+                self.wl_encoder = nn.Linear(self.given_datamodule.num_channels_wl, in_channels)
+
             self.sub_node_encoder = DeepSets(encoder=encoder, decoder=decoder,
                                              aggr=self.h.sub_node_encoder_aggr)
             num_nodes = given_datamodule.test_data.num_nodes
@@ -151,7 +154,9 @@ class GraphNeuralModel(LightningModule):
             self.loss = nn.BCEWithLogitsLoss()
         self.evaluator = Evaluator(self.h.metrics, self.h.is_multi_labels)
 
-    def forward(self, x=None, batch=None, sub_x=None, sub_batch=None, sub_x_weight=None,
+    def forward(self,
+                x=None, batch=None,
+                sub_x=None, sub_batch=None, sub_x_weight=None, sub_x_wl=None,
                 edge_index=None, edge_attr=None, adj_t=None, x_to_xs=None):
 
         if self.dh.replace_x_with_wl4pattern:
@@ -160,6 +165,17 @@ class GraphNeuralModel(LightningModule):
         if sub_x is not None:
             sub_x = self.node_emb(sub_x)
             x = self.sub_node_encoder(sub_x, sub_batch, sub_x_weight)
+
+            # todo: refactoring
+            if sub_x_wl is not None:
+                # sum
+                # x = 0.5 * x + self.wl_encoder(sub_x_wl)
+                # x = 0.1 * x + self.wl_encoder(sub_x_wl)
+                x = 0.01 * x + self.wl_encoder(sub_x_wl)
+                # x = x + self.wl_encoder(sub_x_wl)
+
+                # cat
+                # x = torch.cat([x, sub_x_wl], dim=1)  # [N, F] cat [N, F_wl] --> [N, F + F_wl]
         else:
             x = self.node_emb(x)
 
@@ -174,7 +190,7 @@ class GraphNeuralModel(LightningModule):
 
     def step(self, batch: Data, batch_idx: int):
         step_kws = try_getattr(
-            batch, ["x", "batch", "sub_x", "sub_batch", "sub_x_weight",
+            batch, ["x", "batch", "sub_x", "sub_batch", "sub_x_weight", "sub_x_wl",
                     "edge_index", "edge_attr", "adj_t", "x_to_xs"])
         logits = self.forward(**step_kws)
 
@@ -237,7 +253,7 @@ if __name__ == '__main__':
         print(_kv_dict)
 
 
-    NAME = "EMUser"
+    NAME = "PPIBP"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
 
@@ -290,13 +306,15 @@ if __name__ == '__main__':
         dataset_path=PATH,
         embedding_type=E_TYPE,
         use_s2n=USE_S2N,
-        s2n_mapping_matrix_type="sqrt_d_node_div_d_sub",
+        s2n_mapping_matrix_type="unnormalized",
+        s2n_set_sub_x_weight="original_sqrt_d_node_div_d_sub",
+        s2n_add_sub_x_wl=True,
         edge_thres=0.0,
         use_consistent_processing=True,
-        post_edge_normalize="clamp_1",
-        # post_edge_normalize_arg_1=0.0,
-        # post_edge_normalize_arg_2=2.0,
-        s2n_target_matrix="adjacent_no_self_loops",
+        post_edge_normalize="standardize_then_trunc_thres_max_linear",
+        post_edge_normalize_arg_1=2.0,
+        post_edge_normalize_arg_2=2.0,
+        s2n_target_matrix="adjacent_with_self_loops",
         s2n_is_weighted=True,
         subgraph_batching=SUBGRAPH_BATCHING,
         batch_size=32,

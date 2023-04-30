@@ -36,6 +36,7 @@ class SubgraphDataModule(LightningDataModule):
                  use_s2n: bool,
                  s2n_mapping_matrix_type: str = None,
                  s2n_set_sub_x_weight: str = "follow_mapping_matrix",
+                 s2n_add_sub_x_wl: bool = False,
                  edge_thres: Union[float, Callable, List[float]] = None,
                  post_edge_normalize: Union[str, Callable, None] = None,
                  s2n_target_matrix: str = None,
@@ -85,6 +86,10 @@ class SubgraphDataModule(LightningDataModule):
     def num_channels_sub(self):
         assert self.train_data.num_features == self.val_data.num_features == self.test_data.num_features
         return self.train_data.num_features
+
+    @property
+    def num_channels_wl(self):
+        return self.train_data.sub_x_wl.size(1) if self.h.s2n_add_sub_x_wl else 0
 
     @property
     def num_classes(self):
@@ -156,6 +161,11 @@ class SubgraphDataModule(LightningDataModule):
                 save=(not is_customized_split),
                 load=(not is_customized_split),
             )
+            if self.h.s2n_add_sub_x_wl:
+                data_list = s2n.node_task_add_sub_x_wl(
+                    s2n_data_list=list(data_list),
+                    separated_data_list=list(self.dataset.get_train_val_test_with_individual_relabeling()),
+                )
             transform_list = []
             if not self.h.s2n_is_weighted:
                 transform_list.append(RemoveAttrs(["edge_attr"]))
@@ -287,14 +297,16 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
         dataset_path=PATH,
         embedding_type=E_TYPE,
         use_s2n=USE_S2N,
-        s2n_mapping_matrix_type="sqrt_d_node_div_d_sub",
+        s2n_mapping_matrix_type="unnormalized",
+        s2n_set_sub_x_weight="original_sqrt_d_node_div_d_sub",
+        s2n_add_sub_x_wl=True,
         edge_thres=0.0,
         use_consistent_processing=True,
-        post_edge_normalize="clamp_1",
-        # post_edge_normalize_arg_1=0.0,
-        # post_edge_normalize_arg_2=2.0,
-        s2n_target_matrix="adjacent_no_self_loops",
-        s2n_is_weighted=False,
+        post_edge_normalize="standardize_then_trunc_thres_max_linear",
+        post_edge_normalize_arg_1=2.0,
+        post_edge_normalize_arg_2=2.0,
+        s2n_target_matrix="adjacent_with_self_loops",
+        s2n_is_weighted=True,
         subgraph_batching=SUBGRAPH_BATCHING,
         batch_size=32,
         eval_batch_size=5,

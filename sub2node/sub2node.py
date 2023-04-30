@@ -7,6 +7,8 @@ from typing import List, Callable, Union, Tuple, Dict
 
 import numpy as np
 import torch_sparse
+from sklearn.decomposition import PCA
+from sklearn.feature_selection import VarianceThreshold
 from termcolor import cprint
 import networkx as nx
 import torch
@@ -16,6 +18,7 @@ from torch_geometric.utils import (to_networkx, from_networkx, is_undirected, de
                                    add_remaining_self_loops, remove_self_loops, to_dense_adj, degree, coalesce)
 from tqdm import tqdm
 
+from dataset_wl import ReplaceXWithWL4Pattern
 from utils import to_symmetric_matrix, try_getattr, spspmm_quad, repr_kvs
 
 
@@ -364,6 +367,32 @@ class SubgraphToNode:
             cprint(f"Saved: {self._node_task_data_list} at {path}", "blue")
 
         return tuple(self._node_task_data_list)
+
+    def node_task_add_sub_x_wl(self, s2n_data_list: List[Data],
+                               separated_data_list: List[List[Data]]):
+        num_layer = 3  # NOTE: num_layer is hard-coded.
+        separated_wl_list = ReplaceXWithWL4Pattern(
+            num_layers=num_layer,
+            wl_step_to_use=-1,  # Last step
+            wl_type_to_use="color",
+            cache_path=(self.path / f"sub_wl_L={num_layer}.pth"),
+            cumcat=True,
+        )(separated_data_list)
+
+        # todo: generalize & argnize
+        """
+        if self.name == "EMUser":
+            reduce_dim = VarianceThreshold(5e-5)
+        else:
+            reduce_dim = VarianceThreshold(5e-4)
+        """
+        reduce_dim = PCA(n_components=128)
+
+        for idx, (sep_wl_data, s2n_data) in enumerate(zip(separated_wl_list, s2n_data_list)):
+            if idx == 0:
+                reduce_dim.fit(sep_wl_data.x)
+            s2n_data.sub_x_wl = torch.from_numpy(reduce_dim.transform(sep_wl_data.x)).float()
+        return s2n_data_list
 
     @staticmethod
     def print_mat_stat(matrix, start=None, print_counter=False):
