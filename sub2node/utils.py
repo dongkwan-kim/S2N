@@ -61,7 +61,7 @@ __MAGIC__ = "This is magic, please trust the author."
 
 def _try_do(do: Callable,
             obj, name_list: List[Any],
-            default=__MAGIC__, iter_all=True,
+            default: Optional[Any] = __MAGIC__, iter_all=True,
             as_dict=True) -> Union[Dict[Any, Any], List, Any]:
     _e = None
     ret_list = list()
@@ -73,30 +73,27 @@ def _try_do(do: Callable,
             if not iter_all:
                 break
         except Exception as e:
-            _e = e
-    if len(ret_list) > 0:
-        if as_dict:
-            return dict(zip(real_name_list, ret_list))
-        else:
-            return ret_list
-    elif default != __MAGIC__:
-        if as_dict:
-            return {"default": default}
-        else:
-            return default
+            ret_list.append(default)
+
+    if as_dict:
+        return {name: ret for (name, ret) in zip(name_list, ret_list)
+                if ret != __MAGIC__}
     else:
-        raise _e
+        if default != __MAGIC__:  # default is given
+            return ret_list
+        else:
+            return [ret for ret in ret_list if ret != default]
 
 
 def try_getattr(obj, name_list: List[str],
-                default=__MAGIC__, iter_all=True,
+                default: Optional[Any] = __MAGIC__, iter_all=True,
                 as_dict=True) -> Union[Dict[str, Any], List, Any]:
     return _try_do(do=getattr, obj=obj, name_list=name_list, default=default,
                    iter_all=iter_all, as_dict=as_dict)
 
 
 def try_get_from_dict(o, name_list: List[Any],
-                      default=__MAGIC__, iter_all=True,
+                      default: Optional[Any] = __MAGIC__, iter_all=True,
                       as_dict=True) -> Union[Dict[Any, Any], List, Any]:
     return _try_do(do=(lambda _o, _n: _o.get(_n)),
                    obj=o, name_list=name_list, default=default,
@@ -510,7 +507,7 @@ def unbatch(src: Tensor, batch: Tensor, dim: int = 0) -> List[Tensor]:
 
 if __name__ == '__main__':
 
-    METHOD = "repr_kvs"
+    METHOD = "try_getattr"
 
     from pytorch_lightning import seed_everything
 
@@ -590,6 +587,9 @@ if __name__ == '__main__':
         Point = namedtuple('Point', ['x', 'y'])
         _p = Point(x=11, y=22)
         pprint(try_getattr(_p, ["x", "z", "y"]))
+        pprint(try_getattr(_p, ["x", "z", "y"], default=None))
+        pprint(try_getattr(_p, ["x", "z", "y"], as_dict=False))
+        pprint(try_getattr(_p, ["x", "z", "y"], as_dict=False, default=None))
 
     elif METHOD == "try_get_from_dict":
         pprint(try_get_from_dict({"x": 1, "y": 2}, ["x", "z", "y"]))
