@@ -389,6 +389,11 @@ def dropout_adj_st(edge_index: Union[Tensor, SparseTensor],
         return edge_index, edge_attr
 
 
+def filter_living_edge_index(edge_index, num_nodes):
+    mask = (edge_index[0] < num_nodes) & (edge_index[1] < num_nodes)
+    return edge_index[:, mask]
+
+
 def torch_choice(tensor_1d: Tensor, sample_size_or_ratio: int or float):
     tensor_size = tensor_1d.size(0)
     if isinstance(sample_size_or_ratio, float):
@@ -507,7 +512,7 @@ def unbatch(src: Tensor, batch: Tensor, dim: int = 0) -> List[Tensor]:
 
 if __name__ == '__main__':
 
-    METHOD = "try_getattr"
+    METHOD = "filter_living_edge_index"
 
     from pytorch_lightning import seed_everything
 
@@ -620,7 +625,8 @@ if __name__ == '__main__':
         print(to_symmetric_matrix(m))
 
     elif METHOD == "dropout_adj_st":
-        _edge_index = torch.tensor([[0, 1, 1, 2, 2, 3], [1, 0, 2, 1, 3, 2]])
+        _edge_index = torch.tensor([[0, 1, 1, 2, 2, 3],
+                                    [1, 0, 2, 1, 3, 2]])
         _edge_attr = torch.Tensor([1, 2, 3, 4, 5, 6])
 
         _row, _col = _edge_index
@@ -628,6 +634,13 @@ if __name__ == '__main__':
 
         print(_adj)
         print(dropout_adj_st(_adj, p=0.9)[0])
+
+    elif METHOD == "filter_living_edge_index":
+        _edge_index = torch.tensor([[0, 1, 1, 2, 2, 3],
+                                    [1, 0, 2, 1, 3, 2]])
+        print(filter_living_edge_index(_edge_index, num_nodes=3))
+        print(filter_living_edge_index(_edge_index, num_nodes=4))
+        print(filter_living_edge_index(_edge_index, num_nodes=5))
 
     elif METHOD == "ItertoolsIter":
         _pi = ItertoolsIter("product", [1, 2, 3], [1, 2, 3])
