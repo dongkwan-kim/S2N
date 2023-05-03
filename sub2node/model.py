@@ -36,8 +36,10 @@ class GraphNeuralModel(LightningModule):
                  weight_decay: float,
                  is_multi_labels: bool,
                  use_s2n: bool,
+                 sub_node_encoder_name: str = "DeepSets",  # todo
                  sub_node_num_layers: int = None,
                  sub_node_encoder_aggr: str = "sum",
+                 sub_node_encoder_layer_kwargs: Dict[str, Any] = {},
                  subname: str = "default",
                  metrics=["micro_f1", "macro_f1"],
                  hp_metric=None,
@@ -66,34 +68,54 @@ class GraphNeuralModel(LightningModule):
             num_channels=num_embedding_channels,
             pretrained_embedding=given_datamodule.embedding,
         )
-        if self.h.use_s2n:
-            if self.h.sub_node_num_layers == 0:
-                encoder, decoder = MyIdentity(), MyIdentity()
-                in_channels = self.node_emb.num_channels
-            else:
-                kws = dict(num_layers=self.h.sub_node_num_layers,
-                           hidden_channels=self.h.hidden_channels,
-                           out_channels=self.h.hidden_channels,
-                           activation=self.h.activation,
-                           dropout=self.h.dropout_channels,
-                           use_gn=self.h.use_gn,
-                           activate_last=True)
-                num_aggr = self.h.sub_node_encoder_aggr.count("-") + 1
-                encoder = MLP(in_channels=given_datamodule.num_channels_global, **kws)
-                decoder = MLP(in_channels=self.h.hidden_channels * num_aggr, **kws)
-                in_channels = self.h.hidden_channels
 
-            # in_channels += self.given_datamodule.num_channels_wl
+        self.sub_node_set_encoder, self.sub_node_graph_encoder = None, None
+        if self.h.use_s2n:
+            sub_node_encoder_kwargs = dict(num_layers=self.h.sub_node_num_layers,
+                                           hidden_channels=self.h.hidden_channels,
+                                           out_channels=self.h.hidden_channels,
+                                           activation=self.h.activation,
+                                           activate_last=True)
+
+            if self.h.sub_node_encoder_name == "DeepSets":
+                if self.h.sub_node_num_layers == 0:
+                    encoder, decoder = MyIdentity(), MyIdentity()
+                    in_channels = self.node_emb.num_channels
+                else:
+                    sub_node_encoder_kwargs.update(dict(dropout=self.h.dropout_channels))
+                    num_aggr = self.h.sub_node_encoder_aggr.count("-") + 1
+                    encoder = MLP(in_channels=given_datamodule.num_channels_global, **sub_node_encoder_kwargs)
+                    decoder = MLP(in_channels=self.h.hidden_channels * num_aggr, **sub_node_encoder_kwargs)
+                    in_channels = self.h.hidden_channels
+
+                self.sub_node_set_encoder = DeepSets(encoder=encoder, decoder=decoder,
+                                                     aggr=self.h.sub_node_encoder_aggr)
+
+            else:  # sub_node_encoder_name == "GCNConv", "GATConv", ...
+                assert self.h.sub_node_num_layers > 0
+                self.sub_node_graph_encoder = GraphEncoder(
+                    self.h.sub_node_encoder_name,
+                    in_channels=self.node_emb.num_channels,
+                    use_bn=self.h.use_bn,
+                    use_gn=self.h.use_gn,
+                    use_skip=self.h.use_skip,
+                    dropout_channels=self.h.dropout_channels,
+                    dropout_edges=self.h.dropout_edges,
+                    **sub_node_encoder_kwargs,
+                    **self.h.sub_node_encoder_layer_kwargs,
+                )
+                in_channels = self.h.hidden_channels
+                self.sub_node_set_encoder = DeepSets(encoder=MyIdentity(), decoder=MyIdentity(),
+                                                     aggr=self.h.sub_node_encoder_aggr)
+
             if self.given_datamodule.num_channels_wl > 0:
                 self.wl_encoder = nn.Linear(self.given_datamodule.num_channels_wl, in_channels)
+                self.x_tmp_encoder = nn.Linear(in_channels, in_channels)  # todo:
 
-            self.sub_node_encoder = DeepSets(encoder=encoder, decoder=decoder,
-                                             aggr=self.h.sub_node_encoder_aggr)
             num_nodes = given_datamodule.test_data.num_nodes
             num_train_nodes = given_datamodule.train_data.num_nodes
             out_channels = given_datamodule.num_classes
         else:
-            self.sub_node_encoder = None
             num_nodes = given_datamodule.num_nodes_global
             num_train_nodes = None
             in_channels = self.node_emb.num_channels
@@ -156,7 +178,8 @@ class GraphNeuralModel(LightningModule):
 
     def forward(self,
                 x=None, batch=None,
-                sub_x=None, sub_batch=None, sub_x_weight=None, sub_x_wl=None,
+                sub_x=None, sub_batch=None,
+                sub_x_weight=None, sub_x_wl=None, sub_edge_index=None,
                 edge_index=None, edge_attr=None, adj_t=None, x_to_xs=None):
 
         if self.dh.replace_x_with_wl4pattern:
@@ -164,15 +187,15 @@ class GraphNeuralModel(LightningModule):
 
         if sub_x is not None:
             sub_x = self.node_emb(sub_x)
-            x = self.sub_node_encoder(sub_x, sub_batch, sub_x_weight)
+            if self.sub_node_graph_encoder is not None:
+                assert sub_edge_index is not None
+                sub_x = self.sub_node_graph_encoder(sub_x, sub_edge_index, batch=sub_batch)
+            x = self.sub_node_set_encoder(sub_x, batch=sub_batch, x_weight=sub_x_weight)
 
             # todo: refactoring
             if sub_x_wl is not None:
                 # sum
-                # x = 0.5 * x + self.wl_encoder(sub_x_wl)
-                # x = 0.1 * x + self.wl_encoder(sub_x_wl)
-                x = 0.01 * x + self.wl_encoder(sub_x_wl)
-                # x = x + self.wl_encoder(sub_x_wl)
+                x = self.x_tmp_encoder(x) + self.wl_encoder(sub_x_wl)
 
                 # cat
                 # x = torch.cat([x, sub_x_wl], dim=1)  # [N, F] cat [N, F_wl] --> [N, F + F_wl]
@@ -190,7 +213,8 @@ class GraphNeuralModel(LightningModule):
 
     def step(self, batch: Data, batch_idx: int):
         step_kws = try_getattr(
-            batch, ["x", "batch", "sub_x", "sub_batch", "sub_x_weight", "sub_x_wl",
+            batch, ["x", "batch", "sub_x", "sub_batch",
+                    "sub_x_weight", "sub_x_wl", "sub_edge_index",
                     "edge_index", "edge_attr", "adj_t", "x_to_xs"])
         logits = self.forward(**step_kws)
 
@@ -300,6 +324,14 @@ if __name__ == '__main__':
     else:
         LAYER_KWARGS = {}
 
+    SUB_NODE_ENCODER_NAME = "GCNConv"  # DeepSets, GCNConv
+    if SUB_NODE_ENCODER_NAME == "DeepSets":
+        SUB_NODE_NUM_LAYERS = 0
+        USE_SUB_EDGE_INDEX = False
+    else:
+        SUB_NODE_NUM_LAYERS = 2
+        USE_SUB_EDGE_INDEX = True
+
     seed_everything(42)
     _sdm = SubgraphDataModule(
         dataset_name=NAME,
@@ -308,7 +340,8 @@ if __name__ == '__main__':
         use_s2n=USE_S2N,
         s2n_mapping_matrix_type="unnormalized",
         s2n_set_sub_x_weight="original_sqrt_d_node_div_d_sub",
-        s2n_add_sub_x_wl=True,
+        s2n_use_sub_edge_index=USE_SUB_EDGE_INDEX,
+        s2n_add_sub_x_wl=False,
         edge_thres=0.0,
         use_consistent_processing=True,
         post_edge_normalize="standardize_then_trunc_thres_max_linear",
@@ -334,9 +367,10 @@ if __name__ == '__main__':
         weight_decay=1e-6,
         is_multi_labels=(NAME == "HPONeuro"),
         use_s2n=USE_S2N,
-        sub_node_num_layers=0,
-        use_bn=False,
-        use_gn=True,
+        sub_node_encoder_name=SUB_NODE_ENCODER_NAME,
+        sub_node_num_layers=SUB_NODE_NUM_LAYERS,
+        use_bn=True,
+        use_gn=False,
         use_skip=False,
         dropout_channels=0.0,
         dropout_edges=0.0,

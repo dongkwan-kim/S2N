@@ -5,21 +5,20 @@ from pathlib import Path
 from pprint import pprint
 from typing import List, Callable, Union, Tuple, Dict
 
-import numpy as np
-import torch_sparse
-from sklearn.decomposition import PCA
-from sklearn.feature_selection import VarianceThreshold
-from termcolor import cprint
 import networkx as nx
 import torch
+import torch_sparse
+from sklearn.decomposition import PCA
+from termcolor import cprint
 from torch import Tensor
 from torch_geometric.data import Data, Batch
-from torch_geometric.utils import (to_networkx, from_networkx, is_undirected, dense_to_sparse,
+from torch_geometric.utils import (to_networkx, is_undirected, dense_to_sparse,
                                    add_remaining_self_loops, remove_self_loops, to_dense_adj, degree, coalesce)
 from tqdm import tqdm
 
+from data_utils import RelabelNodes
 from dataset_wl import ReplaceXWithWL4Pattern
-from utils import to_symmetric_matrix, try_getattr, spspmm_quad, repr_kvs
+from utils import try_getattr, spspmm_quad, repr_kvs, filter_living_edge_index
 
 
 class SubgraphToNode:
@@ -233,8 +232,9 @@ class SubgraphToNode:
         # edge = 1 / (spl + 1) where 0 <= spl, then 0 < edge <= 1
         return 1 / (sub_spl_mat + 1)
 
-    def node_task_data_precursor(self, matrix_type=None, save=True):
-        path = self.path / f"{self.node_task_name}_node_task_data_mmt={matrix_type}_precursor.pth"
+    def node_task_data_precursor(self, matrix_type=None, use_sub_edge_index=False, save=True):
+        name_key = repr_kvs(mmt=matrix_type, use_sei=use_sub_edge_index)
+        path = self.path / f"{self.node_task_name}_node_task_data_precursor_{name_key}.pth"
         try:
             self._node_task_data_precursor = torch.load(path)
             cprint(f"Load: {self._node_task_data_precursor} at {path}", "green")
@@ -244,12 +244,31 @@ class SubgraphToNode:
 
         # Node aggregation: x, y, batch, ...
         # DataBatch(x=[16236, 1], y=[1591], split=[1591], batch=[16236], ptr=[1592])
-        self._node_task_data_precursor = Batch.from_data_list(self.subgraph_data_list)
-        del self._node_task_data_precursor.edge_index
+        if use_sub_edge_index:
+            rn_transform = RelabelNodes()
+            self.subgraph_data_list = [rn_transform(d) for d in self.subgraph_data_list]
+            self._node_task_data_precursor = Batch.from_data_list(self.subgraph_data_list)
+        else:
+            self._node_task_data_precursor = Batch.from_data_list(self.subgraph_data_list)
+
         # Row-wise sorting for using mapping_matrix_values without indices.
         batch, x = coalesce(torch.stack([self._node_task_data_precursor.batch,
                                          self._node_task_data_precursor.x.squeeze()]))
+        # Relabel nodes in (sub)_edge_index based on coalesced batch and x
+        if use_sub_edge_index:
+            assert x.size(0) == self._node_task_data_precursor.x.squeeze().size(0)
+            N = x.max().item() + 1
+            bx = self._node_task_data_precursor.batch * N + self._node_task_data_precursor.x.squeeze()
+            coalesce_bx = batch * N + x
+            bx_to_idx = torch.full((bx.max().item() + 1,), fill_value=-1, dtype=torch.long)
+            bx_to_idx[bx] = torch.arange(bx.size(0))
+            idx_to_coalesce_idx = torch.full((bx.size(0),), fill_value=-1, dtype=torch.long)
+            idx_to_coalesce_idx[bx_to_idx[coalesce_bx]] = torch.arange(bx.size(0))
+            self._node_task_data_precursor.sub_edge_index = idx_to_coalesce_idx[
+                self._node_task_data_precursor.edge_index]
+
         self._node_task_data_precursor.batch, self._node_task_data_precursor.x = batch, x.unsqueeze(1)
+        del self._node_task_data_precursor.edge_index
 
         # Edge aggregation
         if self.target_matrix.startswith("adjacent"):
@@ -266,6 +285,7 @@ class SubgraphToNode:
     def node_task_data_splits(self,
                               mapping_matrix_type: str = None,
                               set_sub_x_weight: str = "follow_mapping_matrix",
+                              use_sub_edge_index: bool = False,
                               post_edge_normalize: Union[str, Callable, None] = None,
                               post_edge_normalize_args: Union[List, None] = None,
                               edge_thres: Union[float, Callable, List[float]] = 1.0,
@@ -285,7 +305,7 @@ class SubgraphToNode:
             [str(round(a, 3)) for a in post_edge_normalize_args]  # todo: general repr for args
         ) if post_edge_normalize is not None else None
 
-        name_key = repr_kvs(mmt=mapping_matrix_type, xw=set_sub_x_weight,
+        name_key = repr_kvs(mmt=mapping_matrix_type, xw=set_sub_x_weight, sei=use_sub_edge_index,
                             et=str_et, en=str_en, ucp=use_consistent_processing)
         path = self.path / f"{self.node_task_name}_node_task_data_{name_key}.pth"
         try:
@@ -300,18 +320,22 @@ class SubgraphToNode:
             edge_thres = [edge_thres, edge_thres, edge_thres]
         assert len(edge_thres) == len(self.splits)
 
-        node_task_data_precursor = self.node_task_data_precursor(mapping_matrix_type, save)
+        node_task_data_precursor = self.node_task_data_precursor(mapping_matrix_type, use_sub_edge_index, save)
         ew_mat = node_task_data_precursor.edge_weight_matrix
 
         edge_norm_kws = {}
         for i, (s, et) in enumerate(zip(self.splits, edge_thres)):
-            x, y, batch, ptr = try_getattr(node_task_data_precursor,
-                                           ["x", "y", "batch", "ptr"], as_dict=False)
+            x, y, batch, ptr, sub_edge_index = try_getattr(node_task_data_precursor,
+                                                           ["x", "y", "batch", "ptr", "sub_edge_index"],
+                                                           default=None, as_dict=False)
             s_0, s_1 = self.num_start, self.num_start + s
             sub_x = x[ptr[s_0]:ptr[s_1], :]
             sub_batch = batch[ptr[s_0]:ptr[s_1]]
             sub_batch = sub_batch - sub_batch.min()  # if ptr[s_0] is not 0, sub_batch can be > 0.
             y = y[s_0:s_1]
+
+            if sub_edge_index is not None:
+                sub_edge_index = filter_living_edge_index(sub_edge_index, num_nodes=sub_x.size(0))
 
             num_nodes = y.size(0)
             eval_mask = None
@@ -356,7 +380,8 @@ class SubgraphToNode:
                 )
 
             self._node_task_data_list.append(Data(
-                sub_x=sub_x, sub_batch=sub_batch, sub_x_weight=sub_x_weight,
+                sub_x=sub_x, sub_batch=sub_batch,
+                sub_x_weight=sub_x_weight, sub_edge_index=sub_edge_index,
                 y=y, eval_mask=eval_mask,
                 edge_index=edge_index, edge_attr=edge_attr.view(-1, 1),
                 num_nodes=num_nodes,
@@ -573,6 +598,7 @@ if __name__ == '__main__':
                     ntds = s2n.node_task_data_splits(
                         mapping_matrix_type="unnormalized",
                         set_sub_x_weight="original_sqrt_d_node_div_d_sub",
+                        use_sub_edge_index=True,
                         post_edge_normalize="standardize_then_trunc_thres_max_linear",
                         post_edge_normalize_args=[i, j],
                         edge_thres=0.0,

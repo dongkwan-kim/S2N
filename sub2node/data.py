@@ -36,6 +36,7 @@ class SubgraphDataModule(LightningDataModule):
                  use_s2n: bool,
                  s2n_mapping_matrix_type: str = None,
                  s2n_set_sub_x_weight: str = "follow_mapping_matrix",
+                 s2n_use_sub_edge_index: bool = False,
                  s2n_add_sub_x_wl: bool = False,
                  edge_thres: Union[float, Callable, List[float]] = None,
                  post_edge_normalize: Union[str, Callable, None] = None,
@@ -153,6 +154,7 @@ class SubgraphDataModule(LightningDataModule):
             data_list = s2n.node_task_data_splits(
                 mapping_matrix_type=self.h.s2n_mapping_matrix_type,
                 set_sub_x_weight=self.h.s2n_set_sub_x_weight,
+                use_sub_edge_index=self.h.s2n_use_sub_edge_index,
                 post_edge_normalize=self.h.post_edge_normalize,
                 post_edge_normalize_args=[getattr(self.h, f"post_edge_normalize_arg_{i}") for i in range(1, 3)
                                           if getattr(self.h, f"post_edge_normalize_arg_{i}", None) is not None],
@@ -299,7 +301,8 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
         use_s2n=USE_S2N,
         s2n_mapping_matrix_type="unnormalized",
         s2n_set_sub_x_weight="original_sqrt_d_node_div_d_sub",
-        s2n_add_sub_x_wl=True,
+        s2n_add_sub_x_wl=False,
+        s2n_use_sub_edge_index=False,
         edge_thres=0.0,
         use_consistent_processing=True,
         post_edge_normalize="standardize_then_trunc_thres_max_linear",
