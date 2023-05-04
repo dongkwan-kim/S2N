@@ -687,8 +687,8 @@ class DeepSets(nn.Module):
         x = self.decoder(x)  # batch is not matched for decoder.
         return x
 
-    def extra_repr(self) -> str:
-        return f"(aggr): {self.aggr}"
+    def __repr__(self):
+        return f"{self.__class__.__name__}(aggr={self.aggr}, encoder={self.encoder}, decoder={self.decoder})"
 
 
 class VersatileEmbedding(nn.Module):

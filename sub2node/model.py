@@ -114,15 +114,15 @@ class GraphNeuralModel(LightningModule):
 
             num_nodes = given_datamodule.test_data.num_nodes
             num_train_nodes = given_datamodule.train_data.num_nodes
-            out_channels = given_datamodule.num_classes
         else:
             num_nodes = given_datamodule.num_nodes_global
             num_train_nodes = None
             in_channels = self.node_emb.num_channels
-            if self.dh.replace_x_with_wl4pattern:
-                out_channels = given_datamodule.num_classes
-            else:
-                out_channels = self.h.hidden_channels
+
+        if self.dh.replace_x_with_wl4pattern:
+            out_channels = given_datamodule.num_classes
+        else:
+            out_channels = self.h.hidden_channels
 
         # If weighted edges are using, some models require special kwargs.
         if given_datamodule.h.s2n_is_weighted:
@@ -160,13 +160,14 @@ class GraphNeuralModel(LightningModule):
                 use_skip=self.h.use_skip,
                 dropout_channels=self.h.dropout_channels,
                 dropout_edges=self.h.dropout_edges,
-                activate_last=False,
+                activate_last=True,
                 **self.h.layer_kwargs,
             )
 
-        if self.h.use_s2n or self.dh.replace_x_with_wl4pattern:
-            self.readout = None
-        else:
+        self.readout, self.lin_last = None, None
+        if self.h.use_s2n:
+            self.lin_last = nn.Linear(out_channels, given_datamodule.num_classes)
+        elif not (self.h.use_s2n or self.dh.replace_x_with_wl4pattern):
             self.readout = Readout("sum", use_in_mlp=False, use_out_linear=True,
                                    hidden_channels=self.h.hidden_channels,
                                    out_channels=given_datamodule.num_classes)
@@ -205,7 +206,9 @@ class GraphNeuralModel(LightningModule):
         edge_index = adj_t if adj_t is not None else edge_index
         x = self.encoder(x, edge_index, edge_attr)
 
-        if not self.h.use_s2n:
+        if self.h.use_s2n:
+            x = self.lin_last(x)
+        else:
             if x_to_xs is not None:  # for connected subgraphs
                 x = x[x_to_xs]
             _, x = self.readout(x, batch)
@@ -265,6 +268,9 @@ class GraphNeuralModel(LightningModule):
 
 if __name__ == '__main__':
 
+    from termcolor import cprint
+
+
     def _pprint_tensor_dict(td: dict):
         _kv_dict = {}
         for k, v in td.items():
@@ -299,7 +305,7 @@ if __name__ == '__main__':
         WL4PATTERN_ARGS = None
 
     ENCODER_NAME = "GCNConv"  # ["Linear", "GCNConv"]  # GATConv, LINKX, FAConv, GINConv
-    NUM_LAYERS = 2
+    NUM_LAYERS = 1
     if isinstance(ENCODER_NAME, list):
         NUM_LAYERS = [2, 3]
 
@@ -368,16 +374,23 @@ if __name__ == '__main__':
         is_multi_labels=(NAME == "HPONeuro"),
         use_s2n=USE_S2N,
         sub_node_encoder_name=SUB_NODE_ENCODER_NAME,
+        shared_sub_node_and_graph_encoder=True,
         sub_node_num_layers=SUB_NODE_NUM_LAYERS,
         use_bn=True,
         use_gn=False,
-        use_skip=False,
-        dropout_channels=0.0,
+        use_skip=True,
+        dropout_channels=0.2,
         dropout_edges=0.0,
         layer_kwargs=LAYER_KWARGS,
         given_datamodule=_sdm,
     )
-    print(_gnm)
+    cprint("\n" + "-" * 50, "green")
+    for _name, _item in _gnm.named_modules():
+        print(_name)
+        print(_item)
+        cprint("-" * 10, "green")
+    cprint("\n" + "-" * 50, "green")
+
     for _i, _b in enumerate(_sdm.train_dataloader()):
         print(_b)
         _step_out = _gnm.training_step(_b, _i)
