@@ -227,9 +227,10 @@ def aggregate_csv_metrics(in_path, out_path,
         "model/dropout_edges",
         "model/use_bn",
         "model/use_gn",
-        "model/layer_kwargs",
         "model/use_skip",
-        "trainer/gradient_clip_val",
+        "model/_gradient_clip_val",
+        "model/layer_kwargs",
+        "model/sub_node_encoder_layer_kwargs",
     ]
     path_hparams = path_hparams or key_hparams[:1]
 
