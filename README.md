@@ -18,15 +18,16 @@ python run_main.py trainer.gpus="[0]" datamodule=${batching_type}/${dataset} mod
 python run_main.py trainer.gpus="[0]" datamodule=s2n/${dataset}/for-${model} model=${model}/s2n/for-${dataset}
 
 # For hparams tuning
-python run_main.py --multirun hparams_search=optuna_as_is trainer.gpus="[1]" datamodule=${batching_type}/${dataset}/for-${model} model=${model}/${batching_type}/for-${dataset}
+python run_main.py --multirun hparams_search=optuna_as_is trainer.gpus="[1]" datamodule=${batching_type}/${dataset} model=${model}/${batching_type}/for-${dataset}
 python run_main.py --multirun hparams_search=optuna_s2n trainer.gpus="[1]" datamodule=s2n/${dataset}/for-${model} model=${model}/s2n/for-${dataset}
-# Examples
-python run_main.py --multirun hparams_search=optuna_s2n_lr trainer.gpus="[1]" datamodule=s2n/ppi_bp/for-gcn model=gcn/s2n/for-ppi_bp datamodule.s2n_mapping_matrix_type="sqrt_d_node_div_d_sub"
-python run_main.py --multirun hparams_search=optuna_s2n_lr trainer.gpus="[1]" datamodule=s2n/ppi_bp/for-gcn model=gcn/s2n/for-ppi_bp datamodule.s2n_mapping_matrix_type="1_div_sqrt_num_nodes_in_sub"
-
-# Examples of WLKS
-python run_main.py --multirun hparams_search=optuna_as_is trainer.gpus="[1]" datamodule=separated/wlks model=gcn/separated/for-wlks datamodule.transform_args="[0]"
-python run_main.py --multirun hparams_search=optuna_s2n trainer.gpus="[1]" datamodule=s2n/wlks model=gcn/s2n/for-wlks datamodule.s2n_transform_args="[0]"
+# Examples (s2n)
+python run_main.py --multirun hparams_search=optuna_s2n_lr trainer.gpus="[0]" datamodule=s2n/ppi_bp/for-gcn model=gcn/s2n/for-ppi_bp
+python run_main.py --multirun hparams_search=optuna_s2n_gcn2_lr trainer.gpus="[0]" datamodule=s2n/ppi_bp/for-gcn2 model=gcn2/s2n/for-ppi_bp
+python run_main.py --multirun hparams_search=optuna_s2n_fa_lr trainer.gpus="[0]" datamodule=s2n/ppi_bp/for-fa model=fa/s2n/for-ppi_bp
+# Examples (others)
+python run_main.py --multirun hparams_search=optuna_as_is_lr trainer.gpus="[1]" datamodule=connected/ppi_bp model=gcn/connected/for-ppi_bp
+python run_main.py --multirun hparams_search=optuna_s2n_gcn2_lr trainer.gpus="[1]" datamodule=connected/ppi_bp model=gcn2/connected/for-ppi_bp
+python run_main.py --multirun hparams_search=optuna_s2n_fa_lr trainer.gpus="[1]" datamodule=connected/ppi_bp model=fa/connected/for-ppi_bp
 
 # Examples by a number of training subgraphs
 python run_main.py trainer.gpus="[2]" datamodule=connected/ppi_bp model=gcn/connected/for-ppi_bp datamodule.custom_splits="[0.7, 0.1, 0.1]"
