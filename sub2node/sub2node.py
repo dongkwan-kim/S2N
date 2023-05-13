@@ -335,7 +335,9 @@ class SubgraphToNode:
             y = y[s_0:s_1]
 
             if sub_edge_index is not None:
-                sub_edge_index = filter_living_edge_index(sub_edge_index, num_nodes=sub_x.size(0))
+                sub_edge_index = filter_living_edge_index(
+                    sub_edge_index - ptr[s_0],  # sub_x is truncated when ptr[s_0] > 0.
+                    num_nodes=sub_x.size(0), min_index=0)
 
             num_nodes = y.size(0)
             eval_mask = None
@@ -345,7 +347,7 @@ class SubgraphToNode:
             else:
                 self.print_mat_stat(ew_mat, "Summarizing edge_weight_matrix")
 
-            ew_mat_s_by_s = ew_mat.clone()[:s, :s]
+            ew_mat_s_by_s = ew_mat.clone()[s_0:s_1, s_0:s_1]
             if post_edge_normalize is not None:
                 if use_consistent_processing:
                     ew_mat_s_by_s, edge_norm_kws = post_edge_normalize(ew_mat_s_by_s, **edge_norm_kws)
@@ -366,7 +368,7 @@ class SubgraphToNode:
                 if set_sub_x_weight == "sparse_sqrt_d_node_div_d_sub":
                     s_index = edge_index
                 elif set_sub_x_weight == "original_sqrt_d_node_div_d_sub":
-                    s_index, _ = dense_to_sparse(ew_mat[:s, :s])
+                    s_index, _ = dense_to_sparse(ew_mat[s_0:s_1, s_0:s_1])
                 else:
                     raise ValueError(f"Wrong set_sub_x_weight: {set_sub_x_weight}")
 

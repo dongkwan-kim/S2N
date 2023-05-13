@@ -250,6 +250,8 @@ def _print_data(data):
         e = torch.cat([row, col])
         print("\t- edge (SparseTensor)", f"{e.min()} -- {e.max()}")
         print("\t- adj_t", data.adj_t)
+    if hasattr(data, "sub_edge_index"):
+        print("\t- sub_edge (Tensor)", f"{data.edge_index.min()} -- {data.edge_index.max()}")
 
 
 def get_subgraph_datamodule_for_test(name, **kwargs):
@@ -302,7 +304,7 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
         s2n_mapping_matrix_type="unnormalized",
         s2n_set_sub_x_weight="original_sqrt_d_node_div_d_sub",
         s2n_add_sub_x_wl=False,
-        s2n_use_sub_edge_index=False,
+        s2n_use_sub_edge_index=True,
         edge_thres=0.0,
         use_consistent_processing=True,
         post_edge_normalize="standardize_then_trunc_thres_max_linear",
@@ -332,7 +334,7 @@ if __name__ == '__main__':
     # Density, CC, Coreness, CutRatio
     _sdm = get_subgraph_datamodule_for_test(
         name="PPIBP",
-        # custom_splits=[0.5, 0.1, 0.1],
+        custom_splits=[0.5, 0.3, 0.1],
     )
 
     print(_sdm)

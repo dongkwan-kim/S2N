@@ -389,8 +389,10 @@ def dropout_adj_st(edge_index: Union[Tensor, SparseTensor],
         return edge_index, edge_attr
 
 
-def filter_living_edge_index(edge_index, num_nodes):
+def filter_living_edge_index(edge_index, num_nodes, min_index=None):
     mask = (edge_index[0] < num_nodes) & (edge_index[1] < num_nodes)
+    if min_index is not None:
+        mask = mask & (edge_index[0] >= min_index) & (edge_index[1] >= min_index)
     return edge_index[:, mask]
 
 
