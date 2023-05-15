@@ -6,12 +6,14 @@ pre_add_self_loops: False  # for GATConv with SparseTensor
 verbose: 2
 num_workers: 0
 
-embedding_type: "gin"  # gin, graphsaint_gcn, glass
+embedding_type: glass  # gin, graphsaint_gcn, glass
 
 # NOTE: common args when use_s2n=True
 edge_thres: 0.0  # important
 use_consistent_processing: True
-s2n_target_matrix: "adjacent_no_self_loops"
+s2n_set_sub_x_weight: "original_sqrt_d_node_div_d_sub"
+s2n_target_matrix: "adjacent_with_self_loops"
+s2n_add_sub_x_wl: False
 s2n_is_weighted: True
 post_edge_normalize_arg_1: null
 post_edge_normalize_arg_2: null
@@ -23,7 +25,7 @@ subgraph_batching: null  # separated, connected
 # NOTE: common args when replace_x_with_wl4pattern=True
 # type of which is (int, str), e.g., (0, "color"), (1, "cluster")
 replace_x_with_wl4pattern: False
-wl4pattern_args: [null, null]
+wl4pattern_args: [ null, null ]
 
 # NOTE: for sensitivity analysis by a number of training samples
 # Splits:

@@ -52,17 +52,11 @@ hydra:
         low: 0.5
         high: 2.0
         step: 0.5
-      datamodule.s2n_target_matrix:
-        type: categorical
-        choices:
-          - "adjacent_no_self_loops"
-          - "adjacent_with_self_loops"
       model.learning_rate:
-        type: categorical
-        choices:
-          - 0.0005
-          - 0.001
-          - 0.005
+        type: float
+        log: True
+        low: 5e-4
+        high: 1e-2
       model._gradient_clip_val:
         type: float
         low: 0.0
@@ -86,7 +80,8 @@ hydra:
       model.num_layers:
         type: int
         low: 1
-        high: 3
+        high: 2
+
       model.layer_kwargs.eps:
         type: float
         low: 0.1

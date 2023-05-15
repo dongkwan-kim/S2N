@@ -6,7 +6,7 @@ defaults:
 encoder_layer_name: GCNConv
 num_layers: 2
 use_bn: True
-use_skip: False
+use_skip: true
 dropout_channels: 0.1
 dropout_edges: 0.0
 

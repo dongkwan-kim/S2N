@@ -6,7 +6,7 @@ defaults:
 encoder_layer_name: SAGEConv
 num_layers: 2
 use_bn: True
-use_skip: False
+use_skip: true
 dropout_channels: 0.1
 dropout_edges: 0.0
 
@@ -15,6 +15,6 @@ weight_decay: 0.00001
 _gradient_clip_val: 0.0
 
 sub_node_num_layers: 0
-sub_node_encoder_aggr: "sum"
+sub_node_encoder_aggr: sum
 
 subname: "SAGE-S2N-${datamodule.s2n_transform_args[0]}"

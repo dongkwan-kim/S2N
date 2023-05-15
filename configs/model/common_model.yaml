@@ -3,8 +3,15 @@ hidden_channels: 64
 
 is_multi_labels: ${datamodule._is_multi_labels}
 use_s2n: ${datamodule.use_s2n}
+layer_kwargs: { }
+sub_node_encoder_layer_kwargs:
+  heads: 8
+  eps: null
+  alpha: null
+  theta: null
+  shared_weights: null
 
-metrics: ["micro_f1", "macro_f1"]
+metrics: [ "micro_f1", "macro_f1" ]
 hp_metric: "micro_f1"
 
 # To Trainer

@@ -43,11 +43,10 @@ hydra:
     # https://github.com/facebookresearch/hydra/blob/02495f9c781615e2fe7ae5588e16f596fcec010c/plugins/hydra_optuna_sweeper/tests/test_optuna_sweeper_plugin.py#L49
     search_space:
       model.learning_rate:
-        type: categorical
-        choices:
-          - 0.0005
-          - 0.001
-          - 0.005
+        type: float
+        log: True
+        low: 5e-4
+        high: 1e-2
       model._gradient_clip_val:
         type: float
         low: 0.0
@@ -71,4 +70,4 @@ hydra:
       model.num_layers:
         type: int
         low: 1
-        high: 3
+        high: 2

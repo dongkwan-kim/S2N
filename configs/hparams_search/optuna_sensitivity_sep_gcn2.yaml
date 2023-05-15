@@ -21,9 +21,9 @@ num_averaging: 10
 # Set optuna specific logger dirs
 logger:
   tensorboard:
-    save_dir: "${project_dir}/logs_multi_tensorboard/"
+    save_dir: "${project_dir}/logs_sensitivity_tensorboard/"
   csv:
-    save_dir: "${project_dir}/logs_multi_csv/"
+    save_dir: "${project_dir}/logs_sensitivity_csv/"
 
 hydra:
   # here we define Optuna hyperparameter search
@@ -36,12 +36,16 @@ hydra:
     direction: maximize
 
     # number of experiments that will be executed
-    n_trials: 100
+    n_trials: 50  # NOTE: a slightly smaller value
 
     # define range of hyperparameters
     # https://hydra.cc/docs/plugins/optuna_sweeper/
     # https://github.com/facebookresearch/hydra/blob/02495f9c781615e2fe7ae5588e16f596fcec010c/plugins/hydra_optuna_sweeper/tests/test_optuna_sweeper_plugin.py#L49
     search_space:
+      model.learning_rate:
+        type: categorical
+        choices:
+          - 0.001
       datamodule.post_edge_normalize_arg_1:
         type: float
         low: 0.0
@@ -52,11 +56,6 @@ hydra:
         low: 0.5
         high: 2.0
         step: 0.5
-      model.learning_rate:
-        type: float
-        log: True
-        low: 5e-4
-        high: 1e-2
       model._gradient_clip_val:
         type: float
         low: 0.0
@@ -80,8 +79,7 @@ hydra:
       model.num_layers:
         type: int
         low: 1
-        high: 2
-
+        high: 1
       model.layer_kwargs.alpha:
         type: float
         low: 0.1
@@ -93,6 +91,26 @@ hydra:
         high: 2.0
         step: 0.1
       model.layer_kwargs.shared_weights:
+        type: categorical
+        choices:
+          - True
+          - False
+
+      model.sub_node_num_layers:
+        type: int
+        low: 1
+        high: 1
+      model.sub_node_encoder_layer_kwargs.alpha:
+        type: float
+        low: 0.1
+        high: 0.9
+        step: 0.1
+      model.sub_node_encoder_layer_kwargs.theta:
+        type: float
+        low: 0.1
+        high: 2.0
+        step: 0.1
+      model.sub_node_encoder_layer_kwargs.shared_weights:
         type: categorical
         choices:
           - True

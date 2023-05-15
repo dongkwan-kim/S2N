@@ -1,10 +1,10 @@
 _target_: model.GraphNeuralModel
 defaults:
-- common_model.yaml
+  - common_model.yaml
 encoder_layer_name: LINKX
 num_layers: 1
 use_bn: true
-use_skip: false
+use_skip: true
 dropout_channels: 0.30000000000000004
 dropout_edges: 0.30000000000000004
 layer_kwargs:

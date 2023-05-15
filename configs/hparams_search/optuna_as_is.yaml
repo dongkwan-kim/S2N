@@ -65,4 +65,4 @@ hydra:
       model.num_layers:
         type: int
         low: 1
-        high: 3
+        high: 2
