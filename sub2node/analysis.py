@@ -414,12 +414,12 @@ if __name__ == '__main__':
         )
     elif METHOD == "visualize_efficiency":
         visualize_efficiency(
-            csv_path="./_sub2node Table (new) - tab_efficiency.csv",
+            csv_path="./_sub2node Table (new2) - tab_efficiency.csv",
             extension="pdf",
         )
     elif METHOD == "visualize_efficiency_by_num_training":
         visualize_efficiency_by_num_training(
-            csv_path="./_sub2node Table (new) - tab_efficiency_by_num_training.csv",
+            csv_path="./_sub2node Table (new2) - tab_efficiency_by_num_training.csv",
             extension="pdf",
-            dataset="HPO-Metab",
+            dataset="EM-User",
         )
