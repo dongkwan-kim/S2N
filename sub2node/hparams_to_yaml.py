@@ -1,7 +1,7 @@
 import csv
 from pathlib import Path
 from types import BuiltinFunctionType
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 from omegaconf import OmegaConf, DictConfig, ListConfig
 from termcolor import cprint
@@ -29,8 +29,8 @@ def load_kwargs(dataset_name, batching_type, model_name) -> (str, DictConfig, st
         "EMUser": "em_user"
     })
     dataset_name = dataset_name.split("-")[0]  # for cases like DATASET-[0.x, 0.y, 0.z]
-    if batching_type == "s2n":
-        datamodule_yaml = f"../configs/datamodule/s2n/{dataset_name}/for-{model_name}.yaml"
+    if "s2n" in batching_type:
+        datamodule_yaml = f"../configs/datamodule/{batching_type}/{dataset_name}/for-{model_name}.yaml"
     else:
         datamodule_yaml = f"../configs/datamodule/{batching_type}/{dataset_name}.yaml"
 
@@ -41,8 +41,12 @@ def load_kwargs(dataset_name, batching_type, model_name) -> (str, DictConfig, st
     return datamodule_yaml, datamodule_cfg, model_yaml, model_cfg
 
 
-def load_best_hparams_per_dataset(dataset_name, log_path) -> List[Dict[str, Any]]:
+def load_best_hparams_per_dataset(dataset_name, log_path) -> Optional[List[Dict[str, Any]]]:
     the_log = list(Path(log_path).glob(f"**/_log_{dataset_name}*"))
+    if len(the_log) == 0:
+        cprint(f"Not found any {dataset_name} logs in {log_path}", "red")
+        return None
+
     assert len(the_log) == 1
     the_log = the_log[0]
     cprint(f"Load: {the_log}", "green")
@@ -62,6 +66,8 @@ def load_best_hparams_per_dataset(dataset_name, log_path) -> List[Dict[str, Any]
 def replace_and_dump_hparams_to_args(dataset_name, log_path="../_aggr_logs",
                                      dump_datamodule=True, dump_model=True):
     best_hparams = load_best_hparams_per_dataset(dataset_name, log_path=log_path)
+    if best_hparams is None:
+        return
     for bh_dict in best_hparams:
         bh_datamodule, bh_model = bh_dict["datamodule"], bh_dict["model"]
 
@@ -107,16 +113,14 @@ def replace_and_dump_hparams_to_args(dataset_name, log_path="../_aggr_logs",
 
 
 if __name__ == '__main__':
-    LOG_PATH = "../_aggr_logs/for-ICML2023/sensitivity_v2"
+    LOG_PATH = "../_aggr_logs/"
 
-    # ../_aggr_logs/for-ICML2023/main
-    if not "sensitivity" in LOG_PATH:
+    if "sensitivity" not in LOG_PATH:
         replace_and_dump_hparams_to_args("PPIBP", LOG_PATH)
         replace_and_dump_hparams_to_args("HPOMetab", LOG_PATH)
         replace_and_dump_hparams_to_args("HPONeuro", LOG_PATH)
         replace_and_dump_hparams_to_args("EMUser", LOG_PATH)
 
-    # ../_aggr_logs/for-ICML2023/sensitivity_v2
     else:
 
         IDX = 0  # 0, 1, 2, 3
