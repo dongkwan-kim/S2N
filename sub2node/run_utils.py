@@ -285,9 +285,10 @@ def aggregate_csv_metrics(in_path, out_path,
 
             model_to_bom_metric = defaultdict(float)
             for experiment_key, values in experiment_key_to_values.items():
-                model_subname = key_to_ingredients[experiment_key][model_key]
-                model_to_bom_metric[model_subname] = max(float(np.mean(values)),
-                                                         model_to_bom_metric[model_subname])
+                if len(values) >= min_aggr_length:
+                    model_subname = key_to_ingredients[experiment_key][model_key]
+                    model_to_bom_metric[model_subname] = max(float(np.mean(values)),
+                                                             model_to_bom_metric[model_subname])
 
             num_lines = 0
             model_to_bom_logged = defaultdict(bool)
