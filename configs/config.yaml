@@ -3,10 +3,10 @@
 # specify here default training configuration
 defaults:
   - config_sub.yaml  # args that can be overridden by below yamls
-  - datamodule: s2n/wlks.yaml
+  - datamodule: s2n/ppi_bp.yaml
     # s2n, separated, connected
-    # ppi_bp, hpo_metab, hpo_neuro, em_user, wlks
-  - model: gcn/s2n/for-wlks.yaml
+    # ppi_bp, hpo_metab, hpo_neuro, em_user
+  - model: gcn/s2n/for-ppi_bp.yaml
     # fa, gat, gcn, gcn2, gin, linkx, sage
     # s2n, separated, connected
   - callbacks: checkpoint.yaml # set this to null if you don't want to use callbacks

@@ -1,0 +1,24 @@
+_target_: model.GraphNeuralModel
+defaults:
+- common_model.yaml
+encoder_layer_name: FAConv
+num_layers: 2
+use_bn: true
+use_skip: true
+dropout_channels: 0.4
+dropout_edges: 0.5
+layer_kwargs:
+  eps: 0.1
+learning_rate: 0.006031089798925712
+weight_decay: 2.7851457617992673e-09
+_gradient_clip_val: 0.0
+sub_node_num_layers: 2
+sub_node_encoder_aggr: sum
+sub_node_encoder_name: FAConv
+sub_node_encoder_layer_kwargs:
+  heads: 8
+  eps: 0.1
+  alpha: null
+  theta: null
+  shared_weights: null
+subname: FA-SUB-S2N

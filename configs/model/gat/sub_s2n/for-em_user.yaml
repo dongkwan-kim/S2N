@@ -1,0 +1,24 @@
+_target_: model.GraphNeuralModel
+defaults:
+  - common_model.yaml
+encoder_layer_name: GATConv
+num_layers: 1
+use_bn: true
+use_skip: true
+dropout_channels: 0.0
+dropout_edges: 0.2
+learning_rate: 0.0021346563922442917
+weight_decay: 1.2175121979272477e-09
+_gradient_clip_val: 0.30000000000000004
+sub_node_num_layers: 2
+sub_node_encoder_aggr: sum
+sub_node_encoder_name: GATConv
+layer_kwargs:
+  heads: 8
+sub_node_encoder_layer_kwargs:
+  heads: 8
+  eps: null
+  alpha: null
+  theta: null
+  shared_weights: null
+subname: GAT-SUB-S2N

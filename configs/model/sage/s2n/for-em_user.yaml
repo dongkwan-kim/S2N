@@ -2,14 +2,20 @@ _target_: model.GraphNeuralModel
 defaults:
   - common_model.yaml
 encoder_layer_name: SAGEConv
-num_layers: 1
+num_layers: 2
 use_bn: true
 use_skip: true
-dropout_channels: 0.30000000000000004
+dropout_channels: 0.1
 dropout_edges: 0.5
-learning_rate: 0.0005
-weight_decay: 4.503692762914334e-08
-_gradient_clip_val: 0.0
+learning_rate: 0.0029830522156857266
+weight_decay: 7.252805971489632e-09
+_gradient_clip_val: 0.1
 sub_node_num_layers: 0
 sub_node_encoder_aggr: sum
+sub_node_encoder_layer_kwargs:
+  heads: 8
+  eps: null
+  alpha: null
+  theta: null
+  shared_weights: null
 subname: SAGE-S2N

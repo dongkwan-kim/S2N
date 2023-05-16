@@ -1,18 +1,13 @@
 _target_: data.SubgraphDataModule
-
 defaults:
-  - common_datamodule.yaml
-
-dataset_name: "HPONeuro"
-
-use_s2n: True
-s2n_mapping_matrix_type: "unnormalized"   # unnormalized, sqrt_d_node_div_d_sub, 1_div_sqrt_num_nodes_in_sub
-s2n_set_sub_x_weight: "original_sqrt_d_node_div_d_sub"
-s2n_target_matrix: "adjacent_with_self_loops"
-post_edge_normalize: "standardize_then_trunc_thres_max_linear"
-post_edge_normalize_arg_1: 4.0
+- common_datamodule.yaml
+dataset_name: HPONeuro
+use_s2n: true
+s2n_mapping_matrix_type: unnormalized
+s2n_set_sub_x_weight: original_sqrt_d_node_div_d_sub
+s2n_target_matrix: adjacent_with_self_loops
+post_edge_normalize: standardize_then_trunc_thres_max_linear
+post_edge_normalize_arg_1: 1.25
 post_edge_normalize_arg_2: 1.0
-
-# Will be inherited to the trainer, model
 _max_epochs: 2500
-_is_multi_labels: True
+_is_multi_labels: true
