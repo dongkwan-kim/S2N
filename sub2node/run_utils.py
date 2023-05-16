@@ -195,7 +195,8 @@ def aggregate_csv_metrics(in_path, out_path,
                           key_hparams=None,
                           path_hparams=None,
                           metric=None,
-                          model_key="model/subname"):
+                          model_key="model/subname",
+                          min_aggr_length=10):
     import yaml
     import pandas as pd
     import numpy as np
@@ -291,20 +292,21 @@ def aggregate_csv_metrics(in_path, out_path,
             num_lines = 0
             model_to_bom_logged = defaultdict(bool)
             for experiment_key, values in experiment_key_to_values.items():
-                key_dict = key_to_ingredients[experiment_key]
-                mean_metric = float(np.mean(values))
-                bom = True if (mean_metric == model_to_bom_metric[key_dict[model_key]]) else ""
-                writer.writerow({
-                    "best_of_model": bom if not model_to_bom_logged[key_dict[model_key]] else "",
-                    **key_dict,
-                    f"mean/{metric}": mean_metric,
-                    f"std/{metric}": float(np.std(values)),
-                    f"N/{metric}": len(values),
-                    "list": str(values),
-                })
-                num_lines += 1
-                if bom != "":
-                    model_to_bom_logged[key_dict[model_key]] = True
+                if len(values) >= min_aggr_length:
+                    key_dict = key_to_ingredients[experiment_key]
+                    mean_metric = float(np.mean(values))
+                    bom = True if (mean_metric == model_to_bom_metric[key_dict[model_key]]) else ""
+                    writer.writerow({
+                        "best_of_model": bom if not model_to_bom_logged[key_dict[model_key]] else "",
+                        **key_dict,
+                        f"mean/{metric}": mean_metric,
+                        f"std/{metric}": float(np.std(values)),
+                        f"N/{metric}": len(values),
+                        "list": str(values),
+                    })
+                    num_lines += 1
+                    if bom != "":
+                        model_to_bom_logged[key_dict[model_key]] = True
             print(f"Saved (lines {num_lines}): {out_file.resolve()}")
 
 
