@@ -1,14 +1,9 @@
 _target_: data.SubgraphDataModule
-
 defaults:
-  - common_datamodule.yaml
-
-dataset_name: "HPOMetab"
-embedding_type: glass  # gin, graphsaint_gcn, glass
-
-subgraph_batching: "connected"
-use_s2n: False
-
-# Will be inherited to the trainer, model
+- common_datamodule.yaml
+dataset_name: HPOMetab
+embedding_type: glass
+subgraph_batching: connected
+use_s2n: false
 _max_epochs: 2500
-_is_multi_labels: False
+_is_multi_labels: false

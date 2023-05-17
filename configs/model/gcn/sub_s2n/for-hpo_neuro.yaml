@@ -6,10 +6,10 @@ num_layers: 1
 use_bn: true
 use_skip: true
 dropout_channels: 0.5
-dropout_edges: 0.1
-learning_rate: 0.005995412450167464
-weight_decay: 4.6128408072879566e-07
-_gradient_clip_val: 0.1
+dropout_edges: 0.0
+learning_rate: 0.0008387565206000689
+weight_decay: 4.3750561021575074e-07
+_gradient_clip_val: 0.2
 sub_node_num_layers: 1
 sub_node_encoder_aggr: sum
 sub_node_encoder_name: GCNConv

@@ -7,7 +7,7 @@ s2n_mapping_matrix_type: unnormalized
 s2n_set_sub_x_weight: original_sqrt_d_node_div_d_sub
 s2n_target_matrix: adjacent_with_self_loops
 post_edge_normalize: standardize_then_trunc_thres_max_linear
-post_edge_normalize_arg_1: 3.75
-post_edge_normalize_arg_2: 1.5
+post_edge_normalize_arg_1: 0.75
+post_edge_normalize_arg_2: 0.5
 _max_epochs: 2500
 _is_multi_labels: false

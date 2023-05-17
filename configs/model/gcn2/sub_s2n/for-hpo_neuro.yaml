@@ -5,22 +5,22 @@ encoder_layer_name: GCN2Conv
 num_layers: 1
 use_bn: true
 use_skip: true
-dropout_channels: 0.2
-dropout_edges: 0.2
-learning_rate: 0.0005917915345702802
-weight_decay: 6.73236753878142e-09
-_gradient_clip_val: 0.4
-sub_node_num_layers: 1
+dropout_channels: 0.30000000000000004
+dropout_edges: 0.4
+learning_rate: 0.0006506577786611304
+weight_decay: 5.171540196863701e-09
+_gradient_clip_val: 0.1
+sub_node_num_layers: 2
 sub_node_encoder_aggr: sum
 sub_node_encoder_name: GCN2Conv
 layer_kwargs:
-  alpha: 0.1
-  theta: 0.4
-  shared_weights: false
+  alpha: 0.5
+  theta: 1.6
+  shared_weights: true
 sub_node_encoder_layer_kwargs:
   heads: 8
   eps: null
-  alpha: 0.6
-  theta: 0.8
+  alpha: 0.5
+  theta: 0.7000000000000001
   shared_weights: false
 subname: GCNII-SUB-S2N

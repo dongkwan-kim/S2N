@@ -1,13 +1,13 @@
 _target_: model.GraphNeuralModel
 defaults:
-  - common_model.yaml
+- common_model.yaml
 encoder_layer_name: GCNConv
-num_layers: 1
+num_layers: 2
 use_bn: true
 use_skip: true
 dropout_channels: 0.5
-dropout_edges: 0.1
-learning_rate: 0.001
-weight_decay: 6.038554582117411e-09
-_gradient_clip_val: 0.3
+dropout_edges: 0.30000000000000004
+learning_rate: 0.002985575016542551
+weight_decay: 1.247797838939892e-09
+_gradient_clip_val: 0.30000000000000004
 subname: GCN-${datamodule.subgraph_batching}

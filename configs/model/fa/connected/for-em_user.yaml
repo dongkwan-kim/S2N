@@ -1,15 +1,15 @@
 _target_: model.GraphNeuralModel
 defaults:
-  - common_model.yaml
+- common_model.yaml
 encoder_layer_name: FAConv
 num_layers: 2
 use_bn: true
 use_skip: true
-dropout_channels: 0.5
+dropout_channels: 0.4
 dropout_edges: 0.1
 layer_kwargs:
   eps: 0.30000000000000004
-learning_rate: 0.0005
-weight_decay: 6.082135001663187e-09
-_gradient_clip_val: 0.0
+learning_rate: 0.0008175747773477316
+weight_decay: 1.1500086718787546e-09
+_gradient_clip_val: 0.4
 subname: FA-${datamodule.subgraph_batching}

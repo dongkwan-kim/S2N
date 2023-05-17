@@ -1,6 +1,6 @@
 _target_: data.SubgraphDataModule
 defaults:
-  - common_datamodule.yaml
+- common_datamodule.yaml
 dataset_name: HPONeuro
 embedding_type: glass
 subgraph_batching: separated

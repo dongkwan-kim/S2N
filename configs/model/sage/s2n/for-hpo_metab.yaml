@@ -6,10 +6,10 @@ num_layers: 1
 use_bn: true
 use_skip: true
 dropout_channels: 0.5
-dropout_edges: 0.1
-learning_rate: 0.0006301957426829515
-weight_decay: 4.6490573487678295e-07
-_gradient_clip_val: 0.5
+dropout_edges: 0.4
+learning_rate: 0.0007693234828386352
+weight_decay: 1.1432689397349465e-07
+_gradient_clip_val: 0.0
 sub_node_num_layers: 0
 sub_node_encoder_aggr: sum
 sub_node_encoder_layer_kwargs:

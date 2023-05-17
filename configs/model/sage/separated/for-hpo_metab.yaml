@@ -1,13 +1,13 @@
 _target_: model.GraphNeuralModel
 defaults:
-  - common_model.yaml
+- common_model.yaml
 encoder_layer_name: SAGEConv
-num_layers: 2
+num_layers: 1
 use_bn: true
 use_skip: true
 dropout_channels: 0.5
-dropout_edges: 0.30000000000000004
-learning_rate: 0.005
-weight_decay: 1.2957355357225804e-07
+dropout_edges: 0.5
+learning_rate: 0.0012919807888399737
+weight_decay: 1.0651429870851863e-09
 _gradient_clip_val: 0.0
 subname: SAGE-${datamodule.subgraph_batching}

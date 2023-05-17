@@ -1,17 +1,17 @@
 _target_: model.GraphNeuralModel
 defaults:
-  - common_model.yaml
+- common_model.yaml
 encoder_layer_name: FAConv
 num_layers: 2
 use_bn: true
 use_skip: true
 dropout_channels: 0.1
-dropout_edges: 0.30000000000000004
+dropout_edges: 0.2
 layer_kwargs:
   eps: 0.1
-learning_rate: 0.0033531905667898644
-weight_decay: 2.0230935281875724e-08
-_gradient_clip_val: 0.5
+learning_rate: 0.009179257392779062
+weight_decay: 6.550938690447694e-08
+_gradient_clip_val: 0.1
 sub_node_num_layers: 0
 sub_node_encoder_aggr: sum
 sub_node_encoder_layer_kwargs:
