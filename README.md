@@ -3,9 +3,9 @@ Official implementation of Subgraph-To-Node (S2N) Translation
 
 ## Run
 
-- `${model}`: `fa, gat, gcn, gcn2, gin, linkx, sage`
-- `${dataset}`: `em_user, hpo_metab, hpo_neuro, ppi_bp, wlks`
-- `${batching_type}`: `s2n, separated, connected`
+- `${model}`: `gat, gcn, gcn2, sage`
+- `${dataset}`: `em_user, hpo_metab, hpo_neuro, ppi_bp`
+- `${batching_type}`: `s2n (S2N+0), sub_s2n (S2N+A), separated, connected`
 
 ```shell
 # Print args: --cfg all
