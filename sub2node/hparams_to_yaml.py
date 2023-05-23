@@ -113,7 +113,7 @@ def replace_and_dump_hparams_to_args(dataset_name, log_path="../_aggr_logs",
 
 
 if __name__ == '__main__':
-    LOG_PATH = "../_aggr_logs/"
+    LOG_PATH = "../_aggr_sensitivity_logs/"
 
     if "sensitivity" not in LOG_PATH:
         replace_and_dump_hparams_to_args("PPIBP", LOG_PATH)
@@ -123,14 +123,14 @@ if __name__ == '__main__':
 
     else:
 
-        IDX = 0  # 0, 1, 2, 3
+        IDX = 0  # 0, 1, 2, 3, 4
 
         # Prefix: a ratio of not used samples
         prefix_settings = {
-            "PPIBP": [0.7, 0.5, 0.3, 0.1],
-            "HPOMetab": [0.7, 0.5, 0.3, 0.1],
-            "HPONeuro": [0.7, 0.5, 0.3, 0.1],
-            "EMUser": [0.6, 0.45, 0.3, 0.15],
+            "PPIBP": [0.7, 0.5, 0.3, 0.1, 0.0],
+            "HPOMetab": [0.7, 0.5, 0.3, 0.1, 0.0],
+            "HPONeuro": [0.7, 0.5, 0.3, 0.1, 0.0],
+            "EMUser": [0.6, 0.45, 0.3, 0.15, 0.0],
         }
         for _dataset_name, _prefix_list in prefix_settings.items():
             _dataset_name_w_prefix = f"{_dataset_name}-[{_prefix_list[IDX]}"
