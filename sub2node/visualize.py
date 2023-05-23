@@ -45,33 +45,33 @@ def plot_data_points_by_tsne(xs: np.ndarray, ys: np.ndarray,
             plot_for_one_y(ys[:, y_idx], _key=f"{key}_y{y_idx}", _title=f"TSNE: {key} of y={y_idx}")
 
 
-def plot_box(xs, ys, xlabel, ylabel,
-             path, key, extension="pdf",
-             orient="v",
-             hues=None, hue_name=None,
-             cols=None, col_name=None,
-             label_kws: Dict[str, Any] = None,
-             scales_kws: Dict[str, Any] = None,
-             xticks=None, yticks=None,
-             **kwargs):
+def plot_catplot(kind,
+                 xs, ys, xlabel, ylabel,
+                 path, key, extension="pdf",
+                 orient="v",
+                 hues=None, hue_name=None,
+                 rows=None, row_name=None,
+                 cols=None, col_name=None,
+                 label_kws: Dict[str, Any] = None,
+                 scales_kws: Dict[str, Any] = None,
+                 xticks=None, yticks=None,
+                 tight_layout_kwargs: dict = None,
+                 **kwargs):
     data = {
         xlabel: xs,
         ylabel: ys,
-        **{obj_name: obj for obj_name, obj in zip([hue_name, col_name],
-                                                  [hues, cols])
+        **{obj_name: obj for obj_name, obj in zip([hue_name, col_name, row_name],
+                                                  [hues, cols, rows])
            if obj_name is not None}
     }
     df = pd.DataFrame(data)
 
     plot = sns.catplot(
-        kind="box",
+        kind=kind,
         data=df, orient=orient,
-        x=xlabel, y=ylabel, hue=hue_name,
+        x=xlabel, y=ylabel, hue=hue_name, row=row_name, col=col_name,
         **kwargs,
     )
-    if "legend" in kwargs and kwargs["legend"] is not False:
-        for lh in plot._legend.legendHandles:
-            lh.set_sizes([kwargs["s"]])
 
     if label_kws is not None:
         plot.set(**label_kws)  # e.g., xlabel=None
@@ -82,14 +82,66 @@ def plot_box(xs, ys, xlabel, ylabel,
     if xticks is not None:
         plt.xticks(xticks)
 
+    if tight_layout_kwargs is not None:
+        # e.g., rect=[0, 0, 0.8, 1]
+        plt.tight_layout(**tight_layout_kwargs)
+
     plot_info = "_".join([k for k in [xlabel, ylabel, hue_name]
                           if k is not None])
     plot_info = plot_info.replace("/", "|").replace("#", "Num")
-    path_and_name = "{}/fig_box_{}_{}.{}".format(path, key, plot_info, extension)
+    path_and_name = "{}/fig_{}_{}_{}.{}".format(path, kind, key, plot_info, extension)
 
     plot.savefig(path_and_name, bbox_inches='tight')
     cprint(f"Saved: {path_and_name}", "blue")
     plt.clf()
+
+
+def plot_box(xs, ys, xlabel, ylabel,
+             path, key, extension="pdf",
+             orient="v",
+             hues=None, hue_name=None,
+             rows=None, row_name=None,
+             cols=None, col_name=None,
+             label_kws: Dict[str, Any] = None,
+             scales_kws: Dict[str, Any] = None,
+             xticks=None, yticks=None,
+             tight_layout_kwargs: dict = None,
+             **kwargs):
+    plot_catplot("box", xs=xs, ys=ys, xlabel=xlabel, ylabel=ylabel,
+                 path=path, key=key, extension=extension,
+                 orient=orient,
+                 hues=hues, hue_name=hue_name,
+                 rows=rows, row_name=row_name,
+                 cols=cols, col_name=col_name,
+                 label_kws=label_kws,
+                 scales_kws=scales_kws,
+                 tight_layout_kwargs=tight_layout_kwargs,
+                 xticks=xticks, yticks=yticks,
+                 **kwargs)
+
+
+def plot_bar(xs, ys, xlabel, ylabel,
+             path, key, extension="pdf",
+             orient="v",
+             hues=None, hue_name=None,
+             rows=None, row_name=None,
+             cols=None, col_name=None,
+             label_kws: Dict[str, Any] = None,
+             scales_kws: Dict[str, Any] = None,
+             xticks=None, yticks=None,
+             tight_layout_kwargs: dict = None,
+             **kwargs):
+    plot_catplot("bar", xs=xs, ys=ys, xlabel=xlabel, ylabel=ylabel,
+                 path=path, key=key, extension=extension,
+                 orient=orient,
+                 hues=hues, hue_name=hue_name,
+                 rows=rows, row_name=row_name,
+                 cols=cols, col_name=col_name,
+                 label_kws=label_kws,
+                 scales_kws=scales_kws,
+                 tight_layout_kwargs=tight_layout_kwargs,
+                 xticks=xticks, yticks=yticks,
+                 **kwargs)
 
 
 def plot_relplot(kind,
@@ -97,6 +149,7 @@ def plot_relplot(kind,
                  path, key, extension="pdf",
                  hues=None, hue_name=None,
                  styles=None, style_name=None,
+                 rows=None, row_name=None,
                  cols=None, col_name=None,
                  elm_sizes=None, elm_size_name=None,
                  label_kws: Dict[str, Any] = None,
@@ -110,8 +163,8 @@ def plot_relplot(kind,
     data = {
         xlabel: xs,
         ylabel: ys,
-        **{obj_name: obj for obj_name, obj in zip([hue_name, style_name, col_name, elm_size_name],
-                                                  [hues, styles, cols, elm_sizes])
+        **{obj_name: obj for obj_name, obj in zip([hue_name, style_name, row_name, col_name, elm_size_name],
+                                                  [hues, styles, rows, cols, elm_sizes])
            if obj_name is not None}
     }
     df = pd.DataFrame(data)
@@ -153,6 +206,7 @@ def plot_scatter(xs, ys, xlabel, ylabel,
                  path, key, extension="pdf",
                  hues=None, hue_name=None,
                  styles=None, style_name=None,
+                 rows=None, row_name=None,
                  cols=None, col_name=None,
                  elm_sizes=None, elm_size_name=None,
                  label_kws: Dict[str, Any] = None,
@@ -164,10 +218,11 @@ def plot_scatter(xs, ys, xlabel, ylabel,
                  path=path, key=key, extension=extension,
                  hues=hues, hue_name=hue_name,
                  styles=styles, style_name=style_name,
+                 rows=rows, row_name=row_name,
                  cols=cols, col_name=col_name,
                  elm_sizes=elm_sizes, elm_size_name=elm_size_name,
-                 label_kws= label_kws,
-                 scales_kws = scales_kws,
+                 label_kws=label_kws,
+                 scales_kws=scales_kws,
                  xticks=xticks, yticks=yticks,
                  tight_layout_kwargs=tight_layout_kwargs,
                  **kwargs)
@@ -177,6 +232,7 @@ def plot_line(xs, ys, xlabel, ylabel,
               path, key, extension="pdf",
               hues=None, hue_name=None,
               styles=None, style_name=None,
+              rows=None, row_name=None,
               cols=None, col_name=None,
               elm_sizes=None, elm_size_name=None,
               label_kws: Dict[str, Any] = None,
@@ -188,10 +244,11 @@ def plot_line(xs, ys, xlabel, ylabel,
                  path=path, key=key, extension=extension,
                  hues=hues, hue_name=hue_name,
                  styles=styles, style_name=style_name,
+                 rows=rows, row_name=row_name,
                  cols=cols, col_name=col_name,
                  elm_sizes=elm_sizes, elm_size_name=elm_size_name,
-                 label_kws= label_kws,
-                 scales_kws = scales_kws,
+                 label_kws=label_kws,
+                 scales_kws=scales_kws,
                  xticks=xticks, yticks=yticks,
                  tight_layout_kwargs=tight_layout_kwargs,
                  **kwargs)
