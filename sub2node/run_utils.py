@@ -5,6 +5,7 @@ import time
 import warnings
 from collections import defaultdict, OrderedDict
 from datetime import datetime
+from multiprocessing import Manager
 from pathlib import Path
 from pprint import pprint
 from typing import List, Sequence, Dict
@@ -13,6 +14,7 @@ import pytorch_lightning as pl
 import rich.syntax
 import rich.tree
 from omegaconf import DictConfig, OmegaConf
+from p_tqdm import p_imap
 from pytorch_lightning.utilities import rank_zero_only
 from tqdm import tqdm
 
@@ -241,35 +243,41 @@ def aggregate_csv_metrics(in_path, out_path,
     in_path = Path(in_path)
     key_to_values = defaultdict(lambda: defaultdict(list))
     key_to_ingredients = dict()
-    for csv_path in tqdm(in_path.glob("**/*.csv"),
-                         desc=f"Reading CSVs from {in_path}",
-                         total=len(list(in_path.glob("**/*.csv")))):
-        csv_path = Path(csv_path)
-        yaml_path = csv_path.parent / "hparams.yaml"
 
+    def parse_csv_to_k2vi(_path):
+        _path = Path(_path)
+        yaml_path = _path.parent / "hparams.yaml"
         with open(yaml_path, "r") as stream:
             yaml_data = yaml.safe_load(stream)
-            key_dict = OrderedDict()
+            _key_dict = OrderedDict()
             for h in key_hparams:
                 try:
                     parsed = h.split("/")
                     yd = yaml_data
                     for p in parsed:
                         yd = yd[p]
-                    key_dict[h] = yd
+                    _key_dict[h] = yd
                 except (KeyError, TypeError) as e:
                     pass
-            experiment_key = "+".join(str(s) for s in key_dict.values())
-            path_key = "+".join(str(v) for k, v in key_dict.items()
-                                if k in path_hparams)
+            _experiment_key = "+".join(str(s) for s in _key_dict.values())
+            _path_key = "+".join(str(v) for k, v in _key_dict.items()
+                                 if k in path_hparams)
 
-        csv_data = pd.read_csv(csv_path)
+        csv_data = pd.read_csv(_path)
         try:
-            metric_value = csv_data[metric].tail(1)
-            key_to_values[path_key][experiment_key].append(float(metric_value))
-            key_to_ingredients[experiment_key] = key_dict
+            return _path_key, _experiment_key, float(csv_data[metric].tail(1)), _key_dict
         except KeyError:
-            pass
+            # Not finished experiments.
+            return None
+
+    for parsed_csv in p_imap(parse_csv_to_k2vi, in_path.glob("**/*.csv"),
+                             desc=f"Reading CSVs from {in_path}",
+                             total=len(list(in_path.glob("**/*.csv")))):
+        if parsed_csv is None:
+            continue
+        path_key, experiment_key, metric_value, key_dict = parsed_csv
+        key_to_values[path_key][experiment_key].append(metric_value)
+        key_to_ingredients[experiment_key] = key_dict
 
     out_path = Path(out_path)
     out_path.mkdir(exist_ok=True)
