@@ -207,7 +207,7 @@ class SubgraphDataset(DatasetBase):
             - global_data: Data(edge_index=[2, 6476348], x=[14587, 64])
         """
         self.data, self.slices = torch.load(self.processed_paths[0])
-        self.global_data = torch.load(self.processed_paths[1]).cpu()
+        self.global_data = torch.load(self.processed_paths[1], map_location=torch.device("cpu"))
         meta = torch.load(self.processed_paths[2])
         self.num_start = 0
         self.num_train = int(meta[0])
