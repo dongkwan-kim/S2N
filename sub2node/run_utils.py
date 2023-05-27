@@ -207,8 +207,8 @@ def aggregate_csv_metrics(in_path, out_path,
     assert metric.startswith("test"), f"Wrong metric format: {metric}"
     key_hparams = key_hparams or [
         "datamodule/dataset_subname",
-        "datamodule/custom_splits",
         "datamodule/embedding_type",
+        "datamodule/custom_splits",
         "model/subname",
         "datamodule/subgraph_batching",
         "datamodule/use_s2n",
@@ -238,7 +238,7 @@ def aggregate_csv_metrics(in_path, out_path,
         "model/layer_kwargs",
         "model/sub_node_encoder_layer_kwargs",
     ]
-    path_hparams = path_hparams or key_hparams[:1]
+    path_hparams = path_hparams or key_hparams[:2]
 
     in_path = Path(in_path)
     key_to_values = defaultdict(lambda: defaultdict(list))
@@ -263,10 +263,10 @@ def aggregate_csv_metrics(in_path, out_path,
             _path_key = "+".join(str(v) for k, v in _key_dict.items()
                                  if k in path_hparams)
 
-        csv_data = pd.read_csv(_path)
         try:
+            csv_data = pd.read_csv(_path)
             return _path_key, _experiment_key, float(csv_data[metric].tail(1)), _key_dict
-        except KeyError:
+        except (KeyError, pd.errors.EmptyDataError):
             # Not finished experiments.
             return None
 
