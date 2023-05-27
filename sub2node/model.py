@@ -50,6 +50,7 @@ class GraphNeuralModel(LightningModule):
                  dropout_edges: float = 0.0,
                  layer_kwargs: Dict[str, Any] = {},
                  given_datamodule: SubgraphDataModule = None,
+                 use_lr_scheduler=False,
                  **kwargs):
         super().__init__()
         self.save_hyperparameters(ignore=["given_datamodule"])
@@ -262,8 +263,20 @@ class GraphNeuralModel(LightningModule):
         self.epoch_end("test", ld_to_dl(outputs))
 
     def configure_optimizers(self):
-        return torch.optim.Adam(params=self.parameters(),
-                                lr=self.h.learning_rate, weight_decay=self.h.weight_decay)
+        optimizer = torch.optim.Adam(params=self.parameters(),
+                                     lr=self.h.learning_rate, weight_decay=self.h.weight_decay)
+        # https://lightning.ai/docs/pytorch/1.5.4/api/pytorch_lightning.core.lightning.html#pytorch_lightning.core.lightning.LightningModule.configure_optimizers
+        if self.h.use_lr_scheduler:
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {
+                    "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.7, min_lr=5e-5),
+                    "monitor": "valid/loss",
+                    "frequency": 1,  # "frequency" should be set to a multiple of "trainer.check_val_every_n_epoch"
+                },
+            }
+        else:
+            return optimizer
 
 
 if __name__ == '__main__':
