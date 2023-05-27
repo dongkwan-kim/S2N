@@ -195,7 +195,7 @@ def finish(
 
 def aggregate_csv_metrics(in_path, out_path,
                           key_hparams=None,
-                          path_hparams=None,
+                          num_path_hparams: int = 2,
                           metric=None,
                           model_key="model/subname",
                           min_aggr_length=10):
@@ -238,7 +238,7 @@ def aggregate_csv_metrics(in_path, out_path,
         "model/layer_kwargs",
         "model/sub_node_encoder_layer_kwargs",
     ]
-    path_hparams = path_hparams or key_hparams[:2]
+    path_hparams = key_hparams[:num_path_hparams]
 
     in_path = Path(in_path)
     key_to_values = defaultdict(lambda: defaultdict(list))
@@ -287,9 +287,9 @@ def aggregate_csv_metrics(in_path, out_path,
             writer = csv.DictWriter(
                 f, fieldnames=[
                     "best_of_model",
-                    *key_hparams[:2],
+                    *key_hparams[:num_path_hparams],
                     f"mean/{metric}", f"std/{metric}", f"N/{metric}",
-                    *key_hparams[2:],
+                    *key_hparams[num_path_hparams:],
                     "list",
                 ])
             writer.writeheader()
