@@ -40,6 +40,7 @@ class GraphNeuralModel(LightningModule):
                  sub_node_num_layers: int = None,
                  sub_node_encoder_aggr: str = "sum",
                  sub_node_encoder_layer_kwargs: Dict[str, Any] = {},
+                 use_s2n_jk: bool = True,
                  subname: str = "default",
                  metrics=["micro_f1", "macro_f1"],
                  hp_metric=None,
@@ -167,7 +168,8 @@ class GraphNeuralModel(LightningModule):
 
         self.readout, self.lin_last = None, None
         if self.h.use_s2n:
-            self.lin_last = nn.Linear(out_channels, given_datamodule.num_classes)
+            out_channels_total = (in_channels + out_channels) if self.h.use_s2n_jk else out_channels
+            self.lin_last = nn.Linear(out_channels_total, given_datamodule.num_classes)
         elif not (self.h.use_s2n or self.dh.replace_x_with_wl4pattern):
             self.readout = Readout("sum", use_in_mlp=False, use_out_linear=True,
                                    hidden_channels=self.h.hidden_channels,
@@ -205,7 +207,10 @@ class GraphNeuralModel(LightningModule):
             x = self.node_emb(x)
 
         edge_index = adj_t if adj_t is not None else edge_index
-        x = self.encoder(x, edge_index, edge_attr)
+        if self.h.use_s2n_jk:
+            x = torch.cat([x, self.encoder(x, edge_index, edge_attr)], dim=1)
+        else:
+            x = self.encoder(x, edge_index, edge_attr)
 
         if self.h.use_s2n:
             x = self.lin_last(x)
@@ -387,8 +392,8 @@ if __name__ == '__main__':
         is_multi_labels=(NAME == "HPONeuro"),
         use_s2n=USE_S2N,
         sub_node_encoder_name=SUB_NODE_ENCODER_NAME,
-        shared_sub_node_and_graph_encoder=True,
         sub_node_num_layers=SUB_NODE_NUM_LAYERS,
+        use_s2n_jk=True,
         use_bn=True,
         use_gn=False,
         use_skip=True,
