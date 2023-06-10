@@ -173,7 +173,8 @@ class GraphNeuralModel(LightningModule):
         if self.h.use_s2n:
             assert (in_channels == out_channels) if self.h.use_s2n_jk == "sum" else True
             out_channels_total = (in_channels + out_channels) if self.h.use_s2n_jk == "concat" else out_channels
-            self.lin_last = nn.Linear(out_channels_total, given_datamodule.num_classes)
+            self.lin_last = nn.Sequential(nn.Dropout(p=self.h.dropout_channels),
+                                          nn.Linear(out_channels_total, given_datamodule.num_classes))
         elif not (self.h.use_s2n or self.dh.replace_x_with_wl4pattern):
             self.readout = Readout("sum", use_in_mlp=False, use_out_linear=True,
                                    hidden_channels=self.h.hidden_channels,
@@ -354,10 +355,10 @@ if __name__ == '__main__':
     else:
         LAYER_KWARGS = {}
 
-    SUB_NODE_ENCODER_NAME = "GCNConv"  # DeepSets, GCNConv
+    SUB_NODE_ENCODER_NAME = "DeepSets"  # DeepSets, GCNConv
     if SUB_NODE_ENCODER_NAME == "DeepSets":
         SUB_NODE_NUM_LAYERS = 0
-        USE_SUB_EDGE_INDEX = False
+        USE_SUB_EDGE_INDEX = True
     else:
         SUB_NODE_NUM_LAYERS = 2
         USE_SUB_EDGE_INDEX = True
