@@ -195,10 +195,11 @@ def finish(
 
 def aggregate_csv_metrics(in_path, out_path,
                           key_hparams=None,
-                          num_path_hparams: int = 2,
+                          num_path_hparams: int = 5,
                           metric=None,
                           model_key="model/subname",
-                          min_aggr_length=10):
+                          min_aggr_sample_counts=10,
+                          dump_best_of_model_only=False):
     import yaml
     import pandas as pd
     import numpy as np
@@ -208,6 +209,10 @@ def aggregate_csv_metrics(in_path, out_path,
     key_hparams = key_hparams or [
         "datamodule/dataset_subname",
         "datamodule/embedding_type",
+        "model/use_bn",
+        "model/use_skip",
+        "model/use_s2n_jk",
+
         "datamodule/custom_splits",
         "model/subname",
         "datamodule/subgraph_batching",
@@ -224,6 +229,7 @@ def aggregate_csv_metrics(in_path, out_path,
         "datamodule/post_edge_normalize_arg_2",
         "model/learning_rate",
         "model/encoder_layer_name",
+        "model/hidden_channels",
         "model/num_layers",
         "model/sub_node_encoder_name",
         "model/sub_node_num_layers",
@@ -231,9 +237,6 @@ def aggregate_csv_metrics(in_path, out_path,
         "model/weight_decay",
         "model/dropout_channels",
         "model/dropout_edges",
-        "model/use_bn",
-        "model/use_gn",
-        "model/use_skip",
         "model/_gradient_clip_val",
         "model/layer_kwargs",
         "model/sub_node_encoder_layer_kwargs",
@@ -296,7 +299,7 @@ def aggregate_csv_metrics(in_path, out_path,
 
             model_to_bom_metric = defaultdict(float)
             for experiment_key, values in experiment_key_to_values.items():
-                if len(values) >= min_aggr_length:
+                if len(values) >= min_aggr_sample_counts:
                     model_subname = key_to_ingredients[experiment_key][model_key]
                     model_to_bom_metric[model_subname] = max(float(np.mean(values)),
                                                              model_to_bom_metric[model_subname])
@@ -304,10 +307,14 @@ def aggregate_csv_metrics(in_path, out_path,
             num_lines = 0
             model_to_bom_logged = defaultdict(bool)
             for experiment_key, values in experiment_key_to_values.items():
-                if len(values) >= min_aggr_length:
+                if len(values) >= min_aggr_sample_counts:
                     key_dict = key_to_ingredients[experiment_key]
                     mean_metric = float(np.mean(values))
                     bom = True if (mean_metric == model_to_bom_metric[key_dict[model_key]]) else ""
+
+                    if dump_best_of_model_only and bom == "":
+                        continue
+
                     writer.writerow({
                         "best_of_model": bom if not model_to_bom_logged[key_dict[model_key]] else "",
                         **key_dict,
