@@ -28,7 +28,7 @@ class GraphNeuralModel(LightningModule):
         return self.given_datamodule.hparams
 
     def extra_repr(self) -> str:
-        return f"(use_s2n_jk): {self.h.use_s2n_jk}"
+        return f"(use_s2n_jk): {self.h.use_s2n_jk}" if self.h.use_s2n else ""
 
     def __init__(self,
                  encoder_layer_name: Union[str, List[str]],
