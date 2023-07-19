@@ -212,9 +212,9 @@ class GraphNeuralModel(LightningModule):
             x = self.node_emb(x)
 
         edge_index = adj_t if adj_t is not None else edge_index
-        if self.h.use_s2n_jk == "concat":
+        if self.h.use_s2n and self.h.use_s2n_jk == "concat":
             x = torch.cat([x, self.encoder(x, edge_index, edge_attr)], dim=1)
-        elif self.h.use_s2n_jk == "sum":
+        elif self.h.use_s2n and self.h.use_s2n_jk == "sum":
             x = x + self.encoder(x, edge_index, edge_attr)
         else:
             x = self.encoder(x, edge_index, edge_attr)
