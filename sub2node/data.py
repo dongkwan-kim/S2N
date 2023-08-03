@@ -16,7 +16,7 @@ from torch_sparse import SparseTensor
 
 from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, SubgraphDataset
 from data_sub import WLKSRandomTree
-from data_sub import Density, CC, Coreness, CutRatio
+from data_sub import Density, Component, Coreness, CutRatio
 from data_utils import AddSelfLoopsV2, RemoveAttrs
 from dataset_wl import SliceYByIndex, ReplaceXWithWL4Pattern
 from sub2node import SubgraphToNode

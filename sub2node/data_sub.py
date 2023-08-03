@@ -1,19 +1,17 @@
+import os
 import shutil
 from collections import Counter
-from pprint import pprint
-from typing import List, Dict, Tuple, Union
-import os
+from typing import List, Union
 
+import networkx as nx
+import numpy as np
 import torch
 from sklearn.feature_selection import VarianceThreshold
 from sklearn.preprocessing import MultiLabelBinarizer
 from termcolor import cprint
-from torch import Tensor
-from torch_geometric.data import Data, Batch
-from torch_geometric.utils import subgraph, k_hop_subgraph, sort_edge_index, to_undirected, from_networkx, to_networkx
-import networkx as nx
+from torch_geometric.data import Data
+from torch_geometric.utils import subgraph, sort_edge_index, to_undirected, from_networkx
 from torch_geometric.utils.num_nodes import maybe_num_nodes
-
 from tqdm import tqdm
 
 from data_base import DatasetBase
@@ -181,13 +179,57 @@ def read_subgraphs(subgraph_path):
     return train_sub_g, train_sub_y, val_sub_g, val_sub_y, test_sub_g, test_sub_y, y_dtype
 
 
+def read_glass_syn_data(path):
+    # copied from https://github.com/mims-harvard/SubGNN/blob/main/SubGNN/subgraph_utils.py
+    obj: dict = np.load(path, allow_pickle=True).item()
+    # dict of ['G', 'subG', 'subGLabel', 'mask']
+    edge = torch.from_numpy(np.array([[i[0] for i in obj['G'].edges],
+                                      [i[1] for i in obj['G'].edges]]))
+    edge = sort_edge_index(to_undirected(edge))
+
+    node = [int(n) for n in obj['G'].nodes]
+    subG = obj["subG"]
+    # subG_pad = pad_sequence([torch.tensor(i) for i in subG],
+    #                         batch_first=True,
+    #                         padding_value=-1)
+    subGLabel = torch.tensor([ord(i) - ord('A') for i in obj["subGLabel"]])
+    mask = torch.tensor(obj['mask'])
+
+    train_nodes, val_nodes, test_nodes = [], [], []
+    for m, sg in zip(obj["mask"], subG):
+        if m == 0:
+            train_nodes.append(sg)
+        elif m == 1:
+            val_nodes.append(sg)
+        elif m == 2:
+            test_nodes.append(sg)
+
+    train_sub_ys = subGLabel[mask == 0]
+    val_sub_ys = subGLabel[mask == 1]
+    test_sub_ys = subGLabel[mask == 2]
+
+    # Generate data classes
+    global_data = Data(edge_index=edge, x=torch.ones((len(node), 1)).float(), num_nodes=len(node))
+    train_data_list = get_data_list_from_subgraphs(
+        global_data.edge_index, train_nodes, train_sub_ys, False)
+    cprint("Converted train_subgraph to PyG format", "green")
+    val_data_list = get_data_list_from_subgraphs(
+        global_data.edge_index, val_nodes, val_sub_ys, False)
+    cprint("Converted val_subgraph to PyG format", "green")
+    test_data_list = get_data_list_from_subgraphs(
+        global_data.edge_index, test_nodes, test_sub_ys, False)
+    cprint("Converted test_subgraph to PyG format", "green")
+
+    return global_data, train_data_list, val_data_list, test_data_list
+
+
 class SubgraphDataset(DatasetBase):
     url = "https://github.com/mims-harvard/SubGNN"
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
-        assert embedding_type in ["gin", "graphsaint_gcn", "no_embedding", "glass"]
+        assert embedding_type in ["gin", "graphsaint_gcn", "no_embedding", "glass", "one"]
         self.embedding_type = embedding_type
         self.save_directed_edges = save_directed_edges
         super().__init__(
@@ -248,7 +290,9 @@ class SubgraphDataset(DatasetBase):
         global_data, data_train, data_val, data_test = read_subgnn_data(
             *self.raw_paths, save_directed_edges=self.save_directed_edges, debug=self.debug,
         )
+        self.process_common(global_data, data_train, data_val, data_test)
 
+    def process_common(self, global_data, data_train, data_val, data_test):
         data_total = data_train + data_val + data_test
         if self.pre_transform is not None:
             data_total = [self.pre_transform(d) for d in tqdm(data_total)]
@@ -264,6 +308,30 @@ class SubgraphDataset(DatasetBase):
         torch.save(torch.as_tensor([self.num_train, self.num_val]).long(), self.processed_paths[2])
 
         self._logging_args()
+
+
+class SynSubgraphGLASSDataset(SubgraphDataset):
+
+    def __init__(self, root, name, embedding_type="one",
+                 val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
+                 transform=None, pre_transform=None, **kwargs):
+        super().__init__(root, name, embedding_type, val_ratio, test_ratio,
+                         save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
+
+    @property
+    def raw_file_names(self):
+        return ["tmp.npy"]
+
+    @property
+    def processed_file_names(self):
+        return ["data.pt", f"global_{self.embedding_type}.pt", "meta.pt"]
+
+    def download(self):
+        super().download()
+
+    def process(self):
+        global_data, data_train, data_val, data_test = read_glass_syn_data(self.raw_paths[0])
+        self.process_common(global_data, data_train, data_val, data_test)
 
 
 class HPONeuro(SubgraphDataset):
@@ -326,12 +394,11 @@ class PPIBP(SubgraphDataset):
         super().process()
 
 
-class Density(SubgraphDataset):
+class Density(SynSubgraphGLASSDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
-        assert embedding_type == "graphsaint_gcn"
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
                          save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
 
@@ -342,12 +409,11 @@ class Density(SubgraphDataset):
         super().process()
 
 
-class Coreness(SubgraphDataset):
+class Coreness(SynSubgraphGLASSDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
-        assert embedding_type == "graphsaint_gcn"
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
                          save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
 
@@ -358,12 +424,11 @@ class Coreness(SubgraphDataset):
         super().process()
 
 
-class CutRatio(SubgraphDataset):
+class CutRatio(SynSubgraphGLASSDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
-        assert embedding_type == "graphsaint_gcn"
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
                          save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
 
@@ -374,12 +439,11 @@ class CutRatio(SubgraphDataset):
         super().process()
 
 
-class CC(SubgraphDataset):
+class Component(SynSubgraphGLASSDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  transform=None, pre_transform=None, **kwargs):
-        assert embedding_type == "graphsaint_gcn"
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
                          save_directed_edges, debug, seed, transform, pre_transform, **kwargs)
 
@@ -631,14 +695,16 @@ if __name__ == '__main__':
 
     FIND_SEED = False  # NOTE: If True, find_seed_that_makes_balanced_datasets will be performed
 
-    NAME = "WLKSRandomTree"
+    NAME = "Density"
     # WLKSRandomTree
     # PPIBP, HPOMetab, HPONeuro, EMUser
-    # Density, CC, Coreness, CutRatio
+    # Density, Component, Coreness, CutRatio
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
     if NAME.startswith("WL"):
         E_TYPE = "no_embedding"
+    elif NAME in ["Density", "Component", "Coreness", "CutRatio"]:
+        E_TYPE = "one"
     else:
         E_TYPE = "gin"  # gin, graphsaint_gcn, glass
     DEBUG = False

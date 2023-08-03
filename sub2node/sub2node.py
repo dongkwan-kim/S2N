@@ -510,11 +510,11 @@ def func_normalize(normalize_type: str, *args):
 
 if __name__ == '__main__':
 
-    from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, CC, Coreness, CutRatio
+    from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, Component, Coreness, CutRatio
 
-    MODE = "EMUser"
+    MODE = "CutRatio"
     # PPIBP, HPOMetab, HPONeuro, EMUser
-    # Density, CC, Coreness, CutRatio
+    # Density, Component, Coreness, CutRatio
     PURPOSE = "MANY_4"
     # MANY, ONCE
     TARGET_MATRIX = "adjacent_with_self_loops"
@@ -525,7 +525,7 @@ if __name__ == '__main__':
     DEBUG = False
 
     if MODE in ["HPOMetab", "PPIBP", "HPONeuro", "EMUser",
-                "Density", "CC", "Coreness", "CutRatio"]:
+                "Density", "Component", "Coreness", "CutRatio"]:
         _cls = eval(MODE)
         dts = _cls(root=PATH, name=MODE, debug=DEBUG, embedding_type=E_TYPE)
         _subgraph_data_list = dts.get_data_list_with_split_attr()
