@@ -72,6 +72,7 @@ class GraphNeuralModel(LightningModule):
             num_entities=given_datamodule.num_nodes_global,
             num_channels=num_embedding_channels,
             pretrained_embedding=given_datamodule.embedding,
+            freeze_pretrained=self.h.freeze_pretrained,
         )
 
         self.sub_node_set_encoder, self.sub_node_graph_encoder = None, None

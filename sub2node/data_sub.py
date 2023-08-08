@@ -209,7 +209,7 @@ def read_glass_syn_data(path):
     test_sub_ys = subGLabel[mask == 2]
 
     # Generate data classes
-    global_data = Data(edge_index=edge, x=torch.ones((len(node), 1)).float(), num_nodes=len(node))
+    global_data = Data(edge_index=edge, x=torch.ones((len(node), 64)).float() / 64, num_nodes=len(node))
     train_data_list = get_data_list_from_subgraphs(
         global_data.edge_index, train_nodes, train_sub_ys, False)
     cprint("Converted train_subgraph to PyG format", "green")
