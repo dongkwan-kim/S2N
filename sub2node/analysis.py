@@ -451,7 +451,7 @@ if __name__ == '__main__':
 
     # analyze_s2n_properties, visualize_s2n_properties,
     # visualize_efficiency, visualize_efficiency_by_num_training
-    METHOD = "visualize_efficiency"
+    METHOD = "visualize_s2n_properties"
 
     TARGETS = "REAL_WORLD"  # SYNTHETIC, REAL_WORLD, ALL
     if TARGETS == "REAL_WORLD":
@@ -472,6 +472,7 @@ if __name__ == '__main__':
             dataset_and_model_name_list=DM_NAME_LIST,
         )
     elif METHOD == "visualize_s2n_properties":
+        sns.set_context("talk")
         visualize_s2n_properties(
             dataset_path=PATH,
             csv_path="./_data_analysis_w_original.csv",
