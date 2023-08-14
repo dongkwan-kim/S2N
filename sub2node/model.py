@@ -53,6 +53,7 @@ class GraphNeuralModel(LightningModule):
                  dropout_channels: float = 0.0,
                  dropout_edges: float = 0.0,
                  layer_kwargs: Dict[str, Any] = {},
+                 freeze_pretrained=False,
                  given_datamodule: SubgraphDataModule = None,
                  use_lr_scheduler=False,
                  **kwargs):
