@@ -451,7 +451,7 @@ if __name__ == '__main__':
 
     # analyze_s2n_properties, visualize_s2n_properties,
     # visualize_efficiency, visualize_efficiency_by_num_training
-    METHOD = "visualize_s2n_properties"
+    METHOD = "visualize_efficiency"
 
     TARGETS = "REAL_WORLD"  # SYNTHETIC, REAL_WORLD, ALL
     if TARGETS == "REAL_WORLD":
@@ -482,7 +482,7 @@ if __name__ == '__main__':
         )
     elif METHOD == "visualize_efficiency":
         visualize_efficiency(
-            csv_path="./_sub2node Table (new2) - tab_efficiency.csv",
+            csv_path="./_sub2node Table (new3) - tab_efficiency.csv",
             extension="pdf",
             queries=[
                 "dkey in ['hpo_metab', 'hpo_neuro', 'em_user']",
@@ -492,7 +492,7 @@ if __name__ == '__main__':
     elif METHOD == "visualize_efficiency_by_num_training":
         sns.set_context("talk")
         visualize_efficiency_by_num_training(
-            csv_path="./_sub2node Table (new2) - tab_efficiency_by_num_training.csv",
+            csv_path="./_sub2node Table (new3) - tab_efficiency_by_num_training.csv",
             extension="pdf",
             dataset="EM-User",
         )
