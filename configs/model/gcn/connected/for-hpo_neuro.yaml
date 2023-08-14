@@ -6,8 +6,8 @@ num_layers: 1
 use_bn: true
 use_skip: true
 dropout_channels: 0.0
-dropout_edges: 0.4
-learning_rate: 0.0031438669140471743
-weight_decay: 1.5920102991160425e-07
-_gradient_clip_val: 0.1
+dropout_edges: 0.5
+learning_rate: 0.0010769690431487325
+weight_decay: 7.275960023219245e-08
+_gradient_clip_val: 0.30000000000000004
 subname: GCN-${datamodule.subgraph_batching}

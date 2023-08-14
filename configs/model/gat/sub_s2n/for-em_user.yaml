@@ -2,14 +2,14 @@ _target_: model.GraphNeuralModel
 defaults:
 - common_model.yaml
 encoder_layer_name: GATConv
-num_layers: 1
+num_layers: 2
 use_bn: true
-use_skip: true
-dropout_channels: 0.4
+use_skip: false
+dropout_channels: 0.30000000000000004
 dropout_edges: 0.5
-learning_rate: 0.008109674456048733
-weight_decay: 4.5396244367670377e-07
-_gradient_clip_val: 0.1
+learning_rate: 0.009487007572548688
+weight_decay: 5.605328455077177e-07
+_gradient_clip_val: 0.4
 sub_node_num_layers: 1
 sub_node_encoder_aggr: sum
 sub_node_encoder_name: GATConv

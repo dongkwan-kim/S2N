@@ -5,7 +5,7 @@ defaults:
 
 encoder_layer_name: [ "Linear", "GCNConv" ]
 num_layers: [ 2, 2 ]
-use_bn: True
+use_bn: false
 use_skip: true
 dropout_channels: 0.1
 dropout_edges: 0.0

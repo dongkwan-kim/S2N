@@ -4,14 +4,14 @@ defaults:
 encoder_layer_name: GCN2Conv
 num_layers: 1
 use_bn: true
-use_skip: true
+use_skip: false
 dropout_channels: 0.0
-dropout_edges: 0.4
+dropout_edges: 0.5
 layer_kwargs:
-  alpha: 0.2
-  theta: 0.2
+  alpha: 0.1
+  theta: 0.4
   shared_weights: true
-learning_rate: 0.0014093678095211735
-weight_decay: 1.7449118107835592e-09
-_gradient_clip_val: 0.2
+learning_rate: 0.005422563407137504
+weight_decay: 2.5519942074970834e-08
+_gradient_clip_val: 0.4
 subname: GCNII-${datamodule.subgraph_batching}

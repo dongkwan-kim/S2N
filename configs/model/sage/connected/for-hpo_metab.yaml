@@ -4,10 +4,10 @@ defaults:
 encoder_layer_name: SAGEConv
 num_layers: 1
 use_bn: true
-use_skip: true
-dropout_channels: 0.30000000000000004
+use_skip: false
+dropout_channels: 0.5
 dropout_edges: 0.4
-learning_rate: 0.0006769098032171864
-weight_decay: 1.4813760880223224e-07
-_gradient_clip_val: 0.0
+learning_rate: 0.0008695047422659721
+weight_decay: 9.713468699017317e-09
+_gradient_clip_val: 0.4
 subname: SAGE-${datamodule.subgraph_batching}

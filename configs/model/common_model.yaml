@@ -1,5 +1,7 @@
 activation: relu
 hidden_channels: 64
+use_lr_scheduler: True
+use_s2n_jk: sum
 
 is_multi_labels: ${datamodule._is_multi_labels}
 use_s2n: ${datamodule.use_s2n}

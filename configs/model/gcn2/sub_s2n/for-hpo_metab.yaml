@@ -2,25 +2,25 @@ _target_: model.GraphNeuralModel
 defaults:
 - common_model.yaml
 encoder_layer_name: GCN2Conv
-num_layers: 1
+num_layers: 2
 use_bn: true
-use_skip: true
-dropout_channels: 0.30000000000000004
-dropout_edges: 0.2
-learning_rate: 0.008789902397006645
-weight_decay: 1.026486479798693e-07
-_gradient_clip_val: 0.30000000000000004
+use_skip: false
+dropout_channels: 0.5
+dropout_edges: 0.30000000000000004
+learning_rate: 0.0008963447640842918
+weight_decay: 2.2075404703753976e-07
+_gradient_clip_val: 0.4
 sub_node_num_layers: 1
 sub_node_encoder_aggr: sum
 sub_node_encoder_name: GCN2Conv
 layer_kwargs:
   alpha: 0.9
-  theta: 2.0
+  theta: 1.5000000000000002
   shared_weights: true
 sub_node_encoder_layer_kwargs:
   heads: 8
   eps: null
-  alpha: 0.9
-  theta: 0.1
-  shared_weights: false
+  alpha: 0.8
+  theta: 0.9
+  shared_weights: true
 subname: GCNII-SUB-S2N

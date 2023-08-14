@@ -3,13 +3,13 @@ defaults:
 - common_model.yaml
 encoder_layer_name: GCNConv
 num_layers: 2
-use_bn: true
-use_skip: true
-dropout_channels: 0.2
+use_bn: false
+use_skip: false
+dropout_channels: 0.30000000000000004
 dropout_edges: 0.5
-learning_rate: 0.000674094106506251
-weight_decay: 3.08719738018155e-09
-_gradient_clip_val: 0.5
+learning_rate: 0.008349225681778514
+weight_decay: 1.7734327373377133e-08
+_gradient_clip_val: 0.4
 sub_node_num_layers: 0
 sub_node_encoder_aggr: sum
 sub_node_encoder_layer_kwargs:

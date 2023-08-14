@@ -71,6 +71,7 @@ hydra:
         type: int
         low: 1
         high: 2
+###
 
       model.layer_kwargs.eps:
         type: float

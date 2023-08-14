@@ -5,11 +5,11 @@ encoder_layer_name: SAGEConv
 num_layers: 1
 use_bn: true
 use_skip: true
-dropout_channels: 0.4
-dropout_edges: 0.1
-learning_rate: 0.000542310741493602
-weight_decay: 1.7124701200474547e-08
-_gradient_clip_val: 0.5
+dropout_channels: 0.1
+dropout_edges: 0.4
+learning_rate: 0.0017722819979520122
+weight_decay: 2.375385355321683e-08
+_gradient_clip_val: 0.30000000000000004
 sub_node_num_layers: 0
 sub_node_encoder_aggr: sum
 sub_node_encoder_layer_kwargs:
