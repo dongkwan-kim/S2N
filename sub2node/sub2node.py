@@ -3,7 +3,7 @@ import multiprocessing as mp
 from collections import Counter
 from pathlib import Path
 from pprint import pprint
-from typing import List, Callable, Union, Tuple, Dict
+from typing import List, Callable, Union, Tuple, Dict, Optional
 
 import networkx as nx
 import torch
@@ -284,7 +284,7 @@ class SubgraphToNode:
 
     def node_task_data_splits(self,
                               mapping_matrix_type: str = None,
-                              set_sub_x_weight: str = "follow_mapping_matrix",
+                              set_sub_x_weight: Optional[str] = "follow_mapping_matrix",
                               use_sub_edge_index: bool = False,
                               post_edge_normalize: Union[str, Callable, None] = None,
                               post_edge_normalize_args: Union[List, None] = None,
@@ -361,9 +361,10 @@ class SubgraphToNode:
             edge_index, edge_attr = dense_to_sparse(ew_mat_s_by_s)
 
             sub_x_weight = None
-            if (self._mapping_matrix_value is not None) and set_sub_x_weight == "follow_mapping_matrix":
+            if set_sub_x_weight is None:
+                pass
+            elif (self._mapping_matrix_value is not None) and set_sub_x_weight == "follow_mapping_matrix":
                 sub_x_weight = self._mapping_matrix_value[ptr[s_0]:ptr[s_1]]
-
             elif "sqrt_d_node_div_d_sub" in set_sub_x_weight:
                 if set_sub_x_weight == "sparse_sqrt_d_node_div_d_sub":
                     s_index = edge_index
@@ -512,7 +513,7 @@ if __name__ == '__main__':
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, Component, Coreness, CutRatio
 
-    MODE = "CutRatio"
+    MODE = "HPONeuro"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, Component, Coreness, CutRatio
     PURPOSE = "MANY_4"
@@ -521,7 +522,7 @@ if __name__ == '__main__':
     # adjacent_with_self_loops, adjacent_no_self_loops
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
-    E_TYPE = "graphsaint_gcn"
+    E_TYPE = "glass"
     DEBUG = False
 
     if MODE in ["HPOMetab", "PPIBP", "HPONeuro", "EMUser",
@@ -599,7 +600,7 @@ if __name__ == '__main__':
                 for j in [0.5, 1.0, 1.5, 2.0]:
                     ntds = s2n.node_task_data_splits(
                         mapping_matrix_type="unnormalized",
-                        set_sub_x_weight="original_sqrt_d_node_div_d_sub",
+                        set_sub_x_weight=None,
                         use_sub_edge_index=True,
                         post_edge_normalize="standardize_then_trunc_thres_max_linear",
                         post_edge_normalize_args=[i, j],
@@ -610,11 +611,13 @@ if __name__ == '__main__':
                     for _d in ntds:
                         print(_d)
                         print(f"\t- density: {_d.edge_index.size(1) / (_d.num_nodes ** 2)}")
-                        _sub_x_weight_stats = repr_kvs(
-                            min=torch.min(_d.sub_x_weight), max=torch.max(_d.sub_x_weight),
-                            avg=torch.mean(_d.sub_x_weight), std=torch.std(_d.sub_x_weight), sep=", ")
-                        print(f"\t- sub_x_weight: {_sub_x_weight_stats}")
+                        if hasattr(_d, "sub_x_weight"):
+                            _sub_x_weight_stats = repr_kvs(
+                                min=torch.min(_d.sub_x_weight), max=torch.max(_d.sub_x_weight),
+                                avg=torch.mean(_d.sub_x_weight), std=torch.std(_d.sub_x_weight), sep=", ")
+                            print(f"\t- sub_x_weight: {_sub_x_weight_stats}")
                     s2n._node_task_data_list = []  # flush
 
         else:
             raise ValueError(f"Wrong purpose: {PURPOSE}")
+
