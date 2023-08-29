@@ -335,6 +335,7 @@ if __name__ == '__main__':
     _sdm = get_subgraph_datamodule_for_test(
         name="PPIBP",
         custom_splits=[0.5, 0.3, 0.1],
+        num_training_tails_to_tile_per_class=2,
     )
 
     print(_sdm)

@@ -1,6 +1,7 @@
 from collections import OrderedDict, Counter
 from itertools import chain
 from pprint import pprint
+from random import Random
 from typing import List, Dict, Tuple, Union, Optional
 import os.path as osp
 
@@ -19,6 +20,7 @@ class DatasetBase(InMemoryDataset):
 
     def __init__(self, root, name,
                  val_ratio=0.15, test_ratio=0.15, debug=False, seed=42,
+                 num_training_tails_to_tile_per_class=0,
                  transform=None, pre_transform=None, **kwargs):
 
         self.name = name
@@ -26,6 +28,10 @@ class DatasetBase(InMemoryDataset):
         self.test_ratio = test_ratio
         self.debug = debug
         self.seed = seed
+
+        # These will be True for data-scarce experiments
+        self.num_training_tails_to_tile_per_class = num_training_tails_to_tile_per_class
+        self.num_train_original = -1
 
         self.num_start = 0
         self.num_train = -1
@@ -150,7 +156,26 @@ class DatasetBase(InMemoryDataset):
         data_list = self.tolist()
         num_until_train = self.num_start + self.num_train
         num_until_val = num_until_train + self.num_val
-        data_train = data_list[self.num_start:num_until_train]
+
+        # If there should be the same number of samples per class in the tail (after self.num_start),
+        if self.num_training_tails_to_tile_per_class > 0:
+            # Shuffle training set only deterministically
+            data_train_original = data_list[:self.num_train_original]
+            Random(12345).shuffle(data_train_original)
+
+            data_tails = [data_train_original.pop()]
+            assert data_tails[-1].y.dim() == 1, "only for single-label"
+
+            while len(data_tails) < self.num_classes * self.num_training_tails_to_tile_per_class:
+                d = data_train_original.pop()
+                if (data_tails[-1].y.item() + 1) % self.num_classes == d.y.item():
+                    # append a sample of the next class
+                    data_tails.append(d)
+                else:
+                    data_train_original.insert(0, d)
+            data_train = (data_train_original + data_tails)[self.num_start:num_until_train]
+        else:
+            data_train = data_list[self.num_start:num_until_train]
         data_val = data_list[num_until_train:num_until_val]
         data_test = data_list[num_until_val:]
         return data_train, data_val, data_test
@@ -179,7 +204,6 @@ class DatasetBase(InMemoryDataset):
 
         rets: List[Data] = []
         for data_list in [data_train, data_val, data_test]:
-
             aggr_data = Batch.from_data_list(data_list)
 
             aggr_data.x_to_xs = aggr_data.x.squeeze()
