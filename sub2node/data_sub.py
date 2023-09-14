@@ -725,7 +725,7 @@ if __name__ == '__main__':
     elif NAME in ["Density", "Component", "Coreness", "CutRatio"]:
         E_TYPE = "one"
     else:
-        E_TYPE = "gin"  # gin, graphsaint_gcn, glass
+        E_TYPE = "glass"  # gin, graphsaint_gcn, glass
     DEBUG = False
     MORE_KWARGS = {
         "num_subgraphs": 2000,

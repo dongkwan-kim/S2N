@@ -19,6 +19,7 @@ from data_sub import WLKSRandomTree
 from data_sub import Density, Component, Coreness, CutRatio
 from data_utils import AddSelfLoopsV2, RemoveAttrs
 from dataset_wl import SliceYByIndex, ReplaceXWithWL4Pattern
+from s2n_coarsening import SubgraphToNodePlusCoarsening
 from sub2node import SubgraphToNode
 from utils import get_log_func, EternalIter, merge_dict_by_keys
 
@@ -44,6 +45,10 @@ class SubgraphDataModule(LightningDataModule):
                  s2n_edge_aggr: Union[Callable[[Tensor], Tensor], str] = None,
                  s2n_is_weighted: bool = True,
                  s2n_transform=None,
+                 use_coarsening: bool = False,
+                 coarsening_ratio: float = None,
+                 coarsening_method: str = None,
+                 min_num_node_for_coarsening: int = 2,
                  subgraph_batching: str = None,
                  batch_size: int = None,
                  eval_batch_size=None,
@@ -127,20 +132,24 @@ class SubgraphDataModule(LightningDataModule):
 
     @property
     def s2n_path(self) -> str:
+        folder_name = "sub2node" if not self.h.use_coarsening else "sub2node_coarsening"
         if self.h.dataset_name in ["WLKSRandomTree"]:
-            return os.path.join(self.dataset.key_dir, "sub2node")
+            return os.path.join(self.dataset.key_dir, folder_name)
         else:  # backward compatibility
-            return f"{self.h.dataset_path}/{self.h.dataset_name.upper()}/sub2node/"
+            return f"{self.h.dataset_path}/{self.h.dataset_name.upper()}/{folder_name}/"
 
     def setup(self, stage: Optional[str] = None) -> None:
 
         self.dataset: SubgraphDataset = self.load_dataset()
         is_customized_split = (self.h.custom_splits is not None)
         if is_customized_split:
-            self.dataset.set_num_start_train_val(*self.h.custom_splits)  # [num_start, num_train, num_val]
+            if len(self.h.custom_splits) == 1:  # [num_train_per_class]
+                self.dataset.set_num_start_train_by_num_train_per_class(*self.h.custom_splits)
+            elif len(self.h.custom_splits) == 3:  # [num_start, num_train, num_val]
+                self.dataset.set_num_start_train_val(*self.h.custom_splits)
 
         if self.h.use_s2n:
-            s2n = SubgraphToNode(
+            s2n_kwargs = dict(
                 global_data=self.dataset.global_data,
                 subgraph_data_list=self.dataset.get_data_list_with_split_attr(),
                 name=self.h.dataset_name,
@@ -151,6 +160,23 @@ class SubgraphDataModule(LightningDataModule):
                 edge_aggr=self.h.s2n_edge_aggr,
                 undirected=True,
             )
+            if self.h.use_coarsening:
+                s2n = SubgraphToNodePlusCoarsening(
+                    coarsening_ratio=self.h.coarsening_ratio,
+                    coarsening_method=self.h.coarsening_method,
+                    min_num_node_for_coarsening=self.h.min_num_node_for_coarsening,
+                    **s2n_kwargs,
+                )
+            else:
+                s2n = SubgraphToNode(**s2n_kwargs)
+
+            has_precursor, precursor_path = s2n.has_node_task_data_precursor(self.h.s2n_mapping_matrix_type,
+                                                                             self.h.s2n_use_sub_edge_index)
+            if is_customized_split and not has_precursor:
+                raise FileNotFoundError(f"{precursor_path}\n"
+                                        f"If you are using customized split, please first create"
+                                        f"a precursor using the default split.")
+
             data_list = s2n.node_task_data_splits(
                 mapping_matrix_type=self.h.s2n_mapping_matrix_type,
                 set_sub_x_weight=self.h.s2n_set_sub_x_weight,
@@ -260,7 +286,7 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
     if NAME.startswith("WL"):
         E_TYPE = "no_embedding"
     else:
-        E_TYPE = "gin"  # gin, graphsaint_gcn
+        E_TYPE = "glass"  # gin, graphsaint_gcn
 
     USE_S2N = True
     USE_SPARSE_TENSOR = False
@@ -329,14 +355,35 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
 
 if __name__ == '__main__':
 
+    MODE = "SEMI_SUPERVISED"  # PLAIN, COARSENING, SEMI_SUPERVISED
+
     # WLKSRandomTree
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
-    _sdm = get_subgraph_datamodule_for_test(
-        name="PPIBP",
-        custom_splits=[0.5, 0.3, 0.1],
-        num_training_tails_to_tile_per_class=2,
-    )
+    if MODE == "PLAIN":
+        _sdm = get_subgraph_datamodule_for_test(
+            name="PPIBP",
+            # custom_splits=[0.5, 0.3, 0.1],
+        )
+    elif MODE == "COARSENING":
+        _sdm = get_subgraph_datamodule_for_test(
+            name="PPIBP",
+            custom_splits=[5],
+            num_training_tails_to_tile_per_class=40,
+            use_coarsening=True,
+            coarsening_ratio=0.3,
+            coarsening_method="variation_neighborhoods",
+        )
+    elif MODE == "SEMI_SUPERVISED":
+        _sdm = get_subgraph_datamodule_for_test(
+            name="PPIBP",
+            custom_splits=[5],
+            num_training_tails_to_tile_per_class=40,
+            use_s2n=False,
+            subgraph_batching="separated",  # connected, separated
+        )
+    else:
+        raise ValueError
 
     print(_sdm)
     cprint("Train ----", "green")

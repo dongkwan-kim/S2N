@@ -29,7 +29,8 @@ class SubgraphToNode:
     def __init__(self,
                  global_data: Data,
                  subgraph_data_list: List[Data],
-                 name: str, path: str,
+                 name: str,
+                 path: str,
                  splits: List[int],
                  num_start: int = 0,
                  target_matrix: str = "adjacent_no_self_loops",
@@ -40,7 +41,22 @@ class SubgraphToNode:
         """
         :param global_data: Single Data(edge_index=[2, *], x=[*, F])
         :param subgraph_data_list: List of Data(x=[*, 1], edge_index=[2, *], y=[1])
-        :param node_spl_cutoff:
+        :param splits: [num_train, num_train + num_val]
+        :param node_spl_cutoff: Deprecated, used for methods based on shortest_path_length
+
+          num_start
+          ↓  [+] num_train
+          ↓   ↓  [+] num_train + num_val
+          ↓   ↓   ↓     num_subgraphs
+          ↓   ↓   ↓     ↓
+        @ @ @ # # + + +
+        @ @ @ # # + + +
+        @ @ @ # # + + +
+        # # # # # + + +
+        # # # # # + + +
+        + + + + + + + +
+        + + + + + + + +
+        + + + + + + + +
         """
         self.global_data: Data = global_data
         self.subgraph_data_list: List[Data] = subgraph_data_list
@@ -60,7 +76,7 @@ class SubgraphToNode:
             "adjacent", "adjacent_with_self_loops", "adjacent_no_self_loops", "shortest_path"
         ]
         assert self.undirected, "Now only support undirected graphs"
-        assert len(self.splits) == 3
+        assert len(self.splits) >= 3
         self.path.mkdir(exist_ok=True)
         self._node_task_data_list: List[Data] = []
         self._mapping_matrix_value = None
@@ -232,6 +248,11 @@ class SubgraphToNode:
         # edge = 1 / (spl + 1) where 0 <= spl, then 0 < edge <= 1
         return 1 / (sub_spl_mat + 1)
 
+    def has_node_task_data_precursor(self, matrix_type=None, use_sub_edge_index=False):
+        name_key = repr_kvs(mmt=matrix_type, use_sei=use_sub_edge_index)
+        path = self.path / f"{self.node_task_name}_node_task_data_precursor_{name_key}.pth"
+        return path.is_file(), path
+
     def node_task_data_precursor(self, matrix_type=None, use_sub_edge_index=False, save=True):
         name_key = repr_kvs(mmt=matrix_type, use_sei=use_sub_edge_index)
         path = self.path / f"{self.node_task_name}_node_task_data_precursor_{name_key}.pth"
@@ -316,15 +337,16 @@ class SubgraphToNode:
         except FileNotFoundError:
             pass
 
-        if not isinstance(edge_thres, list):
-            edge_thres = [edge_thres, edge_thres, edge_thres]
-        assert len(edge_thres) == len(self.splits)
-
-        node_task_data_precursor = self.node_task_data_precursor(mapping_matrix_type, use_sub_edge_index, save)
+        node_task_data_precursor = self.node_task_data_precursor(mapping_matrix_type, use_sub_edge_index, save=True)
         ew_mat = node_task_data_precursor.edge_weight_matrix
 
+        train_val_test_splits = self.splits[-3:] if len(self.splits) > 3 else self.splits
+
+        if not isinstance(edge_thres, list):
+            edge_thres = [edge_thres] * len(train_val_test_splits)
+
         edge_norm_kws = {}
-        for i, (s, et) in enumerate(zip(self.splits, edge_thres)):
+        for i, (s, et) in enumerate(zip(train_val_test_splits, edge_thres)):
             x, y, batch, ptr, sub_edge_index = try_getattr(node_task_data_precursor,
                                                            ["x", "y", "batch", "ptr", "sub_edge_index"],
                                                            default=None, as_dict=False)
@@ -340,12 +362,14 @@ class SubgraphToNode:
                     num_nodes=sub_x.size(0), min_index=0)
 
             num_nodes = y.size(0)
-            eval_mask = None
+            train_mask, eval_mask = None, None
+            if i == 0 and torch.sum(y < 0) > 0:
+                # Training samples contain coarsened nodes
+                train_mask = torch.zeros(num_nodes, dtype=torch.bool)
+                train_mask[y >= 0] = True
             if i > 0:
                 eval_mask = torch.zeros(num_nodes, dtype=torch.bool)
-                eval_mask[self.splits[i - 1]:] = True
-            else:
-                self.print_mat_stat(ew_mat, "Summarizing edge_weight_matrix")
+                eval_mask[train_val_test_splits[i - 1]:] = True
 
             ew_mat_s_by_s = ew_mat.clone()[s_0:s_1, s_0:s_1]
             if post_edge_normalize is not None:
@@ -356,6 +380,8 @@ class SubgraphToNode:
             # Remove ew_mat below than edge_thres
             et = et(ew_mat_s_by_s) if isinstance(et, Callable) else et
             ew_mat_s_by_s[ew_mat_s_by_s < et] = 0
+            if i == 0:
+                self.print_mat_stat(ew_mat, "Summarizing edge_weight_matrix")
             self.print_mat_stat(ew_mat_s_by_s, f"Summarizing processed edge_weight_matrix ({i})")
 
             edge_index, edge_attr = dense_to_sparse(ew_mat_s_by_s)
@@ -385,7 +411,7 @@ class SubgraphToNode:
             self._node_task_data_list.append(Data(
                 sub_x=sub_x, sub_batch=sub_batch,
                 sub_x_weight=sub_x_weight, sub_edge_index=sub_edge_index,
-                y=y, eval_mask=eval_mask,
+                y=y, train_mask=train_mask, eval_mask=eval_mask,
                 edge_index=edge_index, edge_attr=edge_attr.view(-1, 1),
                 num_nodes=num_nodes,
             ))
@@ -620,4 +646,3 @@ if __name__ == '__main__':
 
         else:
             raise ValueError(f"Wrong purpose: {PURPOSE}")
-

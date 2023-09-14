@@ -236,9 +236,12 @@ class GraphNeuralModel(LightningModule):
                     "edge_index", "edge_attr", "adj_t", "x_to_xs"])
         logits = self.forward(**step_kws)
 
-        eval_mask = getattr(batch, "eval_mask", None)
+        train_mask, eval_mask = try_getattr(batch, ["train_mask", "eval_mask"],
+                                            as_dict=False, default=None)
         if eval_mask is not None:
             logits, y = logits[eval_mask], batch.y[eval_mask]
+        elif train_mask is not None:
+            logits, y = logits[train_mask], batch.y[train_mask]
         else:
             y = batch.y
         loss = self.loss(logits, y)
@@ -315,7 +318,7 @@ if __name__ == '__main__':
     # Density, CC, Coreness, CutRatio
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
-    E_TYPE = "gin"  # gin, graphsaint_gcn, glass
+    E_TYPE = "glass"  # gin, graphsaint_gcn, glass
 
     USE_S2N = True  # NOTE: important
     USE_SPARSE_TENSOR = False
@@ -365,6 +368,18 @@ if __name__ == '__main__':
         SUB_NODE_NUM_LAYERS = 2
         USE_SUB_EDGE_INDEX = True
 
+    USE_COARSENING = True  # True, False
+    if USE_COARSENING:
+        data_kwargs = dict(
+            custom_splits=[5],
+            num_training_tails_to_tile_per_class=40,
+            use_coarsening=True,
+            coarsening_ratio=0.3,
+            coarsening_method="variation_neighborhoods",
+        )
+    else:
+        data_kwargs = dict(custom_splits=None)
+
     seed_everything(42)
     _sdm = SubgraphDataModule(
         dataset_name=NAME,
@@ -389,7 +404,7 @@ if __name__ == '__main__':
         pre_add_self_loops=False,
         replace_x_with_wl4pattern=REPLACE_X_WITH_WL4PATTERN,
         wl4pattern_args=WL4PATTERN_ARGS,
-        custom_splits=None,
+        **data_kwargs,
     )
     _gnm = GraphNeuralModel(
         encoder_layer_name=ENCODER_NAME,
