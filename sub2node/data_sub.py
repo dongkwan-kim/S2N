@@ -253,9 +253,8 @@ class SubgraphDataset(DatasetBase):
         self.global_data = torch.load(self.processed_paths[1], map_location=torch.device("cpu"))
         meta = torch.load(self.processed_paths[2])
         self.num_start = 0
-        self.num_train = int(meta[0])
-        self.num_train_original = int(meta[0])
-        self.num_val = int(meta[1])
+        self.num_train = self.num_train_original = int(meta[0])
+        self.num_val = self.num_val_original = int(meta[1])
 
     @property
     def splits(self):
@@ -274,6 +273,11 @@ class SubgraphDataset(DatasetBase):
         self.num_start = num_start
         self.num_train = num_train
         self.num_val = num_val
+
+    def set_num_start_train_by_num_train_per_class(self, num_train_per_class: int):
+        new_num_train = self.num_classes * num_train_per_class
+        self.num_start = self.num_train - new_num_train
+        self.num_train = new_num_train
 
     @property
     def raw_file_names(self):

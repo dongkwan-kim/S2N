@@ -32,6 +32,7 @@ class DatasetBase(InMemoryDataset):
         # These will be True for data-scarce experiments
         self.num_training_tails_to_tile_per_class = num_training_tails_to_tile_per_class
         self.num_train_original = -1
+        self.num_val_original = -1
 
         self.num_start = 0
         self.num_train = -1
@@ -159,13 +160,10 @@ class DatasetBase(InMemoryDataset):
 
         # If there should be the same number of samples per class in the tail (after self.num_start),
         if self.num_training_tails_to_tile_per_class > 0:
-            # Shuffle training set only deterministically
             data_train_original = data_list[:self.num_train_original]
-            Random(12345).shuffle(data_train_original)
 
             data_tails = [data_train_original.pop()]
             assert data_tails[-1].y.dim() == 1, "only for single-label"
-
             while len(data_tails) < self.num_classes * self.num_training_tails_to_tile_per_class:
                 d = data_train_original.pop()
                 if (data_tails[-1].y.item() + 1) % self.num_classes == d.y.item():
