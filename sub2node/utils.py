@@ -514,7 +514,7 @@ def unbatch(src: Tensor, batch: Tensor, dim: int = 0) -> List[Tensor]:
 
 if __name__ == '__main__':
 
-    METHOD = "filter_living_edge_index"
+    METHOD = "try_getattr"
 
     from pytorch_lightning import seed_everything
 
@@ -593,10 +593,10 @@ if __name__ == '__main__':
     elif METHOD == "try_getattr":
         Point = namedtuple('Point', ['x', 'y'])
         _p = Point(x=11, y=22)
-        pprint(try_getattr(_p, ["x", "z", "y"]))
-        pprint(try_getattr(_p, ["x", "z", "y"], default=None))
-        pprint(try_getattr(_p, ["x", "z", "y"], as_dict=False))
-        pprint(try_getattr(_p, ["x", "z", "y"], as_dict=False, default=None))
+        pprint(try_getattr(_p, ["x", "z", "y"]))  # {'x': 11, 'y': 22}
+        pprint(try_getattr(_p, ["x", "z", "y"], default=None))  # {'x': 11, 'y': 22, 'z': None}
+        pprint(try_getattr(_p, ["x", "z", "y"], as_dict=False))  # [11, 22]
+        pprint(try_getattr(_p, ["x", "z", "y"], as_dict=False, default=None))  # [11, None, 22]
 
     elif METHOD == "try_get_from_dict":
         pprint(try_get_from_dict({"x": 1, "y": 2}, ["x", "z", "y"]))
