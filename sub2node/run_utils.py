@@ -195,7 +195,7 @@ def finish(
 
 def aggregate_csv_metrics(in_path, out_path,
                           key_hparams=None,
-                          num_path_hparams: int = 5,
+                          num_path_hparams: int = 2,
                           metric=None,
                           model_key="model/subname",
                           min_aggr_sample_counts=10,
@@ -208,19 +208,16 @@ def aggregate_csv_metrics(in_path, out_path,
     assert metric.startswith("test"), f"Wrong metric format: {metric}"
     key_hparams = key_hparams or [
         "datamodule/dataset_subname",
-        "datamodule/embedding_type",
-        "model/use_bn",
-        "model/use_skip",
-        "model/use_s2n_jk",
-
         "datamodule/custom_splits",
+
+        "datamodule/s2n_set_sub_x_weight",
         "model/subname",
+
         "datamodule/subgraph_batching",
         "datamodule/use_s2n",
         "datamodule/s2n_mapping_matrix_type",
         "datamodule/s2n_is_weighted",
         "datamodule/s2n_target_matrix",
-        "datamodule/s2n_set_sub_x_weight",
         "datamodule/s2n_add_sub_x_wl",
         "datamodule/s2n_use_sub_edge_index",
         "datamodule/use_consistent_processing",
@@ -228,9 +225,13 @@ def aggregate_csv_metrics(in_path, out_path,
         "datamodule/post_edge_normalize_arg_1",
         "datamodule/post_edge_normalize_arg_2",
         "model/learning_rate",
+        "model/activation",
         "model/encoder_layer_name",
         "model/hidden_channels",
         "model/num_layers",
+        "model/use_bn",
+        "model/use_skip",
+        "model/use_s2n_jk",
         "model/sub_node_encoder_name",
         "model/sub_node_num_layers",
         "model/sub_node_encoder_aggr",
@@ -294,6 +295,7 @@ def aggregate_csv_metrics(in_path, out_path,
                     f"mean/{metric}", f"std/{metric}", f"N/{metric}",
                     *key_hparams[num_path_hparams:],
                     "list",
+                    "in_path",
                 ])
             writer.writeheader()
 
@@ -322,6 +324,7 @@ def aggregate_csv_metrics(in_path, out_path,
                         f"std/{metric}": float(np.std(values)),
                         f"N/{metric}": len(values),
                         "list": str(values),
+                        "in_path": in_path,
                     })
                     num_lines += 1
                     if bom != "":
@@ -331,6 +334,8 @@ def aggregate_csv_metrics(in_path, out_path,
 
 if __name__ == '__main__':
     aggregate_csv_metrics(
-        "../logs_multi_csv",  # e.g., ../logs_multi_csv/PPIBP
+        # "../_logs_csv_2023/S2N", "../logs_multi_csv"
+        "../_logs_csv_2023/",
         "../_aggr_logs",
+        dump_best_of_model_only=True,  # True, FalseA
     )
