@@ -15,7 +15,8 @@ from tqdm import tqdm
 
 from data_sub import SubgraphDataset
 from s2n_coarsening_utils import coarsening_pyg, coarsening_pyg_batch
-from sub2node import SubgraphToNode
+from sub2node import SubgraphToNode, dist_by_shared_nodes
+from utils import repr_kvs
 from utils_fscache import fscaches
 from visualize import plot_hist_from_counter, plot_kde_from_counter
 
@@ -202,10 +203,10 @@ if __name__ == "__main__":
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, Component, Coreness, CutRatio
 
-    MODE = "SAVE_PRECURSOR"
-    # CROSS, NUM_TRAIN_PER_CLASS, SAVE_PRECURSOR, analyze_coarsening_results
+    MODE = "node_task_data_splits"
+    # CROSS, NUM_TRAIN_PER_CLASS, SAVE_PRECURSOR, analyze_coarsening_results, node_task_data_splits
 
-    NAME = "EMUser"
+    NAME = "PPIBP"
     # TEST
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, Component, Coreness, CutRatio, WLKSRandomTree
@@ -339,6 +340,52 @@ if __name__ == "__main__":
                     splits=dts.splits,
                     target_matrix=TARGET_MATRIX,
                 )
+    elif MODE == "node_task_data_splits":
+        _cls = eval(NAME)
+        dts = _cls(root=PATH, name=NAME, debug=DEBUG, embedding_type=E_TYPE)
+        _subgraph_data_list = dts.get_data_list_with_split_attr()
+        _global_data = dts.global_data
+
+        for cr in [0.2, 0.4, 0.6, 0.8]:
+            _s2n = SubgraphToNodePlusCoarsening(
+                _global_data, _subgraph_data_list,
+                coarsening_ratio=cr,
+                coarsening_method="variation_neighborhoods",  # NOTE: important
+                min_num_node_for_coarsening=2,
+                name=NAME,
+                path=f"{PATH}/{NAME.upper()}/sub2node_coarsening/",
+                splits=dts.splits,
+                num_start=dts.num_start,
+                target_matrix=TARGET_MATRIX,
+                edge_aggr=None,
+                undirected=True,
+            )
+            print(_s2n)
+            for ssxw in [None, "original_sqrt_d_node_div_d_sub"]:
+                for usei in [True, False]:
+                    # unnormalized, sqrt_d_node_div_d_sub, original_sqrt_d_node_div_d_sub
+                    # standardize_then_trunc_thres_max_linear
+                    for i in [1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
+                        for j in [0.5, 1.0, 1.5, 2.0]:
+                            ntds = _s2n.node_task_data_splits(
+                                mapping_matrix_type="unnormalized",
+                                set_sub_x_weight=ssxw,
+                                use_sub_edge_index=usei,
+                                post_edge_normalize="standardize_then_trunc_thres_max_linear",
+                                post_edge_normalize_args=[i, j],
+                                edge_thres=0.0,
+                                use_consistent_processing=True,
+                                save=True,
+                            )
+                            for _d in ntds:
+                                print(_d)
+                                print(f"\t- density: {_d.edge_index.size(1) / (_d.num_nodes ** 2)}")
+                                if hasattr(_d, "sub_x_weight"):
+                                    _sub_x_weight_stats = repr_kvs(
+                                        min=torch.min(_d.sub_x_weight), max=torch.max(_d.sub_x_weight),
+                                        avg=torch.mean(_d.sub_x_weight), std=torch.std(_d.sub_x_weight), sep=", ")
+                                    print(f"\t- sub_x_weight: {_sub_x_weight_stats}")
+                            _s2n._node_task_data_list = []  # flush
     else:
         # 0           5
         # | > 2 - 3 < |
