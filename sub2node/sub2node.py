@@ -450,17 +450,26 @@ class SubgraphToNode:
 
     @staticmethod
     def print_mat_stat(matrix, start=None, print_counter=False):
+
+        def safe_quantile(t, q):
+            try:
+                return round(torch.quantile(t, q).item(), _decimal)
+            except RuntimeError:
+                return "NA"
+
         _decimal = 5
         _mean = lambda t: round(torch.mean(t).item(), _decimal)
         _std = lambda t: round(torch.std(t).item(), _decimal)
         _min = lambda t: round(torch.min(t).item(), _decimal)
         _median = lambda t: round(torch.median(t).item(), _decimal)
-        _1q = lambda t: round(torch.quantile(t, 0.25).item(), _decimal)
-        _3q = lambda t: round(torch.quantile(t, 0.75).item(), _decimal)
+        _1q = lambda t: safe_quantile(t, 0.25)
+        _3q = lambda t: safe_quantile(t, 0.75)
+
         _max = lambda t: round(torch.max(t).item(), _decimal)
         if start:
             cprint(start, "green")
         matrix_pos = matrix[matrix > 0]
+
         print(
             f"\tmean / std = {_mean(matrix)} / {_std(matrix)} \n"
             f"\tmin / 1q / median / 3q / max = {_min(matrix)} / {_1q(matrix)} / {_median(matrix)}"
