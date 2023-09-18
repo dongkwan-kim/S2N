@@ -1,5 +1,6 @@
 import base64
 import hashlib
+from heapq import nlargest
 from pprint import pprint
 from typing import List, Union, Callable, Optional, Tuple
 from collections import Counter
@@ -102,9 +103,11 @@ class SubgraphToNodePlusCoarsening(SubgraphToNode):
         num_coarsened_nodes = len(data_coarsened)
         num_living_nodes_after_coarsening = sum(d.x.size(0) for d in data_coarsened)
 
-        cprint(f"\t- num_nodes_after_coarsening: {meta_info['num_nodes_after_coarsening']}", "yellow")
-        cprint(f"\t- num_living_nodes_after_coarsening: {num_living_nodes_after_coarsening}", "yellow")
         cprint(f"\t- num_coarsened_nodes: {num_coarsened_nodes}", "yellow")
+        cprint(f"\t- num_nodes_after_coarsening: {meta_info['num_nodes_after_coarsening']}", "yellow")
+        cprint(f"\t- Top 10 big coarsened nodes: {nlargest(10, meta_info['num_nodes_after_coarsening'].keys())}",
+               "yellow")
+        cprint(f"\t- num_living_nodes_after_coarsening: {num_living_nodes_after_coarsening}", "yellow")
 
         new_subgraph_data_list = data_train + data_coarsened + data_val + data_test
         new_splits = [
@@ -203,7 +206,7 @@ if __name__ == "__main__":
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, Component, Coreness, CutRatio
 
-    MODE = "node_task_data_splits"
+    MODE = "analyze_coarsening_results"
     # CROSS, NUM_TRAIN_PER_CLASS, SAVE_PRECURSOR, analyze_coarsening_results, node_task_data_splits
 
     NAME = "PPIBP"
