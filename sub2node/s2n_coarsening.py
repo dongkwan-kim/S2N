@@ -69,7 +69,7 @@ class SubgraphToNodePlusCoarsening(SubgraphToNode):
         self.global_data = global_data
         self.path = path
 
-        self.coarsening_ratio = coarsening_ratio
+        self.coarsening_ratio = round(coarsening_ratio, 1)
         self.coarsening_method = coarsening_method
         self.min_num_node_for_coarsening = min_num_node_for_coarsening
 
