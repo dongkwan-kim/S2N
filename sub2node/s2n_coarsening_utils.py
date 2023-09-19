@@ -6,15 +6,18 @@ https://github.com/szzhang17/Scaling-Up-Graph-Neural-Networks-Via-Graph-Coarseni
 and some minor modifications are applied.
 """
 from pprint import pprint
+from typing import List
 
 import numpy as np
 import pygsp as gsp
 import scipy.sparse.csc
 import torch
+from torch import Tensor
 from torch_geometric.data import Data
 from torch_geometric.utils import to_dense_adj
 from tqdm import tqdm
 
+from dataset_wl import generate_random_subgraph_batch_by_sampling_0_to_l_to_d
 from graph_coarsening.coarsening_utils import coarsen
 
 
@@ -96,10 +99,28 @@ def coarsening_pyg(data: Data, coarsening_ratio, coarsening_method, min_size):
     return index_list, rows_list, cols_list
 
 
+def coarsening_random_pyg_batch(data: Data, coarsening_ratio, coarsening_method,
+                                subgraph_size=None, max_subgraph_size=None):
+    # real world data: e.g., Data(edge_index=[2, 680941], num_nodes=21521, x=[21521, 64])
+    # ratio = 1 - n/N --> n = N * (1 - ratio)
+    N = data.num_nodes
+    num_subgraphs = int(N * (1 - coarsening_ratio))
+    nodes_in_subgraphs: List[Tensor] = list(generate_random_subgraph_batch_by_sampling_0_to_l_to_d(
+        data, num_subgraphs, subgraph_size=subgraph_size, k=1, l=None,
+        subgraph_generation_method=coarsening_method,
+        only_nodes_in_subgraphs=True, max_subgraph_size=max_subgraph_size,
+    ))
+
+    x_ids = torch.arange(len(nodes_in_subgraphs))  # Tensor of original node ids
+    _batch_ids = []
+    for i, nodes in enumerate(nodes_in_subgraphs):
+        _batch_ids += [i for _ in range(len(nodes))]
+    batch = torch.Tensor(_batch_ids).long()  # Tensor of coarsened node (subgraph) ids
+    sub_x = torch.cat(nodes_in_subgraphs).long()  # Tensor of original node ids in xs
+    return x_ids, batch, sub_x
+
+
 def coarsening_pyg_batch(data: Data, coarsening_ratio, coarsening_method, min_size=4):
-    assert coarsening_method in ["variation_neighborhoods", "variation_edges",
-                                 "variation_cliques", "heavy_edge",
-                                 "algebraic_JC", "affinity_GS", "kron"]
     index_list, rows_list, cols_list = coarsening_pyg(
         data, coarsening_ratio, coarsening_method, min_size
     )
@@ -122,7 +143,7 @@ def coarsening_pyg_batch(data: Data, coarsening_ratio, coarsening_method, min_si
         cum_cols_index += cols.size(0)
 
     x_ids = torch.cat(index_list)  # Tensor of original node ids
-    batch = torch.cat(cum_rows_list)  # Tensor of coarsened node ids
+    batch = torch.cat(cum_rows_list)  # Tensor of coarsened node (subgraph) ids
     sub_x_index = torch.cat(cum_cols_list)  # Tensor of indices in xs (original node ids)
     # x_ids[sub_x_index] = Tensor of original node ids in xs
     return x_ids, batch, sub_x_index

@@ -302,10 +302,12 @@ class WL4PatternNet(torch.nn.Module):
 def generate_random_subgraph_batch_by_sampling_0_to_l_to_d(
         global_data: Data, num_subgraphs, subgraph_size=None, k=1, l=2,
         subgraph_generation_method="generate_random_k_hop_subgraph",
+        only_nodes_in_subgraphs=False, max_subgraph_size=None,
 ) -> (Union[Tensor, List[Tensor]], List[Data]):
     if subgraph_generation_method == "generate_random_k_hop_subgraph":
         nodes_in_subgraphs: Union[Tensor, List[Tensor]] = generate_random_k_hop_subgraph(
-            global_data, num_subgraphs=num_subgraphs, subgraph_size=subgraph_size, k=k)
+            global_data, num_subgraphs=num_subgraphs, subgraph_size=subgraph_size,
+            k=k, max_subgraph_size=max_subgraph_size)
     elif subgraph_generation_method == "generate_random_subgraph_by_walk":
         assert subgraph_size is not None
         nodes_in_subgraphs: Tensor = generate_random_subgraph_by_walk(
@@ -319,6 +321,9 @@ def generate_random_subgraph_batch_by_sampling_0_to_l_to_d(
         nodes_in_subgraphs = torch.cat([nodes_in_subgraphs_1, nodes_in_subgraphs_2], dim=0)
     else:
         raise ValueError(f"Wrong subgraph_generation_method {subgraph_generation_method}")
+
+    if only_nodes_in_subgraphs:
+        return nodes_in_subgraphs
 
     batch_list = []
     hop_range = list(range(l + 1))
@@ -374,24 +379,42 @@ def generate_random_subgraph_by_walk(global_data: Data, num_subgraphs, subgraph_
 
 
 def generate_random_k_hop_subgraph(global_data: Data, num_subgraphs,
-                                   subgraph_size=None, k=1) -> Union[Tensor, List[Tensor]]:
+                                   subgraph_size=None, k=1,
+                                   max_subgraph_size=None) -> Union[Tensor, List[Tensor]]:
+    assert not (subgraph_size is not None and max_subgraph_size is not None)
     N, E = global_data.num_nodes, global_data.num_edges
     nodes_in_subgraphs = []
     start = torch.unique(torch.randint(0, N, (num_subgraphs * 3,), dtype=torch.long).flatten(),
                          sorted=False)
     start = start[torch.randperm(start.size(0))]
-    for n_idx in tqdm(start, desc="generate_random_subgraph_by_k_hop", total=num_subgraphs * 2):
+    for n_idx in tqdm(start, desc=f"generate_random_subgraph_by_k_hop (#={num_subgraphs})", total=num_subgraphs * 2):
         subset, _, idx_of_start_in_subset, _ = k_hop_subgraph([n_idx], k, global_data.edge_index, num_nodes=N)
         _S = subset.size(0)
-        if subgraph_size is None or _S == subgraph_size:
+
+        need_sampling = False
+        if subgraph_size is None and max_subgraph_size is None:
             nodes_in_subgraphs.append(subset)
-        elif _S < subgraph_size:
-            continue
-        elif _S > subgraph_size:
+
+        elif subgraph_size is None and max_subgraph_size is not None:
+            if _S <= max_subgraph_size:
+                nodes_in_subgraphs.append(subset)
+            else:
+                need_sampling = True
+
+        elif subgraph_size is not None:
+            if _S == subgraph_size:
+                nodes_in_subgraphs.append(subset)
+            elif _S < subgraph_size:
+                continue
+            elif _S > subgraph_size:
+                need_sampling = True
+
+        if need_sampling:
+            _size_to_sample = subgraph_size or max_subgraph_size
             # Sample nodes of subgraph_size from subset:
             mask = torch.ones(subset.size(0), dtype=torch.bool)
             mask[idx_of_start_in_subset] = False
-            sub_subset = torch_choice(subset[mask], subgraph_size - 1)  # -1 for start
+            sub_subset = torch_choice(subset[mask], _size_to_sample - 1)  # -1 for start
             sub_subset = torch.cat([sub_subset, torch.tensor([n_idx], dtype=torch.long)])
             nodes_in_subgraphs.append(sub_subset)
 

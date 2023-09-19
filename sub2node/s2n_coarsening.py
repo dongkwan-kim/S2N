@@ -15,7 +15,7 @@ from torch_scatter import scatter
 from tqdm import tqdm
 
 from data_sub import SubgraphDataset
-from s2n_coarsening_utils import coarsening_pyg, coarsening_pyg_batch
+from s2n_coarsening_utils import coarsening_pyg, coarsening_pyg_batch, coarsening_random_pyg_batch
 from sub2node import SubgraphToNode, dist_by_shared_nodes
 from utils import repr_kvs
 from utils_fscache import fscaches
@@ -28,6 +28,12 @@ class SubgraphToNodePlusCoarsening(SubgraphToNode):
     METHOD_NAMES_SCALABLE = ["variation_neighborhoods", "variation_edges",  # "variation_cliques",
                              "heavy_edge", "algebraic_JC", "affinity_GS", "kron"]
     METHOD_NAMES_SELECTED = ["variation_neighborhoods", "variation_edges"]
+
+    DATASET_TO_RATIO = {
+        "PPIBP": 0.941,
+        "HPOMetab": 0.868,
+        "EMUser": 0.996,
+    }
 
     def __init__(self,
                  global_data: Data,
@@ -44,7 +50,8 @@ class SubgraphToNodePlusCoarsening(SubgraphToNode):
                  target_matrix: str = "adjacent_no_self_loops",
                  edge_aggr: Union[Callable[[Tensor], Tensor], str] = None,
                  num_workers: int = None,
-                 undirected: bool = None):
+                 undirected: bool = None,
+                 **kwargs):
         """
         :param global_data: Single Data(edge_index=[2, *], x=[*, F])
         :param subgraph_data_list: List of Data(x=[*, 1], edge_index=[2, *], y=[1])
@@ -70,20 +77,32 @@ class SubgraphToNodePlusCoarsening(SubgraphToNode):
         self.global_data = global_data
         self.path = path
 
-        self.coarsening_ratio = round(coarsening_ratio, 1)
+        self.coarsening_ratio = round(coarsening_ratio, 3)
         self.coarsening_method = coarsening_method
         self.min_num_node_for_coarsening = min_num_node_for_coarsening
 
-        subgraph_data_list, splits, self.meta_info = self.process_args_by_coarsening(subgraph_data_list, splits)
+        # NOTE: hard coded
+        if self.coarsening_method == "generate_random_k_hop_subgraph":
+            kwargs["max_random_subgraph_size"] = 100
+        elif self.coarsening_method == "generate_random_subgraph_by_walk":
+            kwargs["random_subgraph_size"] = 40
+        self.kwargs = kwargs
+
+        subgraph_data_list, splits, self.meta_info = self.process_args_by_coarsening(
+            subgraph_data_list, splits, **kwargs)
         super().__init__(global_data, subgraph_data_list, name, path, splits, num_start, target_matrix, edge_aggr,
                          num_workers, undirected, node_spl_cutoff=None)
 
     @property
     def node_task_name(self):
-        return f"{super().node_task_name}-{self.coarsening_method}" \
-               f"-{self.coarsening_ratio}-{self.min_num_node_for_coarsening}"
+        ntn = f"{super().node_task_name}-{self.coarsening_method}" \
+              f"-{self.coarsening_ratio}-{self.min_num_node_for_coarsening}"
+        if len(self.kwargs) > 0:
+            return f"{ntn}-{repr_kvs(**self.kwargs)}"
+        else:
+            return ntn
 
-    def process_args_by_coarsening(self, subgraph_data_list, splits):
+    def process_args_by_coarsening(self, subgraph_data_list, splits, **kwargs):
         for sd in subgraph_data_list:
             del sd.split
         num_train, num_val = splits[0], splits[1] - splits[0]
@@ -97,6 +116,7 @@ class SubgraphToNodePlusCoarsening(SubgraphToNode):
             coarsening_ratio=self.coarsening_ratio,
             coarsening_method=self.coarsening_method,
             min_num_node_for_coarsening=self.min_num_node_for_coarsening,
+            **kwargs,
         )
         data_coarsened = Batch.to_data_list(data_batch_coarsened)
 
@@ -108,6 +128,8 @@ class SubgraphToNodePlusCoarsening(SubgraphToNode):
         cprint(f"\t- Top 10 big coarsened nodes: {nlargest(10, meta_info['num_nodes_after_coarsening'].keys())}",
                "yellow")
         cprint(f"\t- num_living_nodes_after_coarsening: {num_living_nodes_after_coarsening}", "yellow")
+        cprint(f"\t- num_living_unique_nodes_after_coarsening: {torch.unique(data_batch_coarsened.x).size(0)}",
+               "yellow")
 
         new_subgraph_data_list = data_train + data_coarsened + data_val + data_test
         new_splits = [
@@ -122,11 +144,11 @@ class SubgraphToNodePlusCoarsening(SubgraphToNode):
     @fscaches(path_attrname_in_kwargs="path", verbose=True)
     def generate_and_cache_subgraphs_by_coarsening(
             path, data: Data, coarsening_ratio, coarsening_method,
-            min_num_node_for_coarsening,
+            min_num_node_for_coarsening, **kwargs,
     ) -> (Batch, dict):
 
         data_coarsened = SubgraphToNodePlusCoarsening.generate_subgraphs_by_coarsening(
-            data, coarsening_ratio, coarsening_method)
+            data, coarsening_ratio, coarsening_method, **kwargs)
 
         num_nodes_after_coarsening = Counter([d.x.size(0) for d in data_coarsened])
 
@@ -140,11 +162,21 @@ class SubgraphToNodePlusCoarsening(SubgraphToNode):
         )
 
     @staticmethod
-    def generate_subgraphs_by_coarsening(data: Data, coarsening_ratio, coarsening_method):
-        assert coarsening_method in SubgraphToNodePlusCoarsening.METHOD_NAMES
+    def generate_subgraphs_by_coarsening(data: Data, coarsening_ratio, coarsening_method: str,
+                                         random_subgraph_size=None, max_random_subgraph_size=None):
         print(f"Target Data: {data}")
-        x_ids, batch, sub_x_index = coarsening_pyg_batch(data, coarsening_ratio, coarsening_method)
-        sub_x = x_ids[sub_x_index]
+        if coarsening_method.startswith("generate_random"):
+            assert coarsening_method in ["generate_random_k_hop_subgraph", "generate_random_subgraph_by_walk"]
+            x_ids, batch, sub_x = coarsening_random_pyg_batch(
+                data, coarsening_ratio, coarsening_method,
+                subgraph_size=random_subgraph_size, max_subgraph_size=max_random_subgraph_size,
+            )
+        else:
+            assert coarsening_method in ["variation_neighborhoods", "variation_edges",
+                                         "variation_cliques", "heavy_edge",
+                                         "algebraic_JC", "affinity_GS", "kron"]
+            x_ids, batch, sub_x_index = coarsening_pyg_batch(data, coarsening_ratio, coarsening_method)
+            sub_x = x_ids[sub_x_index]
 
         num_nodes_per_coarsened_nodes = scatter(torch.ones(batch.size(0)).long(), batch, dim=0, reduce="sum")
         sizes = [0] + torch.cumsum(num_nodes_per_coarsened_nodes, dim=0).tolist()
@@ -318,6 +350,36 @@ if __name__ == "__main__":
                 use_consistent_processing=True,
                 save=True,
                 load=False,
+            )
+
+    elif MODE == "RANDOM":
+
+        dts: SubgraphDataset = eval(NAME)(
+            root=PATH,
+            name=NAME,
+            embedding_type=E_TYPE,
+            debug=DEBUG,
+        )
+        _subgraph_data_list = dts.get_data_list_with_split_attr()
+        _global_data = dts.global_data
+
+        for usei in [True, False]:
+            _s2n = SubgraphToNodePlusCoarsening(
+                _global_data, _subgraph_data_list,
+                coarsening_ratio=SubgraphToNodePlusCoarsening.DATASET_TO_RATIO[NAME],
+                # generate_random_k_hop_subgraph, generate_random_subgraph_by_walk
+                coarsening_method="generate_random_subgraph_by_walk",
+                min_num_node_for_coarsening=2,  # NOTE: important
+                name=NAME,
+                path=f"{PATH}/{NAME.upper()}/sub2node_coarsening/",
+                undirected=True,
+                splits=dts.splits,
+                target_matrix=TARGET_MATRIX,
+            )
+            _s2n.node_task_data_precursor(
+                matrix_type="unnormalized",
+                use_sub_edge_index=usei,
+                save=True,
             )
 
     elif NAME != "TEST" and MODE == "CROSS":
