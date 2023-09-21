@@ -18,6 +18,8 @@ from p_tqdm import p_imap
 from pytorch_lightning.utilities import rank_zero_only
 from tqdm import tqdm
 
+from utils import repr_kvs
+
 """Most of the codes are adopted from
     https://github.com/ashleve/lightning-hydra-template/blob/main/src/utils/utils.py"""
 
@@ -197,7 +199,7 @@ def aggregate_csv_metrics(in_path, out_path,
                           key_hparams=None,
                           num_path_hparams: int = 2,
                           metric=None,
-                          model_key="model/subname",
+                          model_key_hparams=None,
                           min_aggr_sample_counts=10,
                           dump_best_of_model_only=False):
     import yaml
@@ -206,12 +208,21 @@ def aggregate_csv_metrics(in_path, out_path,
 
     metric = metric or "test/micro_f1"
     assert metric.startswith("test"), f"Wrong metric format: {metric}"
+    model_key_hparams = model_key_hparams or [
+        "model/subname",
+        "datamodule/coarsening_method",
+        "datamodule/coarsening_ratio",
+        "datamodule/s2n_set_sub_x_weight",
+    ]
     key_hparams = key_hparams or [
         "datamodule/dataset_subname",
         "datamodule/custom_splits",
 
-        "datamodule/s2n_set_sub_x_weight",
         "model/subname",
+        "datamodule/s2n_set_sub_x_weight",
+        "datamodule/coarsening_method",
+        "datamodule/coarsening_ratio",
+        "datamodule/use_coarsening",
 
         "datamodule/subgraph_batching",
         "datamodule/use_s2n",
@@ -248,9 +259,16 @@ def aggregate_csv_metrics(in_path, out_path,
     key_to_values = defaultdict(lambda: defaultdict(list))
     key_to_ingredients = dict()
 
+    def get_model_name(ingredients: dict):
+        return repr_kvs(**{k: v for k, v in ingredients.items()
+                           if k in model_key_hparams})
+
     def parse_csv_to_k2vi(_path):
         _path = Path(_path)
         yaml_path = _path.parent / "hparams.yaml"
+        if not yaml_path.is_file():
+            return None
+
         with open(yaml_path, "r") as stream:
             yaml_data = yaml.safe_load(stream)
             _key_dict = OrderedDict()
@@ -292,7 +310,8 @@ def aggregate_csv_metrics(in_path, out_path,
                 f, fieldnames=[
                     "best_of_model",
                     *key_hparams[:num_path_hparams],
-                    f"mean/{metric}", f"std/{metric}", f"N/{metric}",
+                    f"mean/{metric}", f"std/{metric}",
+                    f"N/{metric}", f"N_total/{metric}",
                     *key_hparams[num_path_hparams:],
                     "list",
                     "in_path",
@@ -300,9 +319,11 @@ def aggregate_csv_metrics(in_path, out_path,
             writer.writeheader()
 
             model_to_bom_metric = defaultdict(float)
+            model_to_n_total = defaultdict(int)
             for experiment_key, values in experiment_key_to_values.items():
                 if len(values) >= min_aggr_sample_counts:
-                    model_subname = key_to_ingredients[experiment_key][model_key]
+                    model_subname = get_model_name(key_to_ingredients[experiment_key])
+                    model_to_n_total[model_subname] += 1
                     model_to_bom_metric[model_subname] = max(float(np.mean(values)),
                                                              model_to_bom_metric[model_subname])
 
@@ -310,32 +331,36 @@ def aggregate_csv_metrics(in_path, out_path,
             model_to_bom_logged = defaultdict(bool)
             for experiment_key, values in experiment_key_to_values.items():
                 if len(values) >= min_aggr_sample_counts:
+                    model_subname = get_model_name(key_dict)
+
                     key_dict = key_to_ingredients[experiment_key]
                     mean_metric = float(np.mean(values))
-                    bom = True if (mean_metric == model_to_bom_metric[key_dict[model_key]]) else ""
+                    bom = True if (mean_metric == model_to_bom_metric[model_subname]) else ""
 
                     if dump_best_of_model_only and bom == "":
                         continue
 
                     writer.writerow({
-                        "best_of_model": bom if not model_to_bom_logged[key_dict[model_key]] else "",
+                        "best_of_model": bom if not model_to_bom_logged[model_subname] else "",
                         **key_dict,
                         f"mean/{metric}": mean_metric,
                         f"std/{metric}": float(np.std(values)),
                         f"N/{metric}": len(values),
+                        f"N_total/{metric}": model_to_n_total[model_subname],
                         "list": str(values),
                         "in_path": in_path,
                     })
                     num_lines += 1
                     if bom != "":
-                        model_to_bom_logged[key_dict[model_key]] = True
+                        model_to_bom_logged[get_model_name(key_dict)] = True
             print(f"Saved (lines {num_lines}): {out_file.resolve()}")
 
 
 if __name__ == '__main__':
     aggregate_csv_metrics(
-        # "../_logs_csv_2023/S2N", "../logs_multi_csv"
-        "../_logs_csv_2023/",
+        # "../_logs_csv_2023/", "../logs_multi_csv", "../_logs_csv_coarsening"
+        "../logs_multi_csv/",
+        # "../_logs_csv_2023/relu/baseline",
         "../_aggr_logs",
         dump_best_of_model_only=True,  # True, FalseA
     )
