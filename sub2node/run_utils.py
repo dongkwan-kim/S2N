@@ -331,9 +331,8 @@ def aggregate_csv_metrics(in_path, out_path,
             model_to_bom_logged = defaultdict(bool)
             for experiment_key, values in experiment_key_to_values.items():
                 if len(values) >= min_aggr_sample_counts:
-                    model_subname = get_model_name(key_dict)
-
                     key_dict = key_to_ingredients[experiment_key]
+                    model_subname = get_model_name(key_dict)
                     mean_metric = float(np.mean(values))
                     bom = True if (mean_metric == model_to_bom_metric[model_subname]) else ""
 
