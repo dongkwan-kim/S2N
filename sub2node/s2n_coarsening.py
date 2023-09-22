@@ -27,7 +27,7 @@ class SubgraphToNodePlusCoarsening(SubgraphToNode):
                     "heavy_edge", "algebraic_JC", "affinity_GS", "kron"]
     METHOD_NAMES_SCALABLE = ["variation_neighborhoods", "variation_edges",  # "variation_cliques",
                              "heavy_edge", "algebraic_JC", "affinity_GS", "kron"]
-    METHOD_NAMES_SELECTED = ["variation_neighborhoods", "variation_edges"]
+    METHOD_NAMES_SELECTED = ["variation_edges"]
 
     DATASET_TO_RATIO = {
         "PPIBP": 0.941,
@@ -238,10 +238,10 @@ if __name__ == "__main__":
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, Component, Coreness, CutRatio
 
-    MODE = "analyze_coarsening_results"
+    MODE = "NUM_TRAIN_PER_CLASS"
     # CROSS, NUM_TRAIN_PER_CLASS, SAVE_PRECURSOR, analyze_coarsening_results, node_task_data_splits
 
-    NAME = "PPIBP"
+    NAME = "EMUser"
     # TEST
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, Component, Coreness, CutRatio, WLKSRandomTree
@@ -257,14 +257,26 @@ if __name__ == "__main__":
         E_TYPE = "glass"  # gin, graphsaint_gcn, glass
     DEBUG = False
 
-    print(f"NAME={NAME} | MODE={MODE}")
+    if MODE == "NUM_TRAIN_PER_CLASS":
+        if NAME == "EMUser":
+            CR_LIST = [0.7, 0.8, 0.9]
+        elif NAME == "PPIBP":
+            CR_LIST = [0.2, 0.3, 0.4, 0.5, 0.6]
+        elif NAME == "HPOMetab":
+            CR_LIST = [0.5, 0.6, 0.7, 0.8]
+        else:
+            raise ValueError
+    else:
+        CR_LIST = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+
+    print(f"NAME={NAME} | MODE={MODE} | CR_LIST={CR_LIST}")
     if MODE == "analyze_coarsening_results":
         dts: SubgraphDataset = eval(NAME)(root=PATH, name=NAME, embedding_type=E_TYPE, debug=DEBUG)
         _subgraph_data_list = dts.get_data_list_with_split_attr()
         _global_data = dts.global_data
 
         _s2n_list = []
-        for cr in [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
+        for cr in CR_LIST:
             for method in SubgraphToNodePlusCoarsening.METHOD_NAMES_SELECTED:  # NOTE: METHOD_NAMES_SELECTED
                 _s2n = SubgraphToNodePlusCoarsening(
                     _global_data, _subgraph_data_list,
@@ -289,7 +301,7 @@ if __name__ == "__main__":
         _subgraph_data_list = dts.get_data_list_with_split_attr()
         _global_data = dts.global_data
 
-        for cr in [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
+        for cr in CR_LIST:
             for method in SubgraphToNodePlusCoarsening.METHOD_NAMES_SELECTED:  # NOTE: METHOD_NAMES_SELECTED
                 for usei in [True, False]:
                     _s2n = SubgraphToNodePlusCoarsening(
@@ -317,40 +329,44 @@ if __name__ == "__main__":
             num_training_tails_to_tile_per_class=40,  # NOTE: IMPORTANT
         )
 
-        # ----- NOTE: IMPORTANT
-        dts.set_num_start_train_by_num_train_per_class(5)
-        # -----
+        for C in [5, 10, 20, 30, 40]:
 
-        _subgraph_data_list = dts.get_data_list_with_split_attr()
-        _global_data = dts.global_data
+            # ----- NOTE: IMPORTANT
+            dts.set_num_start_train_by_num_train_per_class(C)
+            # -----
 
-        cr = 0.3
-        _s2n_list = []
-        for method in SubgraphToNodePlusCoarsening.METHOD_NAMES_SELECTED:  # NOTE: METHOD_NAMES_SELECTED
-            _s2n = SubgraphToNodePlusCoarsening(
-                _global_data, _subgraph_data_list,
-                coarsening_ratio=cr,
-                coarsening_method=method,
-                min_num_node_for_coarsening=2,  # NOTE: important
-                name=NAME,
-                path=f"{PATH}/{NAME.upper()}/sub2node_coarsening/",
-                splits=dts.splits,
-                num_start=dts.num_start,
-                target_matrix=TARGET_MATRIX,
-                edge_aggr=None,
-                undirected=True,
-            )
-            data_list = _s2n.node_task_data_splits(
-                mapping_matrix_type="unnormalized",
-                set_sub_x_weight=None,
-                use_sub_edge_index=False,
-                post_edge_normalize="standardize_then_trunc_thres_max_linear",
-                post_edge_normalize_args=[1.0, 1.0],
-                edge_thres=0.0,
-                use_consistent_processing=True,
-                save=True,
-                load=False,
-            )
+            _subgraph_data_list = dts.get_data_list_with_split_attr()
+            _global_data = dts.global_data
+
+            for cr in CR_LIST:
+                for i in [1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
+                    for j in [0.5, 1.0, 1.5, 2.0]:
+                        for usei in [False, True]:
+                            _s2n = SubgraphToNodePlusCoarsening(
+                                _global_data, _subgraph_data_list,
+                                coarsening_ratio=cr,
+                                coarsening_method="variation_edges",
+                                min_num_node_for_coarsening=2,  # NOTE: important
+                                name=NAME,
+                                path=f"{PATH}/{NAME.upper()}/sub2node_coarsening/",
+                                splits=dts.splits,
+                                num_start=dts.num_start,
+                                target_matrix=TARGET_MATRIX,
+                                edge_aggr=None,
+                                undirected=True,
+                            )
+                            data_list = _s2n.node_task_data_splits(
+                                mapping_matrix_type="unnormalized",
+                                set_sub_x_weight=None,
+                                use_sub_edge_index=usei,
+                                post_edge_normalize="standardize_then_trunc_thres_max_linear",
+                                post_edge_normalize_args=[i, j],
+                                edge_thres=0.0,
+                                use_consistent_processing=True,
+                                save=True,
+                                load=True,
+                                is_custom_split=True,
+                            )
 
     elif MODE == "RANDOM":
 
@@ -392,7 +408,7 @@ if __name__ == "__main__":
         _subgraph_data_list = dts.get_data_list_with_split_attr()
         _global_data = dts.global_data
 
-        for cr in [0.3, 0.4, 0.5, 0.6, 0.7, 0.8]:
+        for cr in CR_LIST:
             for method in SubgraphToNodePlusCoarsening.METHOD_NAMES_SELECTED:  # NOTE: METHOD_NAMES_SELECTED
                 _s2n = SubgraphToNodePlusCoarsening(
                     _global_data, _subgraph_data_list,
@@ -405,52 +421,6 @@ if __name__ == "__main__":
                     splits=dts.splits,
                     target_matrix=TARGET_MATRIX,
                 )
-    elif MODE == "node_task_data_splits":
-        _cls = eval(NAME)
-        dts = _cls(root=PATH, name=NAME, debug=DEBUG, embedding_type=E_TYPE)
-        _subgraph_data_list = dts.get_data_list_with_split_attr()
-        _global_data = dts.global_data
-
-        for cr in [0.2, 0.4, 0.6, 0.8]:
-            _s2n = SubgraphToNodePlusCoarsening(
-                _global_data, _subgraph_data_list,
-                coarsening_ratio=cr,
-                coarsening_method="variation_neighborhoods",  # NOTE: important
-                min_num_node_for_coarsening=2,
-                name=NAME,
-                path=f"{PATH}/{NAME.upper()}/sub2node_coarsening/",
-                splits=dts.splits,
-                num_start=dts.num_start,
-                target_matrix=TARGET_MATRIX,
-                edge_aggr=None,
-                undirected=True,
-            )
-            print(_s2n)
-            for ssxw in [None, "original_sqrt_d_node_div_d_sub"]:
-                for usei in [True, False]:
-                    # unnormalized, sqrt_d_node_div_d_sub, original_sqrt_d_node_div_d_sub
-                    # standardize_then_trunc_thres_max_linear
-                    for i in [1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
-                        for j in [0.5, 1.0, 1.5, 2.0]:
-                            ntds = _s2n.node_task_data_splits(
-                                mapping_matrix_type="unnormalized",
-                                set_sub_x_weight=ssxw,
-                                use_sub_edge_index=usei,
-                                post_edge_normalize="standardize_then_trunc_thres_max_linear",
-                                post_edge_normalize_args=[i, j],
-                                edge_thres=0.0,
-                                use_consistent_processing=True,
-                                save=True,
-                            )
-                            for _d in ntds:
-                                print(_d)
-                                print(f"\t- density: {_d.edge_index.size(1) / (_d.num_nodes ** 2)}")
-                                if hasattr(_d, "sub_x_weight"):
-                                    _sub_x_weight_stats = repr_kvs(
-                                        min=torch.min(_d.sub_x_weight), max=torch.max(_d.sub_x_weight),
-                                        avg=torch.mean(_d.sub_x_weight), std=torch.std(_d.sub_x_weight), sep=", ")
-                                    print(f"\t- sub_x_weight: {_sub_x_weight_stats}")
-                            _s2n._node_task_data_list = []  # flush
     else:
         # 0           5
         # | > 2 - 3 < |

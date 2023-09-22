@@ -311,7 +311,7 @@ class SubgraphToNode:
                               post_edge_normalize_args: Union[List, None] = None,
                               edge_thres: Union[float, Callable, List[float]] = 1.0,
                               use_consistent_processing=False,
-                              save=True, load=True) -> Tuple[Data, Data, Data]:
+                              save=True, load=True, is_custom_split=False) -> Tuple[Data, Data, Data]:
         """
         :return: Data(x=[N, 1], edge_index=[2, E], edge_attr=[E], y=[C], batch=[N])
             - N is the number of subgraphs = batch.sum()
@@ -326,8 +326,13 @@ class SubgraphToNode:
             [str(round(a, 3)) for a in post_edge_normalize_args]  # todo: general repr for args
         ) if post_edge_normalize is not None else None
 
-        name_key = repr_kvs(mmt=mapping_matrix_type, xw=set_sub_x_weight, sei=use_sub_edge_index,
+        name_key_kvs = dict(mmt=mapping_matrix_type, xw=set_sub_x_weight, sei=use_sub_edge_index,
                             et=str_et, en=str_en, ucp=use_consistent_processing)
+        if not is_custom_split:
+            name_key = repr_kvs(**name_key_kvs)
+        else:
+            name_key = repr_kvs(**name_key_kvs, splits="_".join([str(s) for s in self.splits]))
+
         path = self.path / f"{self.node_task_name}_node_task_data_{name_key}.pth"
         try:
             if load:

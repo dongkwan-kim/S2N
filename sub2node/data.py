@@ -186,8 +186,9 @@ class SubgraphDataModule(LightningDataModule):
                                           if getattr(self.h, f"post_edge_normalize_arg_{i}", None) is not None],
                 edge_thres=self.h.edge_thres,
                 use_consistent_processing=self.h.use_consistent_processing,
-                save=(not is_customized_split),
-                load=(not is_customized_split),
+                # save=(not is_customized_split),
+                # load=(not is_customized_split),
+                is_custom_split=is_customized_split,
             )
             if self.h.s2n_add_sub_x_wl:
                 data_list = s2n.node_task_add_sub_x_wl(
