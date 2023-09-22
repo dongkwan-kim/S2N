@@ -136,7 +136,7 @@ class SubgraphToNodePlusCoarsening(SubgraphToNode):
             num_train,
             num_train + num_coarsened_nodes,
             num_train + num_coarsened_nodes + num_val,
-        ]
+            ]
         assert str(data_coarsened[0]) == str(new_subgraph_data_list[new_splits[0]])
         return new_subgraph_data_list, new_splits, meta_info
 
@@ -241,7 +241,7 @@ if __name__ == "__main__":
     MODE = "NUM_TRAIN_PER_CLASS"
     # CROSS, NUM_TRAIN_PER_CLASS, SAVE_PRECURSOR, analyze_coarsening_results, node_task_data_splits
 
-    NAME = "EMUser"
+    NAME = "PPIBP"
     # TEST
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, Component, Coreness, CutRatio, WLKSRandomTree
@@ -259,7 +259,7 @@ if __name__ == "__main__":
 
     if MODE == "NUM_TRAIN_PER_CLASS":
         if NAME == "EMUser":
-            CR_LIST = [0.7, 0.8, 0.9]
+            CR_LIST = [0.8, 0.9]
         elif NAME == "PPIBP":
             CR_LIST = [0.2, 0.3, 0.4, 0.5, 0.6]
         elif NAME == "HPOMetab":
@@ -324,12 +324,11 @@ if __name__ == "__main__":
                     )
 
     elif MODE == "NUM_TRAIN_PER_CLASS":
-        dts: SubgraphDataset = eval(NAME)(
-            root=PATH, name=NAME, embedding_type=E_TYPE, debug=DEBUG,
-            num_training_tails_to_tile_per_class=40,  # NOTE: IMPORTANT
-        )
-
-        for C in [5, 10, 20, 30, 40]:
+        for C in [10, 20, 30, 40]:
+            dts: SubgraphDataset = eval(NAME)(
+                root=PATH, name=NAME, embedding_type=E_TYPE, debug=DEBUG,
+                num_training_tails_to_tile_per_class=40,  # NOTE: IMPORTANT
+            )
 
             # ----- NOTE: IMPORTANT
             dts.set_num_start_train_by_num_train_per_class(C)
@@ -342,6 +341,7 @@ if __name__ == "__main__":
                 for i in [1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
                     for j in [0.5, 1.0, 1.5, 2.0]:
                         for usei in [False, True]:
+                            print(f"Running ... C={C} | cr={cr} | i={i} | j={j} | usei={usei}")
                             _s2n = SubgraphToNodePlusCoarsening(
                                 _global_data, _subgraph_data_list,
                                 coarsening_ratio=cr,
