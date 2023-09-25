@@ -19,6 +19,7 @@ from tqdm import tqdm
 from data_utils import RelabelNodes
 from dataset_wl import ReplaceXWithWL4Pattern
 from utils import try_getattr, spspmm_quad, repr_kvs, filter_living_edge_index
+from visualize import plot_dis
 
 
 class SubgraphToNode:
@@ -553,10 +554,10 @@ if __name__ == '__main__':
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, Component, Coreness, CutRatio
 
-    MODE = "HPONeuro"
+    MODE = "EMUser"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, Component, Coreness, CutRatio
-    PURPOSE = "MANY_4"
+    PURPOSE = "SUB_SIZE"
     # MANY, ONCE
     TARGET_MATRIX = "adjacent_with_self_loops"
     # adjacent_with_self_loops, adjacent_no_self_loops
@@ -657,6 +658,44 @@ if __name__ == '__main__':
                                 avg=torch.mean(_d.sub_x_weight), std=torch.std(_d.sub_x_weight), sep=", ")
                             print(f"\t- sub_x_weight: {_sub_x_weight_stats}")
                     s2n._node_task_data_list = []  # flush
+
+        elif PURPOSE == "WEIGHT_DIST":
+            ntdp = s2n.node_task_data_precursor(matrix_type="unnormalized", use_sub_edge_index=False, save=False)
+            ewm = ntdp.edge_weight_matrix.flatten()
+            ewm_pos = ewm[ewm > 0]
+
+            s1_ewm_pos = (ewm_pos - torch.mean(ewm_pos)) / torch.std(ewm_pos)
+            s2_ewm_pos = (ewm_pos - torch.mean(ewm)) / torch.std(ewm)
+
+            plot_dis("hist", xs=torch.log(ewm_pos).tolist(), xlabel="log edge weights",
+                     path="../_figures", key=f"{MODE}_ew", extension="png",
+                     scales_kws={"yscale": "log"},
+                     )
+
+            plot_dis("kde", xs=s1_ewm_pos.tolist(), xlabel="edge weights",
+                     path="../_figures", key=f"{MODE}_ew_s1", extension="png",
+                     # scales_kws={"xscale": "log"},
+                     )
+            plot_dis("kde", xs=s2_ewm_pos.tolist(), xlabel="edge weights",
+                     path="../_figures", key=f"{MODE}_ew_s2", extension="png",
+                     # scales_kws={"xscale": "log"},
+                     )
+
+            plot_dis("kde", xs=ewm_pos.tolist(), xlabel="edge weights",
+                     path="../_figures", key=f"{MODE}_ew", extension="png",
+                     # scales_kws={"xscale": "log"},
+                     )
+
+        elif PURPOSE == "SUB_SIZE":
+            szs = [s.x.size(0) for s in _subgraph_data_list]
+            plot_dis("kde", xs=szs, xlabel="subgraph sizes",
+                     path="../_figures", key=f"{MODE}_subgraph_sizes", extension="png",
+                     # scales_kws={"xscale": "log"},
+                     )
+            plot_dis("hist", xs=szs, xlabel="subgraph sizes",
+                     path="../_figures", key=f"{MODE}_subgraph_sizes", extension="png",
+                     # scales_kws={"xscale": "log"},
+                     )
 
         else:
             raise ValueError(f"Wrong purpose: {PURPOSE}")
