@@ -41,7 +41,8 @@ def load_kwargs(dataset_name, batching_type, model_name) -> (str, DictConfig, st
     return datamodule_yaml, datamodule_cfg, model_yaml, model_cfg
 
 
-def load_best_hparams_per_dataset(dataset_name, log_path) -> Optional[List[Dict[str, Any]]]:
+def load_best_hparams_per_dataset(dataset_name, log_path,
+                                  key_to_sort="mean/test/micro_f1") -> Optional[List[Dict[str, Any]]]:
     the_log = list(Path(log_path).glob(f"**/_log_{dataset_name}*"))
     if len(the_log) == 0:
         cprint(f"Not found any {dataset_name} logs in {log_path}", "red")
@@ -52,7 +53,8 @@ def load_best_hparams_per_dataset(dataset_name, log_path) -> Optional[List[Dict[
     cprint(f"Load: {the_log}", "green")
 
     hparams_list = []
-    for line in csv.DictReader(the_log.open()):
+    lines = sorted([line for line in csv.DictReader(the_log.open())], key=lambda l: l[key_to_sort])
+    for line in lines:
         if line["best_of_model"]:
             hparams = {"datamodule": {}, "model": {}}
             for k, v in line.items():
@@ -98,8 +100,8 @@ def replace_and_dump_hparams_to_args(dataset_name, log_path="../_aggr_logs",
                     model_cfg[k] = bh_model[k]
 
         for k in datamodule_cfg:
-            if k in bh_datamodule and bh_datamodule[k] != "":
-                datamodule_cfg[k] = bh_datamodule[k]
+            if k in bh_datamodule:
+                datamodule_cfg[k] = bh_datamodule[k] if bh_datamodule[k] != "" else None
 
         if dump_datamodule:
             with open(datamodule_yaml, "w") as f:
@@ -113,7 +115,7 @@ def replace_and_dump_hparams_to_args(dataset_name, log_path="../_aggr_logs",
 
 
 if __name__ == '__main__':
-    LOG_PATH = "../_aggr_sensitivity_logs/"
+    LOG_PATH = "../_aggr_logs/_logs_csv_2023/selected/"
 
     if "sensitivity" not in LOG_PATH:
         replace_and_dump_hparams_to_args("PPIBP", LOG_PATH)
