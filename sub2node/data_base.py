@@ -159,7 +159,8 @@ class DatasetBase(InMemoryDataset):
         num_until_val = num_until_train + self.num_val
 
         # If there should be the same number of samples per class in the tail (after self.num_start),
-        if self.num_training_tails_to_tile_per_class > 0:
+        ntt2tpc = self.num_training_tails_to_tile_per_class
+        if ntt2tpc is not None and ntt2tpc > 0:
             data_train_original = data_list[:self.num_train_original]
 
             data_tails = [data_train_original.pop()]
