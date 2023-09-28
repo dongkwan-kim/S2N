@@ -3,24 +3,24 @@ defaults:
 - common_model.yaml
 encoder_layer_name: GCN2Conv
 num_layers: 2
-use_bn: true
+use_bn: false
 use_skip: false
-dropout_channels: 0.5
+dropout_channels: 0.4
 dropout_edges: 0.30000000000000004
-learning_rate: 0.0008963447640842918
-weight_decay: 2.2075404703753976e-07
-_gradient_clip_val: 0.4
-sub_node_num_layers: 1
+learning_rate: 0.0005745252241856178
+weight_decay: 3.29785162674474e-08
+_gradient_clip_val: 0.0
+sub_node_num_layers: 2
 sub_node_encoder_aggr: sum
 sub_node_encoder_name: GCN2Conv
 layer_kwargs:
-  alpha: 0.9
-  theta: 1.5000000000000002
-  shared_weights: true
+  alpha: 0.7000000000000001
+  theta: 0.2
+  shared_weights: false
 sub_node_encoder_layer_kwargs:
   heads: 8
   eps: null
-  alpha: 0.8
-  theta: 0.9
-  shared_weights: true
+  alpha: 0.9
+  theta: 0.7000000000000001
+  shared_weights: false
 subname: GCNII-SUB-S2N

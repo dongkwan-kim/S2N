@@ -3,15 +3,15 @@ defaults:
 - common_model.yaml
 encoder_layer_name: GCN2Conv
 num_layers: 2
-use_bn: false
-use_skip: true
-dropout_channels: 0.5
+use_bn: true
+use_skip: false
+dropout_channels: 0.4
 dropout_edges: 0.30000000000000004
 layer_kwargs:
-  alpha: 0.1
-  theta: 0.8
+  alpha: 0.2
+  theta: 0.4
   shared_weights: false
-learning_rate: 0.003459201439827762
-weight_decay: 8.725212325155934e-09
-_gradient_clip_val: 0.4
+learning_rate: 0.004057445301889852
+weight_decay: 5.286456313420069e-07
+_gradient_clip_val: 0.1
 subname: GCNII-${datamodule.subgraph_batching}

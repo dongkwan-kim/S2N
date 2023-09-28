@@ -1,0 +1,77 @@
+# Args for semi-supervised learning experiments
+
+# custom_splits=[num_train_per_class] should be lower than num_training_tails_to_tile_per_class
+num_training_tails_to_tile_per_class: 40
+
+use_coarsening: true
+
+coarsening_ratio: null
+# For random
+#  "PPIBP": 0.941, 0.882
+#  "HPOMetab": 0.868,
+#  "EMUser": 0.996,
+
+coarsening_method: variation_edges
+# variation_neighborhoods, variation_edges,
+# generate_random_k_hop_subgraph, generate_random_subgraph_by_walk
+
+
+# NOTE PPIBP
+#  NOTE Loaded from /mnt/nas2/GNN-DATA/SUBGRAPH/PPIBP/s2n_coarsening_cache/generate_and_cache_subgraphs_by_coarsening/Pvapo_coarsening_ratio=0.5+coarsening_method=variation_edges+min_num_node_for_coarsening=2.pickle
+#  - num_coarsened_nodes: 1950
+#  - num_nodes_after_coarsening: Counter({1: 8811, 4: 728, 8: 563, 2: 377, 3: 281, 6: 1})
+#  - Top 10 big coarsened nodes: [8, 6, 4, 3, 2, 1]
+#  - num_living_nodes_after_coarsening: 9019
+#  - num_living_unique_nodes_after_coarsening: 9019
+#  Loaded from /mnt/nas2/GNN-DATA/SUBGRAPH/PPIBP/s2n_coarsening_cache/generate_and_cache_subgraphs_by_coarsening/Pvapo_coarsening_ratio=0.3+coarsening_method=variation_neighborhoods+min_num_node_for_coarsening=2.pickle
+#  - num_coarsened_nodes: 933
+#  - num_nodes_after_coarsening: Counter({1: 14132, 4: 120, 2: 118, 3: 115, 5: 91, 6: 82, 7: 76, 8: 57, 9: 49, 11: 34, 12: 30, 10: 22, 14: 20, 13: 17, 18: 13, 15: 12, 19: 11, 16: 9, 22: 6, 20: 6, 17: 5, 21: 5, 25: 3, 23: 3, 37: 3, 39: 2, 30: 2, 33: 2, 35: 2, 59: 2, 27: 2, 36: 2, 65: 1, 80: 1, 57: 1, 29: 1, 24: 1, 55: 1, 40: 1, 32: 1, 38: 1, 41: 1, 26: 1, 28: 1})
+#  - Top 10 big coarsened nodes: [80, 65, 59, 57, 55, 41, 40, 39, 38, 37]
+#  - num_living_nodes_after_coarsening: 7389
+#  Loaded from /mnt/nas2/GNN-DATA/SUBGRAPH/PPIBP/s2n_coarsening_cache/generate_and_cache_subgraphs_by_coarsening/Pvapo_coarsening_ratio=0.4+coarsening_method=variation_neighborhoods+min_num_node_for_coarsening=2.pickle
+#  - num_coarsened_nodes: 1703
+#  - num_nodes_after_coarsening: Counter({1: 11210, 2: 404, 3: 314, 4: 192, 5: 141, 6: 129, 7: 105, 8: 88, 9: 58, 10: 51, 11: 40, 13: 26, 12: 25, 14: 23, 17: 14, 15: 12, 16: 12, 18: 11, 20: 9, 19: 8, 21: 7, 27: 5, 28: 3, 36: 3, 23: 3, 24: 3, 22: 2, 70: 2, 33: 2, 65: 1, 25: 1, 32: 1, 42: 1, 46: 1, 29: 1, 35: 1, 26: 1, 31: 1, 40: 1, 67: 1})
+#  - Top 10 big coarsened nodes: [70, 67, 65, 46, 42, 40, 36, 35, 33, 32]
+#  - num_living_nodes_after_coarsening: 10311
+
+
+# NOTE EMUser
+#  NOTE Loaded from /mnt/nas2/GNN-DATA/SUBGRAPH/EMUSER/s2n_coarsening_cache/generate_and_cache_subgraphs_by_coarsening/YaH5R_coarsening_ratio=0.8+coarsening_method=variation_edges+min_num_node_for_coarsening=2.pickle
+#  - num_coarsened_nodes: 7417
+#  - num_nodes_after_coarsening: Counter({8: 5974, 1: 4050, 2: 561, 3: 218, 4: 189, 7: 174, 5: 165, 6: 126, 16: 10})
+#  - Top 10 big coarsened nodes: [16, 8, 7, 6, 5, 4, 3, 2, 1]
+#  - num_living_nodes_after_coarsening: 53283
+#  - num_living_unique_nodes_after_coarsening: 53283
+#  Loaded from /mnt/nas2/GNN-DATA/SUBGRAPH/EMUSER/s2n_coarsening_cache/generate_and_cache_subgraphs_by_coarsening/YaH5R_coarsening_ratio=0.2+coarsening_method=variation_neighborhoods+min_num_node_for_coarsening=2.pickle
+#  - num_coarsened_nodes: 366
+#  - num_nodes_after_coarsening: Counter({1: 45502, 25: 15, 27: 13, 20: 13, 29: 12, 32: 12, 33: 12, 22: 12, 23: 11, 30: 10, 11: 10, 24: 9, 18: 9, 35: 9, 40: 9, 13: 9, 44: 8, 34: 8, 17: 8, 50: 7, 31: 7, 16: 7, 21: 7, 43: 7, 10: 7, 12: 7, 41: 6, 38: 6, 36: 6, 14: 6, 19: 6, 39: 5, 15: 5, 6: 5, 26: 4, 51: 4, 48: 3, 52: 3, 67: 3, 42: 3, 55: 3, 53: 3, 54: 3, 49: 3, 61: 3, 46: 3, 45: 3, 28: 3, 8: 3, 47: 2, 56: 2, 77: 2, 68: 2, 81: 2, 37: 2, 58: 2, 65: 2, 60: 2, 82: 1, 73: 1, 69: 1, 72: 1, 87: 1, 84: 1, 62: 1, 57: 1, 59: 1, 76: 1, 63: 1, 70: 1, 83: 1, 80: 1, 66: 1, 9: 1, 64: 1, 5: 1})
+#  - Top 10 big coarsened nodes: [87, 84, 83, 82, 81, 80, 77, 76, 73, 72]
+#  - num_living_nodes_after_coarsening: 11831
+#  Loaded from /mnt/nas2/GNN-DATA/SUBGRAPH/EMUSER/s2n_coarsening_cache/generate_and_cache_subgraphs_by_coarsening/YaH5R_coarsening_ratio=0.3+coarsening_method=variation_neighborhoods+min_num_node_for_coarsening=2.pickle
+#  - num_coarsened_nodes: 713
+#  - num_nodes_after_coarsening: Counter({1: 39422, 11: 27, 20: 26, 23: 25, 10: 25, 15: 24, 27: 23, 13: 22, 14: 22, 25: 21, 18: 21, 8: 21, 21: 20, 9: 20, 12: 19, 6: 19, 17: 18, 16: 18, 22: 18, 32: 17, 29: 16, 19: 16, 35: 15, 30: 13, 24: 13, 33: 13, 31: 12, 7: 12, 5: 11, 34: 10, 40: 10, 44: 9, 41: 8, 43: 8, 50: 7, 38: 7, 36: 7, 26: 7, 39: 6, 28: 6, 42: 5, 37: 5, 51: 5, 4: 5, 3: 5, 2: 5, 48: 4, 52: 4, 53: 4, 54: 4, 49: 4, 61: 4, 58: 4, 67: 3, 55: 3, 46: 3, 45: 3, 47: 2, 56: 2, 77: 2, 68: 2, 81: 2, 65: 2, 63: 2, 60: 2, 82: 1, 73: 1, 69: 1, 72: 1, 87: 1, 84: 1, 62: 1, 57: 1, 59: 1, 76: 1, 70: 1, 83: 1, 80: 1, 66: 1, 64: 1})
+#  - Top 10 big coarsened nodes: [87, 84, 83, 82, 81, 80, 77, 76, 73, 72]
+#  - num_living_nodes_after_coarsening: 17911
+#  Loaded from /mnt/nas2/GNN-DATA/SUBGRAPH/EMUSER/s2n_coarsening_cache/generate_and_cache_subgraphs_by_coarsening/YaH5R_coarsening_ratio=0.4+coarsening_method=variation_neighborhoods+min_num_node_for_coarsening=2.pickle
+#  - num_coarsened_nodes: 1233
+#  - num_nodes_after_coarsening: Counter({1: 33167, 12: 53, 11: 53, 8: 52, 9: 50, 7: 49, 13: 48, 5: 48, 10: 44, 4: 42, 14: 40, 6: 38, 15: 37, 3: 37, 16: 36, 22: 35, 26: 35, 18: 34, 17: 31, 19: 30, 24: 28, 23: 27, 20: 26, 25: 25, 2: 24, 21: 22, 31: 19, 27: 19, 28: 18, 30: 17, 33: 14, 37: 13, 41: 13, 29: 12, 34: 12, 32: 11, 35: 10, 36: 9, 39: 8, 48: 7, 47: 7, 38: 7, 42: 6, 56: 6, 40: 6, 50: 5, 44: 4, 53: 4, 68: 4, 55: 4, 49: 4, 65: 4, 69: 3, 54: 3, 64: 3, 43: 3, 46: 3, 45: 3, 83: 2, 57: 2, 67: 2, 66: 2, 77: 2, 81: 2, 58: 2, 52: 2, 51: 2, 70: 2, 61: 1, 80: 1, 84: 1, 76: 1, 60: 1, 85: 1, 73: 1, 62: 1})
+#  - Top 10 big coarsened nodes: [85, 84, 83, 81, 80, 77, 76, 73, 70, 69]
+#  - num_living_nodes_after_coarsening: 24166
+
+# NOTE HPOMetab
+#  NOTE Loaded from /mnt/nas2/GNN-DATA/SUBGRAPH/HPOMETAB/s2n_coarsening_cache/generate_and_cache_subgraphs_by_coarsening/MoAeT_coarsening_ratio=0.7+coarsening_method=variation_edges+min_num_node_for_coarsening=2.pickle
+#  - num_coarsened_nodes: 1447
+#  - num_nodes_after_coarsening: Counter({1: 2930, 16: 477, 2: 266, 3: 205, 4: 190, 5: 112, 7: 56, 6: 56, 8: 53, 15: 10, 14: 6, 9: 5, 10: 3, 13: 3, 12: 3, 11: 2})
+#  - Top 10 big coarsened nodes: [16, 15, 14, 13, 12, 11, 10, 9, 8, 7]
+#  - num_living_nodes_after_coarsening: 11657
+#  - num_living_unique_nodes_after_coarsening: 11657
+#  Loaded from /mnt/nas2/GNN-DATA/SUBGRAPH/HPOMETAB/s2n_coarsening_cache/generate_and_cache_subgraphs_by_coarsening/MoAeT_coarsening_ratio=0.5+coarsening_method=variation_neighborhoods+min_num_node_for_coarsening=2.pickle
+#  - num_coarsened_nodes: 1202
+#  - num_nodes_after_coarsening: Counter({1: 6092, 2: 496, 3: 193, 4: 98, 5: 71, 7: 44, 6: 44, 9: 30, 8: 25, 11: 17, 10: 17, 13: 16, 12: 16, 15: 10, 14: 9, 16: 8, 23: 7, 20: 7, 19: 7, 17: 7, 21: 6, 29: 5, 30: 5, 26: 4, 28: 4, 38: 3, 36: 3, 27: 3, 31: 3, 42: 3, 55: 2, 39: 2, 35: 2, 34: 2, 67: 2, 25: 2, 22: 2, 37: 2, 48: 1, 46: 1, 83: 1, 18: 1, 100: 1, 78: 1, 113: 1, 69: 1, 60: 1, 125: 1, 45: 1, 43: 1, 114: 1, 101: 1, 62: 1, 50: 1, 40: 1, 92: 1, 24: 1, 56: 1, 33: 1, 51: 1, 97: 1, 32: 1, 54: 1})
+#  - Top 10 big coarsened nodes: [125, 114, 113, 101, 100, 97, 92, 83, 78, 69]
+#  - num_living_nodes_after_coarsening: 8495
+#  Loaded from /mnt/nas2/GNN-DATA/SUBGRAPH/HPOMETAB/s2n_coarsening_cache/generate_and_cache_subgraphs_by_coarsening/MoAeT_coarsening_ratio=0.6+coarsening_method=variation_neighborhoods+min_num_node_for_coarsening=2.pickle
+#  - num_coarsened_nodes: 1793
+#  - num_nodes_after_coarsening: Counter({1: 4042, 2: 796, 3: 312, 4: 184, 5: 102, 6: 58, 7: 42, 8: 36, 9: 25, 10: 21, 11: 20, 17: 15, 14: 15, 12: 12, 16: 12, 15: 11, 23: 10, 21: 9, 13: 9, 18: 9, 19: 8, 20: 7, 24: 6, 33: 5, 28: 5, 25: 5, 30: 5, 43: 5, 29: 4, 44: 3, 26: 3, 22: 3, 38: 2, 32: 2, 73: 2, 46: 2, 37: 2, 50: 2, 80: 2, 36: 2, 27: 2, 61: 1, 83: 1, 47: 1, 60: 1, 49: 1, 85: 1, 53: 1, 54: 1, 144: 1, 58: 1, 42: 1, 31: 1, 78: 1, 34: 1, 52: 1, 55: 1, 35: 1, 40: 1})
+#  - Top 10 big coarsened nodes: [144, 85, 83, 80, 78, 73, 61, 60, 58, 55]
+#  - num_living_nodes_after_coarsening: 10545

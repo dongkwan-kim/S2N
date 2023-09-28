@@ -6,14 +6,14 @@ num_layers: 1
 use_bn: false
 use_skip: false
 dropout_channels: 0.0
-dropout_edges: 0.2
+dropout_edges: 0.5
 layer_kwargs:
-  alpha: 0.1
-  theta: 0.9
+  alpha: 0.5
+  theta: 0.5
   shared_weights: true
-learning_rate: 0.008224545421398144
-weight_decay: 1.3959030393016763e-08
-_gradient_clip_val: 0.30000000000000004
+learning_rate: 0.008181077606742282
+weight_decay: 4.5569747083905593e-07
+_gradient_clip_val: 0.5
 sub_node_num_layers: 0
 sub_node_encoder_aggr: sum
 sub_node_encoder_layer_kwargs:

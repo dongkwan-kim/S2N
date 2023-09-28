@@ -4,10 +4,10 @@ defaults:
 encoder_layer_name: GCNConv
 num_layers: 1
 use_bn: false
-use_skip: true
+use_skip: false
 dropout_channels: 0.2
-dropout_edges: 0.1
-learning_rate: 0.0030187428197389864
-weight_decay: 9.261772265353933e-07
-_gradient_clip_val: 0.4
+dropout_edges: 0.5
+learning_rate: 0.006010758880376057
+weight_decay: 4.749503078558382e-08
+_gradient_clip_val: 0.0
 subname: GCN-${datamodule.subgraph_batching}
