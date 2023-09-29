@@ -75,6 +75,8 @@ def replace_and_dump_hparams_to_args(dataset_name, log_path="../_aggr_logs",
 
         # NOTE: hard-coded
         batching_type = "s2n" if bh_datamodule["subgraph_batching"] == "" else bh_datamodule["subgraph_batching"]
+        if bh_datamodule["use_coarsening"]:
+            batching_type = f"{batching_type}_co"
         model_name = {
             "FA": "fa",
             "GAT": "gat",
@@ -115,9 +117,9 @@ def replace_and_dump_hparams_to_args(dataset_name, log_path="../_aggr_logs",
 
 
 if __name__ == '__main__':
-    LOG_PATH = "../_aggr_logs/_logs_csv_2023/selected/"
+    LOG_PATH = "../_aggr_logs/_logs_csv_coarsening/selected/"
 
-    if "sensitivity" not in LOG_PATH:
+    if "coarsening" not in LOG_PATH:
         replace_and_dump_hparams_to_args("PPIBP", LOG_PATH)
         replace_and_dump_hparams_to_args("HPOMetab", LOG_PATH)
         replace_and_dump_hparams_to_args("HPONeuro", LOG_PATH)
@@ -125,14 +127,14 @@ if __name__ == '__main__':
 
     else:
 
-        IDX = 0  # 0, 1, 2, 3, 4
+        IDX = 3  # 0, 1, 2, 3, 4
 
         # Prefix: a ratio of not used samples
         prefix_settings = {
-            "PPIBP": [0.7, 0.5, 0.3, 0.1, 0.0],
-            "HPOMetab": [0.7, 0.5, 0.3, 0.1, 0.0],
-            "HPONeuro": [0.7, 0.5, 0.3, 0.1, 0.0],
-            "EMUser": [0.6, 0.45, 0.3, 0.15, 0.0],
+            "EMUser": [5, 10, 20, 30, 40],
+            "PPIBP": [5, 10, 20, 30, 40],
+            # "HPOMetab": [5, 10, 20, 30, 40],
+            # "HPONeuro": [5, 10, 20, 30, 40],
         }
         for _dataset_name, _prefix_list in prefix_settings.items():
             _dataset_name_w_prefix = f"{_dataset_name}-[{_prefix_list[IDX]}"
