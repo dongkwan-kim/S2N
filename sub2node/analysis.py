@@ -173,8 +173,8 @@ def visualize_s2n_properties(dataset_path, csv_path, dataset_model_s2n_name_list
     plot_scatter(
         xs=df["# nodes"].to_numpy(),
         ys=df["# edges"].to_numpy(),
-        xlabel="# Nodes (Log)",
-        ylabel="# Edges (Log)",
+        xlabel="# Nodes",
+        ylabel="# Edges",
         path=FIGURE_PATH,
         key="s2n_properties",
         extension=extension,
@@ -311,7 +311,7 @@ def visualize_efficiency(csv_path, extension="png", queries: List[str] = None):
         xs=df["# parameters"].to_numpy(),
         xlabel="# parameters (Log)",
         ys=df["Max Allocated GPU Memory (MB)"].to_numpy(),
-        ylabel="Max Allocated VRAM (MB, Log)",
+        ylabel="Max Allocated VRAM (MB)",
 
         hues=df["Data structure"].to_numpy(), hue_name="Data structure",
         styles=df["Model"].to_numpy(), style_name="Model",
@@ -326,9 +326,9 @@ def visualize_efficiency(csv_path, extension="png", queries: List[str] = None):
 
     plot_scatter(
         xs=df["Throughput (Train)"].to_numpy(),
-        xlabel="Train Throughput (#/s, Log)",
+        xlabel="Train Throughput (#/s)",
         ys=df["Throughput (Eval)"].to_numpy(),
-        ylabel="Eval Throughput (#/s, Log)",
+        ylabel="Eval Throughput (#/s)",
 
         hues=df["Data structure"].to_numpy(), hue_name="Data structure",
         styles=df["Model"].to_numpy(), style_name="Model",
@@ -460,7 +460,7 @@ def visualize_efficiency_by_num_training(csv_path, extension="png", dataset=None
             xs=df["#train/C"].to_numpy(),
             xlabel="# training samples / class",
             ys=df["Max Allocated GPU Memory (MB)"].to_numpy(),
-            ylabel="Max Allocated VRAM (MB, Log)",
+            ylabel="Max Allocated VRAM (MB)",
 
             scales_kws={"yscale": "log"},
             yticks=metric_y_ticks[dataset]["Max Allocated GPU Memory (MB)"],
@@ -471,7 +471,7 @@ def visualize_efficiency_by_num_training(csv_path, extension="png", dataset=None
             xs=df["#train/C"].to_numpy(),
             xlabel="# training samples / class",
             ys=df["Throughput (Train)"].to_numpy().astype(float),
-            ylabel="Train Throughput (#/s, Log)",
+            ylabel="Train Throughput (#/s)",
 
             scales_kws={"yscale": "log"},
             yticks=metric_y_ticks[dataset]["Throughput (Train)"],
@@ -493,7 +493,7 @@ def visualize_efficiency_by_num_training(csv_path, extension="png", dataset=None
             xs=df["#train/C"].to_numpy(),
             xlabel="# training samples / class",
             ys=df["Throughput (Eval)"].to_numpy().astype(float),
-            ylabel="Eval Throughput (#/s, Log)",
+            ylabel="Eval Throughput (#/s)",
 
             scales_kws={"yscale": "log"},
             yticks=metric_y_ticks[dataset]["Throughput (Eval)"],
@@ -537,7 +537,7 @@ def visualize_efficiency_by_num_training(csv_path, extension="png", dataset=None
             xs=df["#train/C"].to_numpy(),
             xlabel="# training samples / class",
             ys=df["Max Allocated GPU Memory (MB)"].to_numpy(),
-            ylabel="Max Allocated VRAM (MB, Log)",
+            ylabel="Max Allocated VRAM (MB)",
 
             scales_kws={"yscale": "log"},
             yticks=[1e2, 1e3, 1e4],
@@ -547,7 +547,7 @@ def visualize_efficiency_by_num_training(csv_path, extension="png", dataset=None
             xs=df["#train/C"].to_numpy(),
             xlabel="# training samples / class",
             ys=df["Throughput (Train)"].to_numpy(),
-            ylabel="Train Throughput (#/s, Log)",
+            ylabel="Train Throughput (#/s)",
 
             scales_kws={"yscale": "log"},
             yticks=[1e2, 1e3, 1e4, 1e5],
@@ -575,7 +575,7 @@ if __name__ == '__main__':
     # analyze_s2n_properties, visualize_s2n_properties,
     # visualize_efficiency, visualize_efficiency_by_num_training
     # visualize_performance_by_coarsening_ratio
-    METHOD = "visualize_performance_by_coarsening_ratio"
+    METHOD = "visualize_s2n_properties"
 
     TARGETS = "REAL_WORLD"  # SYNTHETIC, REAL_WORLD, ALL
     if TARGETS == "REAL_WORLD":
