@@ -112,7 +112,7 @@ class SubgraphDataModule(LightningDataModule):
     @property
     def dataset_class(self):
         assert self.h.dataset_name in ["HPOMetab", "PPIBP", "HPONeuro", "EMUser",
-                                       "Density", "CC", "Coreness", "CutRatio",
+                                       "Density", "Component", "Coreness", "CutRatio",
                                        "WLKSRandomTree"]
         return eval(self.h.dataset_name)
 
