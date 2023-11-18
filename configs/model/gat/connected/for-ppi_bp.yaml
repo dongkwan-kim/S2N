@@ -1,7 +1,7 @@
 _target_: model.GraphNeuralModel
 defaults:
-- common_model.yaml
-encoder_layer_name: GATConv
+  - common_model.yaml
+encoder_layer_name: GATv2Conv
 num_layers: 2
 use_bn: false
 use_skip: true
@@ -12,4 +12,4 @@ layer_kwargs:
 learning_rate: 0.0061558347167069115
 weight_decay: 9.821478316322005e-07
 _gradient_clip_val: 0.4
-subname: GAT-${datamodule.subgraph_batching}
+subname: GATv2-${datamodule.subgraph_batching}
