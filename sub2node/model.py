@@ -133,7 +133,7 @@ class GraphNeuralModel(LightningModule):
 
         # If weighted edges are using, some models require special kwargs.
         if given_datamodule.h.s2n_is_weighted:
-            if self.h.encoder_layer_name == "GATConv":
+            if self.h.encoder_layer_name in ["GATConv", "GATv2Conv"]:
                 layer_kwargs["edge_dim"] = 1
 
         if self.h.encoder_layer_name == "LINKX":

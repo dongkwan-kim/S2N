@@ -16,6 +16,7 @@ from torch_geometric.typing import OptTensor, Adj
 from torch_scatter import scatter_add
 from torch_sparse import SparseTensor
 
+from model_gatv2 import GATv2Conv
 from utils import softmax_half, act, merge_dict_by_keys, dropout_adj_st
 
 
@@ -82,6 +83,26 @@ class MyGATConv(GATConv):
         out_channels = out_channels // heads
         super().__init__(in_channels, out_channels, heads, concat, negative_slope,
                          dropout, add_self_loops, edge_dim, fill_value, bias, **kwargs)
+
+    def forward(self, x, edge_index, edge_attr, size=None, return_attention_weights=None):
+        if self.edge_dim is None:
+            edge_index, edge_attr = clear_edge_attr(self, edge_index, edge_attr, "edge_dim=None")
+        return super().forward(x, edge_index, edge_attr, size, return_attention_weights)
+
+
+class MyGATv2Conv(GATv2Conv):
+
+    def __init__(self, in_channels: int,
+                 out_channels: int, heads: int = 1, concat: bool = True,
+                 negative_slope: float = 0.2, dropout: float = 0.0,
+                 add_self_loops: bool = True, edge_dim: Optional[int] = None,
+                 fill_value: Union[float, Tensor, str] = 'mean',
+                 bias: bool = True, share_weights: bool = False, **kwargs):
+        if concat:
+            assert out_channels % heads == 0
+        out_channels = out_channels // heads
+        super().__init__(in_channels, out_channels, heads, concat, negative_slope,
+                         dropout, add_self_loops, edge_dim, fill_value, bias, share_weights, **kwargs)
 
     def forward(self, x, edge_index, edge_attr, size=None, return_attention_weights=None):
         if self.edge_dim is None:
@@ -314,6 +335,7 @@ def get_gnn_conv_and_kwargs(gnn_name, **kwargs):
         "GCNConv": GCNConv,
         "SAGEConv": MySAGEConv,
         "GATConv": MyGATConv,
+        "GATv2Conv": MyGATv2Conv,
         "GINConv": MyGINConv,
         "FAConv": MyFAConv,
         "GCN2Conv": MyGCN2Conv,
