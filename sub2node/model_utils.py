@@ -485,6 +485,11 @@ class GraphEncoder(nn.Module):
             return ", " + ", ".join([f"{k}={v}" for k, v in self.gnn_kwargs.items()])
 
     def __repr__(self):
+        if self.num_layers == 0:
+            return "{}(conv={}, L={}, I=O={})".format(
+                self.__class__.__name__, self.layer_name, self.num_layers, self.in_channels
+            )
+
         return "{}(conv={}, L={}, I={}, H={}, O={}, act={}, act_last={}, skip={}, bn={}, gn={}{})".format(
             self.__class__.__name__, self.layer_name, self.num_layers,
             self.in_channels, self.hidden_channels, self.out_channels,
@@ -859,6 +864,15 @@ if __name__ == '__main__':
         print(_ds(_x, _batch).size())
 
     elif MODE == "GraphEncoder":
+        enc = GraphEncoder(
+            layer_name="GINConv", num_layers=0, in_channels=32, hidden_channels=64, out_channels=128,
+            activation="relu", use_bn=False, use_gn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
+            activate_last=True,
+        )
+        cprint(enc, "green")
+        _x = torch.ones(10 * 32).view(10, -1)
+        _ei = torch.randint(0, 10, [2, 10])
+
         enc = GraphEncoder(
             layer_name="GINConv", num_layers=3, in_channels=32, hidden_channels=64, out_channels=128,
             activation="relu", use_bn=False, use_gn=False, use_skip=False, dropout_channels=0.0, dropout_edges=0.2,
