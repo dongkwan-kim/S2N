@@ -248,6 +248,43 @@ def plot_line(xs, ys, xlabel, ylabel,
                  **kwargs)
 
 
+def plot_line_with_errors(xs, ys_mean, ys_std, xlabel, ylabel,
+                          path, key, extension="pdf",
+                          hues=None, hue_name=None,
+                          styles=None, style_name=None,
+                          rows=None, row_name=None,
+                          cols=None, col_name=None,
+                          elm_sizes=None, elm_size_name=None,
+                          label_kws: Dict[str, Any] = None,
+                          scales_kws: Dict[str, Any] = None,
+                          xticks=None, yticks=None,
+                          tight_layout_kwargs: dict = None,
+                          **kwargs):
+    __N__ = 50
+
+    _xs, _ys = [], []
+    for x, m, s in zip(xs, ys_mean, ys_std):
+        _ys.append(np.random.normal(m, s, __N__))
+        _xs += [x] * __N__
+    ys = np.concatenate(_ys)
+    xs = np.asarray(_xs)
+
+    # TODO
+    # plot_relplot("line", xs=xs, ys=ys, xlabel=xlabel, ylabel=ylabel,
+    #              path=path, key=key, extension=extension,
+    #              hues=hues, hue_name=hue_name,
+    #              styles=styles, style_name=style_name,
+    #              rows=rows, row_name=row_name,
+    #              cols=cols, col_name=col_name,
+    #              elm_sizes=elm_sizes, elm_size_name=elm_size_name,
+    #              label_kws=label_kws,
+    #              scales_kws=scales_kws,
+    #              xticks=xticks, yticks=yticks,
+    #              tight_layout_kwargs=tight_layout_kwargs,
+    #              **kwargs)
+    raise NotImplementedError
+
+
 def plot_dis(kind,
              xs: Union[list, dict], xlabel,
              path, key, extension="pdf",
