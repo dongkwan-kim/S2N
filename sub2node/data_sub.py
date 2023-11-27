@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 from collections import Counter
 from typing import List, Union
@@ -10,16 +11,19 @@ from sklearn.feature_selection import VarianceThreshold
 from sklearn.preprocessing import MultiLabelBinarizer
 from termcolor import cprint
 from torch_geometric.data import Data
+from torch_geometric.transforms import LocalDegreeProfile
 from torch_geometric.utils import subgraph, sort_edge_index, to_undirected, from_networkx
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 from tqdm import tqdm
 
 from data_base import DatasetBase
 from data_sub_utils import save_subgraphs
+from data_transform import AddRandomWalkPE
 from dataset_wl import generate_random_subgraph_by_walk, WL4PatternNet, WL4PatternConv, \
     generate_random_k_hop_subgraph, generate_random_subgraph_batch_by_sampling_0_to_l_to_d, \
     nx_rewired_balanced_tree
 from utils import from_networkx_customized_ordering, to_directed, unbatch
+from utils_fscache import fscaches
 
 
 def read_subgnn_data(edge_list_path, subgraph_path,
@@ -230,7 +234,7 @@ class SubgraphDataset(DatasetBase):
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  num_training_tails_to_tile_per_class=0,
                  transform=None, pre_transform=None, **kwargs):
-        assert embedding_type in ["gin", "graphsaint_gcn", "no_embedding", "glass", "one"]
+        # assert embedding_type in ["gin", "graphsaint_gcn", "no_embedding", "glass", "one"]
         self.embedding_type = embedding_type
         self.save_directed_edges = save_directed_edges
         super().__init__(
@@ -322,9 +326,54 @@ class SynSubgraphGLASSDataset(SubgraphDataset):
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
                  num_training_tails_to_tile_per_class=0,
                  transform=None, pre_transform=None, **kwargs):
-        super().__init__(root, name, embedding_type, val_ratio, test_ratio,
+
+        __embedding_type__ = "one"
+
+        super().__init__(root, name, __embedding_type__, val_ratio, test_ratio,
                          save_directed_edges, debug, seed, num_training_tails_to_tile_per_class,
                          transform, pre_transform, **kwargs)
+
+        if "RWPE" in embedding_type:
+            try:
+                # e.g., RWPE_K_4
+                K = int(re.search("K_([0-9]+)", embedding_type).group(1))
+            except:
+                K = 32  # default
+            D = 64 - K
+
+            if embedding_type.startswith("ones_1/64/RWPE"):
+                self.global_data.x = torch.ones((self.global_data.x.size(0), D)).float() / D
+            elif embedding_type.startswith("ones_64/RWPE"):
+                self.global_data.x = torch.ones((self.global_data.x.size(0), D)).float()
+
+            syn_path = os.path.join(root, self.__class__.__name__.upper(), "synthetic")
+            self.global_data.x = self.get_random_walk_pe(
+                path=syn_path, data=self.global_data, walk_length=K,
+                key=f"x={self.global_data.x.min().item()}-{self.global_data.x.max().item()}",
+            )
+
+        elif "LDP" in embedding_type:
+            D = 64 - 5
+            if embedding_type == "ones_1/64/LDP":
+                self.global_data.x = torch.ones((self.global_data.x.size(0), D)).float() / D
+            elif embedding_type == "ones_64/LDP":
+                self.global_data.x = torch.ones((self.global_data.x.size(0), D)).float()
+
+            self.global_data = LocalDegreeProfile()(self.global_data)
+
+        else:
+            D = 64
+            if embedding_type == "one_d=1":
+                self.global_data.x = torch.ones((self.global_data.x.size(0), 1)).float()
+            elif embedding_type == "ones_64":
+                self.global_data.x = torch.ones((self.global_data.x.size(0), D)).float()
+            elif embedding_type == "ones_1/64":
+                self.global_data.x = torch.ones((self.global_data.x.size(0), D)).float() / D
+
+    @staticmethod
+    @fscaches(path_attrname_in_kwargs="path", verbose=True)
+    def get_random_walk_pe(path, data: Data, walk_length: int, key=None):
+        return AddRandomWalkPE(walk_length=walk_length, attr_name=None)(data).x
 
     @property
     def raw_file_names(self):
@@ -714,7 +763,7 @@ if __name__ == '__main__':
 
     FIND_SEED = False  # NOTE: If True, find_seed_that_makes_balanced_datasets will be performed
 
-    NAME = "PPIBP"
+    NAME = "Component"
     # WLKSRandomTree
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, Component, Coreness, CutRatio
@@ -723,7 +772,7 @@ if __name__ == '__main__':
     if NAME.startswith("WL"):
         E_TYPE = "no_embedding"
     elif NAME in ["Density", "Component", "Coreness", "CutRatio"]:
-        E_TYPE = "one"
+        E_TYPE = "ones_1/64/RWPE_K_4"
     else:
         E_TYPE = "glass"  # gin, graphsaint_gcn, glass
     DEBUG = False
