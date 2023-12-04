@@ -754,11 +754,12 @@ class VersatileEmbedding(nn.Module):
 
     def __repr__(self):
         if self.embedding is not None:
-            return "{}({}, {}, type={})".format(
+            return "{}({}, {}, type={}, freeze={})".format(
                 self.__class__.__name__,
                 self.num_entities,
                 self.num_channels,
                 self.embedding_type,
+                not self.embedding.weight.requires_grad,
             )
         else:
             return "{}(type={})".format(self.__class__.__name__, self.embedding_type)
