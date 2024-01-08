@@ -8,6 +8,7 @@ from torch_geometric.data import Data
 from torch_geometric.transforms import BaseTransform
 from torch_geometric.typing import SparseTensor, OptTensor
 from torch_geometric.utils.num_nodes import maybe_num_nodes
+from tqdm import tqdm
 
 
 def get_self_loop_attr(edge_index: Tensor, edge_attr: OptTensor = None,
@@ -111,7 +112,8 @@ class AddRandomWalkPE(BaseTransform):
         out = adj
         row, col, value = out.coo()
         pe_list = [get_self_loop_attr((row, col), value, num_nodes)]
-        for _ in range(self.walk_length - 1):
+        for _ in tqdm(range(self.walk_length - 1),
+                      desc="AddRandomWalkPE", total=self.walk_length - 1):
             out = out @ adj
             row, col, value = out.coo()
             pe_list.append(get_self_loop_attr((row, col), value, num_nodes))
