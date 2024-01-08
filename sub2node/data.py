@@ -78,6 +78,10 @@ class SubgraphDataModule(LightningDataModule):
             self.log_func(f"{self.__class__.__name__}/{self.h.dataset_name}: prepared and set up!")
 
     @property
+    def has_pe(self):
+        return hasattr(self.dataset.global_data, "pe")
+
+    @property
     def num_nodes_global(self):
         return self.dataset.num_nodes_global
 
@@ -286,8 +290,10 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
     if NAME.startswith("WL"):
         E_TYPE = "no_embedding"
+    elif NAME in ["Density", "Component", "Coreness", "CutRatio"]:
+        E_TYPE = "ones_64/SEP_RWPE_K_32"
     else:
-        E_TYPE = "glass"  # gin, graphsaint_gcn
+        E_TYPE = "glass"  # gin, graphsaint_gcn, glass
 
     USE_S2N = True
     USE_SPARSE_TENSOR = False
@@ -356,7 +362,7 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
 
 if __name__ == '__main__':
 
-    MODE = "SEMI_SUPERVISED"  # PLAIN, COARSENING, SEMI_SUPERVISED
+    MODE = "PLAIN"  # PLAIN, COARSENING, SEMI_SUPERVISED
 
     # WLKSRandomTree
     # PPIBP, HPOMetab, HPONeuro, EMUser
@@ -387,6 +393,7 @@ if __name__ == '__main__':
         raise ValueError
 
     print(_sdm)
+    print(_sdm.dataset.global_data)
     cprint("Train ----", "green")
     for _i, _b in enumerate(_sdm.train_dataloader()):
         _print_data(_b)

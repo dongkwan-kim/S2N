@@ -75,6 +75,16 @@ class GraphNeuralModel(LightningModule):
             pretrained_embedding=given_datamodule.embedding,
             freeze_pretrained=self.h.freeze_pretrained,
         )
+        self.pos_emb, self.pos_encoder, num_pos_channels = None, None, 0
+        if given_datamodule.has_pe:
+            num_pos_channels = given_datamodule.dataset.global_data.pe.size(-1)
+            self.pos_emb = VersatileEmbedding(
+                embedding_type="Pretrained",
+                num_entities=given_datamodule.num_nodes_global,
+                num_channels=num_pos_channels,
+                pretrained_embedding=given_datamodule.dataset.global_data.pe,
+                freeze_pretrained=True,  # NOTE: pos_emb should be frozen
+            )
 
         self.sub_node_set_encoder, self.sub_node_graph_encoder = None, None
         if self.h.use_s2n:
@@ -197,7 +207,12 @@ class GraphNeuralModel(LightningModule):
             return self.encoder(x, edge_index)  # edge_index is actually None.
 
         if sub_x is not None:
-            sub_x = self.node_emb(sub_x)
+
+            if self.pos_emb is not None:
+                sub_x = self.node_emb(sub_x) + self.pos_emb(sub_x)
+            else:
+                sub_x = self.node_emb(sub_x)
+
             if self.sub_node_graph_encoder is not None:
                 assert sub_edge_index is not None
                 sub_x = self.sub_node_graph_encoder(sub_x, sub_edge_index, batch=sub_batch)
@@ -318,7 +333,12 @@ if __name__ == '__main__':
     # Density, CC, Coreness, CutRatio
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
-    E_TYPE = "glass"  # gin, graphsaint_gcn, glass
+    if NAME.startswith("WL"):
+        E_TYPE = "no_embedding"
+    elif NAME in ["Density", "Component", "Coreness", "CutRatio"]:
+        E_TYPE = "ones_64/SEP_RWPE_K_32"
+    else:
+        E_TYPE = "glass"  # gin, graphsaint_gcn, glass
 
     USE_S2N = True  # NOTE: important
     USE_SPARSE_TENSOR = False
@@ -368,7 +388,7 @@ if __name__ == '__main__':
         SUB_NODE_NUM_LAYERS = 2
         USE_SUB_EDGE_INDEX = True
 
-    USE_COARSENING = True  # True, False
+    USE_COARSENING = False  # True, False
     if USE_COARSENING:
         data_kwargs = dict(
             custom_splits=[5],
@@ -404,6 +424,7 @@ if __name__ == '__main__':
         pre_add_self_loops=False,
         replace_x_with_wl4pattern=REPLACE_X_WITH_WL4PATTERN,
         wl4pattern_args=WL4PATTERN_ARGS,
+        load_rwpe=True,  # NOTE: RandomWalkPE
         **data_kwargs,
     )
     _gnm = GraphNeuralModel(

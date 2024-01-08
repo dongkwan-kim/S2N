@@ -232,7 +232,7 @@ class SubgraphDataset(DatasetBase):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0,
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False,
                  transform=None, pre_transform=None, **kwargs):
         # assert embedding_type in ["gin", "graphsaint_gcn", "no_embedding", "glass", "one"]
         self.embedding_type = embedding_type
@@ -241,6 +241,12 @@ class SubgraphDataset(DatasetBase):
             root, name, val_ratio, test_ratio, debug, seed, num_training_tails_to_tile_per_class,
             transform, pre_transform, **kwargs,
         )
+        self.load_rwpe = load_rwpe
+        if self.load_rwpe:
+            self.global_data.pe = self.get_cached_rwpe_data(
+                path=os.path.join(root, self.__class__.__name__.upper(), "rwpe"),
+                data=self.global_data, walk_length=self.global_data.x.size(1),
+            )
 
     def _get_important_elements(self):
         ie = super()._get_important_elements()
@@ -319,18 +325,28 @@ class SubgraphDataset(DatasetBase):
 
         self._logging_args()
 
+    @staticmethod
+    @fscaches(path_attrname_in_kwargs="path", verbose=True)
+    def get_random_walk_pe(path, data: Data, walk_length: int, key=None):
+        return AddRandomWalkPE(walk_length=walk_length, attr_name=None)(data).x
+
+    @staticmethod
+    @fscaches(path_attrname_in_kwargs="path", verbose=True)
+    def get_cached_rwpe_data(path, data: Data, walk_length: int, key=None) -> Data:
+        return AddRandomWalkPE(walk_length=walk_length, attr_name="pe")(data).pe
+
 
 class SynSubgraphGLASSDataset(SubgraphDataset):
 
     def __init__(self, root, name, embedding_type="one",
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0,
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False,
                  transform=None, pre_transform=None, **kwargs):
 
         __embedding_type__ = "one"
 
         super().__init__(root, name, __embedding_type__, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
                          transform, pre_transform, **kwargs)
 
         if "RWPE" in embedding_type:
@@ -370,11 +386,6 @@ class SynSubgraphGLASSDataset(SubgraphDataset):
             elif embedding_type == "ones_1/64":
                 self.global_data.x = torch.ones((self.global_data.x.size(0), D)).float() / D
 
-    @staticmethod
-    @fscaches(path_attrname_in_kwargs="path", verbose=True)
-    def get_random_walk_pe(path, data: Data, walk_length: int, key=None):
-        return AddRandomWalkPE(walk_length=walk_length, attr_name=None)(data).x
-
     @property
     def raw_file_names(self):
         return ["tmp.npy"]
@@ -395,9 +406,9 @@ class HPONeuro(SubgraphDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, transform=None, pre_transform=None, **kwargs):
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, transform=None, pre_transform=None, **kwargs):
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
                          transform, pre_transform, **kwargs)
 
     def download(self):
@@ -411,9 +422,9 @@ class HPOMetab(SubgraphDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, transform=None, pre_transform=None, **kwargs):
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, transform=None, pre_transform=None, **kwargs):
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
                          transform, pre_transform, **kwargs)
 
     def download(self):
@@ -427,9 +438,9 @@ class EMUser(SubgraphDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, transform=None, pre_transform=None, **kwargs):
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, transform=None, pre_transform=None, **kwargs):
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
                          transform, pre_transform, **kwargs)
 
     def download(self):
@@ -443,9 +454,9 @@ class PPIBP(SubgraphDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, transform=None, pre_transform=None, **kwargs):
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, transform=None, pre_transform=None, **kwargs):
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
                          transform, pre_transform, **kwargs)
 
     def download(self):
@@ -459,9 +470,9 @@ class Density(SynSubgraphGLASSDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, transform=None, pre_transform=None, **kwargs):
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, transform=None, pre_transform=None, **kwargs):
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
                          transform, pre_transform, **kwargs)
 
     def download(self):
@@ -475,9 +486,9 @@ class Coreness(SynSubgraphGLASSDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, transform=None, pre_transform=None, **kwargs):
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, transform=None, pre_transform=None, **kwargs):
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
                          transform, pre_transform, **kwargs)
 
     def download(self):
@@ -491,9 +502,9 @@ class CutRatio(SynSubgraphGLASSDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, transform=None, pre_transform=None, **kwargs):
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, transform=None, pre_transform=None, **kwargs):
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
                          transform, pre_transform, **kwargs)
 
     def download(self):
@@ -507,9 +518,9 @@ class Component(SynSubgraphGLASSDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, transform=None, pre_transform=None, **kwargs):
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, transform=None, pre_transform=None, **kwargs):
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
                          transform, pre_transform, **kwargs)
 
     def download(self):
@@ -556,7 +567,7 @@ class WLKSubgraph(SubgraphDataset):
         assert self.wl_x_type_for_hists in ["cluster", "color"]
         assert network_generator.startswith("nx")
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, False,
                          transform, pre_transform, **kwargs)
 
         if wl_hop_to_use is not None:
@@ -763,7 +774,7 @@ if __name__ == '__main__':
 
     FIND_SEED = False  # NOTE: If True, find_seed_that_makes_balanced_datasets will be performed
 
-    NAME = "Component"
+    NAME = "EMUser"
     # WLKSRandomTree
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, Component, Coreness, CutRatio
@@ -775,7 +786,9 @@ if __name__ == '__main__':
         E_TYPE = "ones_1/64/RWPE_K_4"
     else:
         E_TYPE = "glass"  # gin, graphsaint_gcn, glass
+
     DEBUG = False
+
     MORE_KWARGS = {
         "num_subgraphs": 2000,
         "subgraph_size": None,  # NOTE: Using None will use ego-graphs
@@ -796,6 +809,10 @@ if __name__ == '__main__':
         }
     else:
         MORE_KWARGS = {}
+
+    USE_RWPE = True
+    if USE_RWPE and NAME not in ["Density", "Component", "Coreness", "CutRatio"]:
+        MORE_KWARGS["load_rwpe"] = True
 
     if FIND_SEED:
         find_seed_that_makes_balanced_datasets(**MORE_KWARGS)
@@ -828,6 +845,8 @@ if __name__ == '__main__':
     cprint("global_data samples", "yellow")
     print(dts.global_data)
     print("Avg. degree: ", dts.global_data.edge_index.size(1) / dts.global_data.num_nodes)
+    if hasattr(dts.global_data, "pe"):
+        print("PE", dts.global_data.pe)
 
     cprint("All subgraph samples", "magenta")
     print(dts.data)
