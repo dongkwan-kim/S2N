@@ -376,7 +376,7 @@ if __name__ == '__main__':
         _sdm = get_subgraph_datamodule_for_test(
             name="PPIBP",
             custom_splits=[5],
-            num_training_tails_to_tile_per_class=40,
+            num_training_tails_to_tile_per_class=80,
             use_coarsening=True,
             coarsening_ratio=0.3,
             coarsening_method="variation_neighborhoods",
@@ -385,7 +385,7 @@ if __name__ == '__main__':
         _sdm = get_subgraph_datamodule_for_test(
             name="PPIBP",
             custom_splits=[5],
-            num_training_tails_to_tile_per_class=40,
+            num_training_tails_to_tile_per_class=80,
             use_s2n=False,
             subgraph_batching="separated",  # connected, separated
         )

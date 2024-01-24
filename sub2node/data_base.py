@@ -1,9 +1,9 @@
 from collections import OrderedDict, Counter
 from itertools import chain
 from pprint import pprint
-from random import Random
 from typing import List, Dict, Tuple, Union, Optional
 import os.path as osp
+import random
 
 import torch
 from termcolor import cprint
@@ -162,6 +162,8 @@ class DatasetBase(InMemoryDataset):
         ntt2tpc = self.num_training_tails_to_tile_per_class
         if ntt2tpc is not None and ntt2tpc > 0:
             data_train_original = data_list[:self.num_train_original]
+            random.Random(42).shuffle(data_train_original)
+            cprint("Ran random.Random(42).shuffle(data_train_original)", "blue")
 
             data_tails = [data_train_original.pop()]
             assert data_tails[-1].y.dim() == 1, "only for single-label"

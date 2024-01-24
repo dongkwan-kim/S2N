@@ -136,7 +136,7 @@ class SubgraphToNodePlusCoarsening(SubgraphToNode):
             num_train,
             num_train + num_coarsened_nodes,
             num_train + num_coarsened_nodes + num_val,
-            ]
+        ]
         assert str(data_coarsened[0]) == str(new_subgraph_data_list[new_splits[0]])
         return new_subgraph_data_list, new_splits, meta_info
 
@@ -241,7 +241,7 @@ if __name__ == "__main__":
     MODE = "NUM_TRAIN_PER_CLASS"
     # CROSS, NUM_TRAIN_PER_CLASS, SAVE_PRECURSOR, analyze_coarsening_results, node_task_data_splits
 
-    NAME = "PPIBP"
+    NAME = "EMUser"
     # TEST
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, Component, Coreness, CutRatio, WLKSRandomTree
@@ -259,15 +259,18 @@ if __name__ == "__main__":
 
     if MODE == "NUM_TRAIN_PER_CLASS":
         if NAME == "EMUser":
-            CR_LIST = [0.8, 0.9]
+            CR_LIST = [0.7, 0.8, 0.9]
         elif NAME == "PPIBP":
-            CR_LIST = [0.2, 0.3, 0.4, 0.5, 0.6]
+            CR_LIST = [0.2, 0.3, 0.4, 0.5]
         elif NAME == "HPOMetab":
             CR_LIST = [0.5, 0.6, 0.7, 0.8]
         else:
             raise ValueError
     else:
         CR_LIST = [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+
+    MAX_NUM_TRAINING_TAILS = 80
+    C_LIST = [10, 20, 40, 80]
 
     print(f"NAME={NAME} | MODE={MODE} | CR_LIST={CR_LIST}")
     if MODE == "analyze_coarsening_results":
@@ -296,7 +299,7 @@ if __name__ == "__main__":
     elif MODE == "SAVE_PRECURSOR":
         dts: SubgraphDataset = eval(NAME)(
             root=PATH, name=NAME, embedding_type=E_TYPE, debug=DEBUG,
-            num_training_tails_to_tile_per_class=40,  # NOTE: IMPORTANT
+            num_training_tails_to_tile_per_class=MAX_NUM_TRAINING_TAILS,  # NOTE: IMPORTANT
         )
         _subgraph_data_list = dts.get_data_list_with_split_attr()
         _global_data = dts.global_data
@@ -324,10 +327,10 @@ if __name__ == "__main__":
                     )
 
     elif MODE == "NUM_TRAIN_PER_CLASS":
-        for C in [10, 20, 30, 40]:
+        for C in C_LIST:
             dts: SubgraphDataset = eval(NAME)(
                 root=PATH, name=NAME, embedding_type=E_TYPE, debug=DEBUG,
-                num_training_tails_to_tile_per_class=40,  # NOTE: IMPORTANT
+                num_training_tails_to_tile_per_class=MAX_NUM_TRAINING_TAILS,  # NOTE: IMPORTANT
             )
 
             # ----- NOTE: IMPORTANT
