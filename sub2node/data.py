@@ -335,7 +335,7 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
         embedding_type=E_TYPE,
         use_s2n=USE_S2N,
         s2n_mapping_matrix_type="unnormalized",
-        s2n_set_sub_x_weight="original_sqrt_d_node_div_d_sub",
+        s2n_set_sub_x_weight=None,
         s2n_add_sub_x_wl=False,
         s2n_use_sub_edge_index=True,
         edge_thres=0.0,
@@ -362,7 +362,7 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
 
 if __name__ == '__main__':
 
-    MODE = "PLAIN"  # PLAIN, COARSENING, SEMI_SUPERVISED
+    MODE = "PLAIN"  # PLAIN, COARSENING, SEMI_SUPERVISED_S2N, SEMI_SUPERVISED_BASELINE
 
     # WLKSRandomTree
     # PPIBP, HPOMetab, HPONeuro, EMUser
@@ -381,7 +381,13 @@ if __name__ == '__main__':
             coarsening_ratio=0.3,
             coarsening_method="variation_neighborhoods",
         )
-    elif MODE == "SEMI_SUPERVISED":
+    elif MODE == "SEMI_SUPERVISED_S2N":
+        _sdm = get_subgraph_datamodule_for_test(
+            name="PPIBP",
+            custom_splits=[10],
+            num_training_tails_to_tile_per_class=80,
+        )
+    elif MODE == "SEMI_SUPERVISED_BASELINE":
         _sdm = get_subgraph_datamodule_for_test(
             name="PPIBP",
             custom_splits=[5],
