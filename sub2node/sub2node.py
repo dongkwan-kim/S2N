@@ -249,13 +249,13 @@ class SubgraphToNode:
         # edge = 1 / (spl + 1) where 0 <= spl, then 0 < edge <= 1
         return 1 / (sub_spl_mat + 1)
 
-    def has_node_task_data_precursor(self, matrix_type=None, use_sub_edge_index=False):
-        name_key = repr_kvs(mmt=matrix_type, use_sei=use_sub_edge_index)
+    def has_node_task_data_precursor(self, matrix_type=None, use_sub_edge_index=False, **kwargs):
+        name_key = repr_kvs(mmt=matrix_type, use_sei=use_sub_edge_index, **kwargs)
         path = self.path / f"{self.node_task_name}_node_task_data_precursor_{name_key}.pth"
         return path.is_file(), path
 
-    def node_task_data_precursor(self, matrix_type=None, use_sub_edge_index=False, save=True):
-        name_key = repr_kvs(mmt=matrix_type, use_sei=use_sub_edge_index)
+    def node_task_data_precursor(self, matrix_type=None, use_sub_edge_index=False, save=True, **kwargs):
+        name_key = repr_kvs(mmt=matrix_type, use_sei=use_sub_edge_index, **kwargs)
         path = self.path / f"{self.node_task_name}_node_task_data_precursor_{name_key}.pth"
         try:
             self._node_task_data_precursor = torch.load(path)
@@ -312,7 +312,7 @@ class SubgraphToNode:
                               post_edge_normalize_args: Union[List, None] = None,
                               edge_thres: Union[float, Callable, List[float]] = 1.0,
                               use_consistent_processing=False,
-                              save=True, load=True, is_custom_split=False) -> Tuple[Data, Data, Data]:
+                              save=True, load=True, is_custom_split=False, **kwargs) -> Tuple[Data, Data, Data]:
         """
         :return: Data(x=[N, 1], edge_index=[2, E], edge_attr=[E], y=[C], batch=[N])
             - N is the number of subgraphs = batch.sum()
@@ -343,7 +343,7 @@ class SubgraphToNode:
         except FileNotFoundError:
             pass
 
-        node_task_data_precursor = self.node_task_data_precursor(mapping_matrix_type, use_sub_edge_index, save=True)
+        node_task_data_precursor = self.node_task_data_precursor(mapping_matrix_type, use_sub_edge_index, **kwargs)
         ew_mat = node_task_data_precursor.edge_weight_matrix
 
         train_val_test_splits = self.splits[-3:] if len(self.splits) > 3 else self.splits
@@ -554,10 +554,10 @@ if __name__ == '__main__':
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, Component, Coreness, CutRatio
 
-    MODE = "EMUser"
+    MODE = "PPIBP"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, Component, Coreness, CutRatio
-    PURPOSE = "SUB_SIZE"
+    PURPOSE = "PRECURSOR"
     # MANY, ONCE
     TARGET_MATRIX = "adjacent_with_self_loops"
     # adjacent_with_self_loops, adjacent_no_self_loops
@@ -565,6 +565,25 @@ if __name__ == '__main__':
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
     E_TYPE = "glass"
     DEBUG = False
+
+    if PURPOSE == "PRECURSOR":
+        _cls = eval(MODE)
+        dts = _cls(root=PATH, name=MODE, debug=DEBUG, embedding_type=E_TYPE,
+                   num_training_tails_to_tile_per_class=80)
+        _subgraph_data_list = dts.get_data_list_with_split_attr()
+        _global_data = dts.global_data
+
+        s2n = SubgraphToNode(
+            _global_data, _subgraph_data_list,
+            name=MODE,
+            path=f"{PATH}/{MODE.upper()}/sub2node/",
+            undirected=True,
+            splits=dts.splits,
+            target_matrix=TARGET_MATRIX,
+        )
+        s2n.node_task_data_precursor(matrix_type="unnormalized", use_sub_edge_index=True, ntt2tpc=80)
+        s2n.node_task_data_precursor(matrix_type="unnormalized", use_sub_edge_index=False, ntt2tpc=80)
+        exit()
 
     if MODE in ["HPOMetab", "PPIBP", "HPONeuro", "EMUser",
                 "Density", "Component", "Coreness", "CutRatio"]:

@@ -164,6 +164,8 @@ class SubgraphDataModule(LightningDataModule):
                 edge_aggr=self.h.s2n_edge_aggr,
                 undirected=True,
             )
+
+            precursor_kwargs = {}
             if self.h.use_coarsening:
                 s2n = SubgraphToNodePlusCoarsening(
                     coarsening_ratio=self.h.coarsening_ratio,
@@ -174,8 +176,12 @@ class SubgraphDataModule(LightningDataModule):
             else:
                 s2n = SubgraphToNode(**s2n_kwargs)
 
-            has_precursor, precursor_path = s2n.has_node_task_data_precursor(self.h.s2n_mapping_matrix_type,
-                                                                             self.h.s2n_use_sub_edge_index)
+                # not use in use_coarsening (just for a backward compatibility)
+                if hasattr(self.h, "num_training_tails_to_tile_per_class"):
+                    precursor_kwargs["ntt2tpc"] = self.h.num_training_tails_to_tile_per_class
+
+            has_precursor, precursor_path = s2n.has_node_task_data_precursor(
+                self.h.s2n_mapping_matrix_type, self.h.s2n_use_sub_edge_index, **precursor_kwargs)
             if is_customized_split and not has_precursor:
                 raise FileNotFoundError(f"{precursor_path}\n"
                                         f"If you are using customized split, please first create"
@@ -193,6 +199,7 @@ class SubgraphDataModule(LightningDataModule):
                 # save=(not is_customized_split),
                 # load=(not is_customized_split),
                 is_custom_split=is_customized_split,
+                **precursor_kwargs,
             )
             if self.h.s2n_add_sub_x_wl:
                 data_list = s2n.node_task_add_sub_x_wl(
@@ -362,7 +369,7 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
 
 if __name__ == '__main__':
 
-    MODE = "PLAIN"  # PLAIN, COARSENING, SEMI_SUPERVISED_S2N, SEMI_SUPERVISED_BASELINE
+    MODE = "SEMI_SUPERVISED_S2N"  # PLAIN, COARSENING, SEMI_SUPERVISED_S2N, SEMI_SUPERVISED_BASELINE
 
     # WLKSRandomTree
     # PPIBP, HPOMetab, HPONeuro, EMUser
@@ -375,11 +382,11 @@ if __name__ == '__main__':
     elif MODE == "COARSENING":
         _sdm = get_subgraph_datamodule_for_test(
             name="PPIBP",
-            custom_splits=[5],
+            custom_splits=[10],
             num_training_tails_to_tile_per_class=80,
             use_coarsening=True,
             coarsening_ratio=0.3,
-            coarsening_method="variation_neighborhoods",
+            coarsening_method="variation_edges",
         )
     elif MODE == "SEMI_SUPERVISED_S2N":
         _sdm = get_subgraph_datamodule_for_test(
@@ -390,7 +397,7 @@ if __name__ == '__main__':
     elif MODE == "SEMI_SUPERVISED_BASELINE":
         _sdm = get_subgraph_datamodule_for_test(
             name="PPIBP",
-            custom_splits=[5],
+            custom_splits=[10],
             num_training_tails_to_tile_per_class=80,
             use_s2n=False,
             subgraph_batching="separated",  # connected, separated
