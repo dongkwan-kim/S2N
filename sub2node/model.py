@@ -226,7 +226,10 @@ class GraphNeuralModel(LightningModule):
                 # cat
                 # x = torch.cat([x, sub_x_wl], dim=1)  # [N, F] cat [N, F_wl] --> [N, F + F_wl]
         else:
-            x = self.node_emb(x)
+            if self.pos_emb is not None:
+                x = self.node_emb(x) + self.pos_emb(x)
+            else:
+                x = self.node_emb(x)
 
         edge_index = adj_t if adj_t is not None else edge_index
         if self.h.use_s2n and self.h.use_s2n_jk == "concat":
@@ -340,10 +343,10 @@ if __name__ == '__main__':
     else:
         E_TYPE = "glass"  # gin, graphsaint_gcn, glass
 
-    USE_S2N = True  # NOTE: important
+    USE_S2N = False  # NOTE: important
     USE_SPARSE_TENSOR = False
     PRE_ADD_SELF_LOOPS = False
-    SUBGRAPH_BATCHING = None if USE_S2N else "separated"  # separated, connected
+    SUBGRAPH_BATCHING = None if USE_S2N else "connected"  # separated, connected
 
     if USE_S2N:
         REPLACE_X_WITH_WL4PATTERN = False
@@ -392,7 +395,7 @@ if __name__ == '__main__':
     if USE_COARSENING:
         data_kwargs = dict(
             custom_splits=[5],
-            num_training_tails_to_tile_per_class=40,
+            num_training_tails_to_tile_per_class=80,
             use_coarsening=True,
             coarsening_ratio=0.3,
             coarsening_method="variation_neighborhoods",
