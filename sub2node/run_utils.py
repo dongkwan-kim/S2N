@@ -210,6 +210,7 @@ def aggregate_csv_metrics(in_path, out_path,
     assert metric.startswith("test"), f"Wrong metric format: {metric}"
     model_key_hparams = model_key_hparams or [
         "model/subname",
+        "datamodule/embedding_type",
         "datamodule/coarsening_method",
         "datamodule/coarsening_ratio",
         "datamodule/s2n_set_sub_x_weight",
@@ -219,6 +220,7 @@ def aggregate_csv_metrics(in_path, out_path,
         "datamodule/custom_splits",
 
         "model/subname",
+        "datamodule/embedding_type",
         "datamodule/s2n_set_sub_x_weight",
         "datamodule/coarsening_method",
         "datamodule/coarsening_ratio",
@@ -288,8 +290,9 @@ def aggregate_csv_metrics(in_path, out_path,
         try:
             csv_data = pd.read_csv(_path)
             return _path_key, _experiment_key, float(csv_data[metric].tail(1)), _key_dict
-        except (KeyError, pd.errors.EmptyDataError):
+        except (KeyError, pd.errors.EmptyDataError, pd.errors.ParserError) as e:
             # Not finished experiments.
+            print(f"Error ({e}) in {_path}")
             return None
 
     for parsed_csv in p_imap(parse_csv_to_k2vi, in_path.glob("**/*.csv"),
