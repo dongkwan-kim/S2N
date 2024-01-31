@@ -3,7 +3,7 @@
 # specify here default training configuration
 defaults:
   - config_sub.yaml  # args that can be overridden by below yamls
-  - datamodule: s2n/ppi_bp.yaml
+  - datamodule: s2n/ppi_bp/for-gcn2.yaml
     # s2n, separated, connected
     # ppi_bp, hpo_metab, hpo_neuro, em_user
   - model: gcn/s2n/for-ppi_bp.yaml
@@ -11,7 +11,7 @@ defaults:
     # s2n, separated, connected
   - callbacks: checkpoint.yaml # set this to null if you don't want to use callbacks
     # checkpoint, efficiency
-  - logger: many_loggers.yaml
+  - logger: csv.yaml
     # tensorboard.yaml, csv.yaml, many_loggers.yaml
   - trainer: default.yaml
 
