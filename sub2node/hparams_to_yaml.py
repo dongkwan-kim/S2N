@@ -131,8 +131,8 @@ if __name__ == '__main__':
 
         # Prefix: a ratio of not used samples
         prefix_settings = {
-            "EMUser": [5, 10, 20, 30, 40],
-            "PPIBP": [5, 10, 20, 30, 40],
+            "EMUser": [10, 20, 30, 40, 80],
+            "PPIBP": [10, 20, 30, 40, 80],
             # "HPOMetab": [5, 10, 20, 30, 40],
             # "HPONeuro": [5, 10, 20, 30, 40],
         }
