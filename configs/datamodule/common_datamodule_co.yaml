@@ -1,7 +1,7 @@
 # Args for semi-supervised learning experiments
 
 # custom_splits=[num_train_per_class] should be lower than num_training_tails_to_tile_per_class
-num_training_tails_to_tile_per_class: 40
+num_training_tails_to_tile_per_class: 80
 
 use_coarsening: true
 

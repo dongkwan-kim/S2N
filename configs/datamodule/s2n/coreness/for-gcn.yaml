@@ -1,0 +1,15 @@
+_target_: data.SubgraphDataModule
+defaults:
+  - common_datamodule.yaml
+dataset_name: Coreness
+use_s2n: true
+s2n_mapping_matrix_type: unnormalized
+s2n_set_sub_x_weight: null
+s2n_target_matrix: adjacent_with_self_loops
+post_edge_normalize: standardize_then_trunc_thres_max_linear
+post_edge_normalize_arg_1: 0.75
+post_edge_normalize_arg_2: 1.5
+_max_epochs: 650
+_is_multi_labels: false
+embedding_type: one
+
