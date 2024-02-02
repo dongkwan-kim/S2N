@@ -24,6 +24,8 @@ FIGURE_PATH = "../_figures"
 
 # S2N+0, S2N+A, Connected, Separated, Baseline
 METHOD_COLORS = ["#1e88e5", "#3949ab", "#fb8c00", "#43a047", "#e53935"]
+# S2N+0, S2N+A, CoS2N+0, CoS2N+A Connected, Separated,
+CO_METHOD_COLORS = ["#1e88e5", "#3949ab", "#1e88e5", "#3949ab", "#fb8c00", "#43a047"]
 
 # GCN, GAT, SAGE, GCNII, SubGNN, GLASS
 # MODEL_COLORS = ["#00acc1", "#00897b", "#43a047", "#7cb342", "#e53935", "#8e24aa"]
@@ -374,6 +376,15 @@ def visualize_performance_by_coarsening_ratio(path_to_csvs, extension="png", dat
     df = pd.concat(li, axis=0, ignore_index=True)
     df = df.dropna(subset=["datamodule/coarsening_ratio"])
 
+    if dataset == "EMUser":
+        xticks = [0.7, 0.8, 0.9]
+    elif dataset == "PPIBP":
+        xticks = [0.2, 0.3, 0.4, 0.5]
+    else:
+        raise ValueError(f"Wrong dataset: {dataset}")
+
+    df = df[df["datamodule/coarsening_ratio"].isin(xticks)]
+
     data_names = [to_dataset_repr(d.split("-")[0], "paper")
                   for d in df["datamodule/dataset_subname"].to_numpy()]
     ds_names = ["Co" + to_s2n_repr(s if s == "sub_s2n" else "s2n")
@@ -391,11 +402,6 @@ def visualize_performance_by_coarsening_ratio(path_to_csvs, extension="png", dat
         cols=df["datamodule/custom_splits"].to_numpy(), col_name="# samples / class",
     )
 
-    if dataset == "EMUser":
-        xticks = [0.8, 0.9]
-    elif dataset == "PPIBP":
-        xticks = [0.2, 0.3, 0.4, 0.5, 0.6]
-
     plot_line(
         xs=df["datamodule/coarsening_ratio"].to_numpy(),
         xlabel="Coarsening ratio",
@@ -408,10 +414,23 @@ def visualize_performance_by_coarsening_ratio(path_to_csvs, extension="png", dat
 
 
 def visualize_efficiency_by_num_training(csv_path, extension="png", dataset=None):
-    sns.set_palette(METHOD_COLORS)
+    num_training_samples_per_class = [10, 20, 40, 80]
+
+    methods = ["S2N", "CoS2N", "Baseline"]
+    markers = dict(zip(methods, ["^", "X", "."]))
+    dashes = dict(zip(methods, [(2, 0.75), (1, 0), (0.75, 1)]))
+
+    # used_methods = ["CoS2N", "Baseline"]
+    used_methods = ["S2N", "CoS2N", "Baseline"]
+    if len(used_methods) == 3:
+        sns.set_palette(CO_METHOD_COLORS)
+    else:
+        sns.set_palette(CO_METHOD_COLORS[2:])
 
     df = pd.read_csv(csv_path)
     df = df.dropna(subset=["Performance", "Throughput (Train)"])
+    df = df[df["#train/C"].isin(num_training_samples_per_class)]
+    df = df[df["Method"].isin(used_methods)]
 
     metric_y_ticks = {
         "EM-User": {
@@ -437,14 +456,15 @@ def visualize_efficiency_by_num_training(csv_path, extension="png", dataset=None
 
         kws = dict(
             path=FIGURE_PATH,
-            key=f"efficiency_{dataset.replace('-', '_')}",
+            key=f"efficiency_{dataset.replace('-', '_')}_{len(used_methods)}",
             extension=extension,
-            markers=True, dashes=False,
-            aspect=1.0,
+            markers=markers,
+            dashes=dashes,
+            aspect=1.2,
             markersize=13, alpha=0.8,
-            xticks=[5, 10, 20, 30, 40],
+            xticks=num_training_samples_per_class,
             hues=df["Data structure"].to_numpy(), hue_name="Data structure",
-            styles=df["Data structure"].to_numpy(), style_name="Data structure",
+            styles=df["Method"].to_numpy(), style_name="Method",
         )
         plot_line(
             xs=df["#train/C"].to_numpy(),
@@ -575,7 +595,7 @@ if __name__ == '__main__':
     # analyze_s2n_properties, visualize_s2n_properties,
     # visualize_efficiency, visualize_efficiency_by_num_training
     # visualize_performance_by_coarsening_ratio
-    METHOD = "visualize_s2n_properties"
+    METHOD = "visualize_efficiency_by_num_training"
 
     TARGETS = "REAL_WORLD"  # SYNTHETIC, REAL_WORLD, ALL
     if TARGETS == "REAL_WORLD":
@@ -617,11 +637,18 @@ if __name__ == '__main__':
         )
     elif METHOD == "visualize_efficiency_by_num_training":
         sns.set_context("talk")
+        EXT = "pdf"
         visualize_efficiency_by_num_training(
             csv_path="./_sub2node Table (new3) - tab_efficiency_by_num_training.csv",
-            extension="pdf",
+            extension=EXT,
             dataset="EM-User",  # all, EM-User, PPI-BP
         )
+        visualize_efficiency_by_num_training(
+            csv_path="./_sub2node Table (new3) - tab_efficiency_by_num_training.csv",
+            extension=EXT,
+            dataset="PPI-BP",  # all, EM-User, PPI-BP
+        )
+
     elif METHOD == "visualize_performance_by_coarsening_ratio":
         sns.set_context("poster")
         EXT = "pdf"

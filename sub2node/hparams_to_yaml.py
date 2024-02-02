@@ -26,7 +26,11 @@ def load_kwargs(dataset_name, batching_type, model_name) -> (str, DictConfig, st
         "PPIBP": "ppi_bp",
         "HPONeuro": "hpo_neuro",
         "HPOMetab": "hpo_metab",
-        "EMUser": "em_user"
+        "EMUser": "em_user",
+        "Component": "component",
+        "Density": "density",
+        "CutRatio": "cut_ratio",
+        "Coreness": "coreness",
     })
     dataset_name = dataset_name.split("-")[0]  # for cases like DATASET-[0.x, 0.y, 0.z]
     if "s2n" in batching_type:
@@ -79,7 +83,7 @@ def replace_and_dump_hparams_to_args(dataset_name, log_path="../_aggr_logs",
             batching_type = f"{batching_type}_co"
         model_name = {
             "FA": "fa",
-            "GAT": "gat",
+            "GATv2": "gat",
             "GCN": "gcn",
             "GCNII": "gcn2",
             "GIN": "gin",
@@ -117,13 +121,19 @@ def replace_and_dump_hparams_to_args(dataset_name, log_path="../_aggr_logs",
 
 
 if __name__ == '__main__':
-    LOG_PATH = "../_aggr_logs/_logs_csv_coarsening/selected/"
+    LOG_PATH = "../_aggr_logs/_logs_csv_2023/selected"
+    # LOG_PATH = "../_aggr_logs/_logs_csv_coarsening/selected/"
+    # LOG_PATH = "../_aggr_logs/_logs_csv_newgnn/selected"
 
     if "coarsening" not in LOG_PATH:
         replace_and_dump_hparams_to_args("PPIBP", LOG_PATH)
         replace_and_dump_hparams_to_args("HPOMetab", LOG_PATH)
         replace_and_dump_hparams_to_args("HPONeuro", LOG_PATH)
         replace_and_dump_hparams_to_args("EMUser", LOG_PATH)
+        replace_and_dump_hparams_to_args("Component", LOG_PATH)
+        replace_and_dump_hparams_to_args("Coreness", LOG_PATH)
+        replace_and_dump_hparams_to_args("CutRatio", LOG_PATH)
+        replace_and_dump_hparams_to_args("Density", LOG_PATH)
 
     else:
 
