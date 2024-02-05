@@ -3,6 +3,8 @@ from typing import List, Dict, Any, Union
 from sklearn.manifold import TSNE
 from termcolor import cprint
 
+from utils import replace_all
+
 try:
     import seaborn as sns
     import matplotlib.pyplot as plt
@@ -69,7 +71,11 @@ def finish_plot(plot, kind,
 
     plot_info = "_".join([k for k in [xlabel, ylabel, hue_name]
                           if k is not None])
-    plot_info = plot_info.replace("/", "|").replace("#", "Num")
+    plot_info = replace_all(plot_info, {
+        "/": "+", "#": "Num",
+        "(": "", ")": "", " ": "_",
+    })
+    plot_info = plot_info.replace("/", "+").replace("#", "Num")
     path_and_name = f"{path}/fig_{kind}_{key}_{plot_info}.{extension}"
 
     plot.savefig(path_and_name, bbox_inches='tight')
