@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 from data_base import DatasetBase
 from data_sub_utils import save_subgraphs
-from data_transform import AddRandomWalkPE
+from data_transform import AddRandomWalkPE, AddLaplacianEigenvectorPE
 from dataset_wl import generate_random_subgraph_by_walk, WL4PatternNet, WL4PatternConv, \
     generate_random_k_hop_subgraph, generate_random_subgraph_batch_by_sampling_0_to_l_to_d, \
     nx_rewired_balanced_tree
@@ -232,7 +232,7 @@ class SubgraphDataset(DatasetBase):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, load_rwpe=False,
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, load_lepe=False,
                  transform=None, pre_transform=None, **kwargs):
         # assert embedding_type in ["gin", "graphsaint_gcn", "no_embedding", "glass", "one"]
         self.embedding_type = embedding_type
@@ -242,10 +242,16 @@ class SubgraphDataset(DatasetBase):
             transform, pre_transform, **kwargs,
         )
         self.load_rwpe = load_rwpe
+        self.load_lepe = load_lepe
         if self.load_rwpe:
             self.global_data.pe = self.get_cached_rwpe_data(
                 path=os.path.join(root, self.__class__.__name__.upper(), "rwpe"),
                 data=self.global_data, walk_length=self.global_data.x.size(1),
+            )
+        elif self.load_lepe:
+            self.global_data.pe = self.get_cached_lepe_data(
+                path=os.path.join(root, self.__class__.__name__.upper(), "lepe"),
+                data=self.global_data, k=self.global_data.x.size(1),
             )
 
     def _get_important_elements(self):
@@ -335,21 +341,32 @@ class SubgraphDataset(DatasetBase):
     def get_cached_rwpe_data(path, data: Data, walk_length: int, key=None) -> Data:
         return AddRandomWalkPE(walk_length=walk_length, attr_name="pe")(data).pe
 
+    @staticmethod
+    @fscaches(path_attrname_in_kwargs="path", verbose=True)
+    def get_le_pe(path, data: Data, k: int, key=None) -> Data:
+        return AddLaplacianEigenvectorPE(k=k, attr_name=None, is_undirected=True)(data).x
+
+    @staticmethod
+    @fscaches(path_attrname_in_kwargs="path", verbose=True)
+    def get_cached_lepe_data(path, data: Data, k: int, key=None) -> Data:
+        return AddLaplacianEigenvectorPE(k=k, attr_name="pe", is_undirected=True)(data).pe
+
 
 class SynSubgraphGLASSDataset(SubgraphDataset):
 
     def __init__(self, root, name, embedding_type="one",
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, load_rwpe=False,
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, load_lepe=False,
                  transform=None, pre_transform=None, **kwargs):
 
         __embedding_type__ = "one"
 
         super().__init__(root, name, __embedding_type__, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe, load_lepe,
                          transform, pre_transform, **kwargs)
 
-        if "RWPE" in embedding_type:
+        if "RWPE" in embedding_type or "LEPE" in embedding_type:
+            PE = "RWPE" if "RWPE" in embedding_type else "LEPE"
             try:
                 # e.g., RWPE_K_4
                 K = int(re.search("K_([0-9]+)", embedding_type).group(1))
@@ -357,16 +374,22 @@ class SynSubgraphGLASSDataset(SubgraphDataset):
                 K = 32  # default
             D = 64 - K
 
-            if embedding_type.startswith("ones_1/64/RWPE"):
+            if embedding_type.startswith(f"ones_1/64/{PE}"):
                 self.global_data.x = torch.ones((self.global_data.x.size(0), D)).float() / D
-            elif embedding_type.startswith("ones_64/RWPE"):
+            elif embedding_type.startswith(f"ones_64/{PE}"):
                 self.global_data.x = torch.ones((self.global_data.x.size(0), D)).float()
 
             syn_path = os.path.join(root, self.__class__.__name__.upper(), "synthetic")
-            self.global_data.x = self.get_random_walk_pe(
-                path=syn_path, data=self.global_data, walk_length=K,
-                key=f"x={self.global_data.x.min().item()}-{self.global_data.x.max().item()}",
-            )
+            if PE == "RWPE":
+                self.global_data.x = self.get_random_walk_pe(
+                    path=syn_path, data=self.global_data, walk_length=K,
+                    key=f"x={self.global_data.x.min().item()}-{self.global_data.x.max().item()}",
+                )
+            else:
+                self.global_data.x = self.get_le_pe(
+                    path=syn_path, data=self.global_data, k=K,
+                    key=f"x={self.global_data.x.min().item()}-{self.global_data.x.max().item()}",
+                )
 
         elif "LDP" in embedding_type:
             D = 64 - 5
@@ -406,9 +429,10 @@ class HPONeuro(SubgraphDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, load_rwpe=False, transform=None, pre_transform=None, **kwargs):
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, load_lepe=False, transform=None,
+                 pre_transform=None, **kwargs):
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe, load_lepe,
                          transform, pre_transform, **kwargs)
 
     def download(self):
@@ -422,9 +446,10 @@ class HPOMetab(SubgraphDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, load_rwpe=False, transform=None, pre_transform=None, **kwargs):
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, load_lepe=False, transform=None,
+                 pre_transform=None, **kwargs):
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe, load_lepe,
                          transform, pre_transform, **kwargs)
 
     def download(self):
@@ -438,9 +463,10 @@ class EMUser(SubgraphDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, load_rwpe=False, transform=None, pre_transform=None, **kwargs):
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, load_lepe=False, transform=None,
+                 pre_transform=None, **kwargs):
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe, load_lepe,
                          transform, pre_transform, **kwargs)
 
     def download(self):
@@ -454,9 +480,10 @@ class PPIBP(SubgraphDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, load_rwpe=False, transform=None, pre_transform=None, **kwargs):
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, load_lepe=False, transform=None,
+                 pre_transform=None, **kwargs):
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe, load_lepe,
                          transform, pre_transform, **kwargs)
 
     def download(self):
@@ -470,9 +497,10 @@ class Density(SynSubgraphGLASSDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, load_rwpe=False, transform=None, pre_transform=None, **kwargs):
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, load_lepe=False, transform=None,
+                 pre_transform=None, **kwargs):
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe, load_lepe,
                          transform, pre_transform, **kwargs)
 
     def download(self):
@@ -486,9 +514,10 @@ class Coreness(SynSubgraphGLASSDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, load_rwpe=False, transform=None, pre_transform=None, **kwargs):
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, load_lepe=False, transform=None,
+                 pre_transform=None, **kwargs):
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe, load_lepe,
                          transform, pre_transform, **kwargs)
 
     def download(self):
@@ -502,9 +531,10 @@ class CutRatio(SynSubgraphGLASSDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, load_rwpe=False, transform=None, pre_transform=None, **kwargs):
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, load_lepe=False, transform=None,
+                 pre_transform=None, **kwargs):
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe, load_lepe,
                          transform, pre_transform, **kwargs)
 
     def download(self):
@@ -518,9 +548,10 @@ class Component(SynSubgraphGLASSDataset):
 
     def __init__(self, root, name, embedding_type,
                  val_ratio=None, test_ratio=None, save_directed_edges=False, debug=False, seed=42,
-                 num_training_tails_to_tile_per_class=0, load_rwpe=False, transform=None, pre_transform=None, **kwargs):
+                 num_training_tails_to_tile_per_class=0, load_rwpe=False, load_lepe=False, transform=None,
+                 pre_transform=None, **kwargs):
         super().__init__(root, name, embedding_type, val_ratio, test_ratio,
-                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe,
+                         save_directed_edges, debug, seed, num_training_tails_to_tile_per_class, load_rwpe, load_lepe,
                          transform, pre_transform, **kwargs)
 
     def download(self):
@@ -779,11 +810,14 @@ if __name__ == '__main__':
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, Component, Coreness, CutRatio
 
+    USE_RWPE = False
+    USE_LEPE = True
+
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
     if NAME.startswith("WL"):
         E_TYPE = "no_embedding"
     elif NAME in ["Density", "Component", "Coreness", "CutRatio"]:
-        E_TYPE = "ones_1/64/RWPE_K_4"
+        E_TYPE = "ones_1/64/LEPE"
     else:
         E_TYPE = "glass"  # gin, graphsaint_gcn, glass
 
@@ -810,9 +844,10 @@ if __name__ == '__main__':
     else:
         MORE_KWARGS = {}
 
-    USE_RWPE = True
     if USE_RWPE and NAME not in ["Density", "Component", "Coreness", "CutRatio"]:
         MORE_KWARGS["load_rwpe"] = True
+    elif USE_LEPE and NAME not in ["Density", "Component", "Coreness", "CutRatio"]:
+        MORE_KWARGS["load_lepe"] = True
 
     if FIND_SEED:
         find_seed_that_makes_balanced_datasets(**MORE_KWARGS)

@@ -7,6 +7,7 @@ from torch import Tensor
 from torch_geometric.data import Data
 from torch_geometric.transforms import BaseTransform
 from torch_geometric.typing import SparseTensor, OptTensor
+from torch_geometric.utils import get_laplacian, to_scipy_sparse_matrix
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 from tqdm import tqdm
 
@@ -118,6 +119,71 @@ class AddRandomWalkPE(BaseTransform):
             row, col, value = out.coo()
             pe_list.append(get_self_loop_attr((row, col), value, num_nodes))
         pe = torch.stack(pe_list, dim=-1)
+
+        data = add_node_attr(data, pe, attr_name=self.attr_name)
+        return data
+
+
+class AddLaplacianEigenvectorPE(BaseTransform):
+    r"""Adds the Laplacian eigenvector positional encoding from the
+    `"Benchmarking Graph Neural Networks" <https://arxiv.org/abs/2003.00982>`_
+    paper to the given graph
+    (functional name: :obj:`add_laplacian_eigenvector_pe`).
+
+    Args:
+        k (int): The number of non-trivial eigenvectors to consider.
+        attr_name (str, optional): The attribute name of the data object to add
+            positional encodings to. If set to :obj:`None`, will be
+            concatenated to :obj:`data.x`.
+            (default: :obj:`"laplacian_eigenvector_pe"`)
+        is_undirected (bool, optional): If set to :obj:`True`, this transform
+            expects undirected graphs as input, and can hence speed up the
+            computation of eigenvectors. (default: :obj:`False`)
+        **kwargs (optional): Additional arguments of
+            :meth:`scipy.sparse.linalg.eigs` (when :attr:`is_undirected` is
+            :obj:`False`) or :meth:`scipy.sparse.linalg.eigsh` (when
+            :attr:`is_undirected` is :obj:`True`).
+    """
+
+    def __init__(
+            self,
+            k: int,
+            attr_name: Optional[str] = 'laplacian_eigenvector_pe',
+            is_undirected: bool = False,
+            **kwargs,
+    ):
+        self.k = k
+        self.attr_name = attr_name
+        self.is_undirected = is_undirected
+        self.kwargs = kwargs
+
+    def __call__(self, data: Data) -> Data:
+        from scipy.sparse.linalg import eigs, eigsh
+        eig_fn = eigs if not self.is_undirected else eigsh
+
+        num_nodes = data.num_nodes
+        edge_index, edge_weight = get_laplacian(
+            data.edge_index,
+            # data.edge_weight,
+            None,
+            normalization='sym',
+            num_nodes=num_nodes,
+        )
+
+        L = to_scipy_sparse_matrix(edge_index, edge_weight, num_nodes)
+
+        eig_vals, eig_vecs = eig_fn(
+            L,
+            k=self.k + 1,
+            which='SR' if not self.is_undirected else 'SA',
+            return_eigenvectors=True,
+            **self.kwargs,
+        )
+
+        eig_vecs = np.real(eig_vecs[:, eig_vals.argsort()])
+        pe = torch.from_numpy(eig_vecs[:, 1:self.k + 1])
+        sign = -1 + 2 * torch.randint(0, 2, (self.k,))
+        pe *= sign
 
         data = add_node_attr(data, pe, attr_name=self.attr_name)
         return data
