@@ -557,7 +557,7 @@ if __name__ == '__main__':
     MODE = "PPIBP"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, Component, Coreness, CutRatio
-    PURPOSE = "PRECURSOR"
+    PURPOSE = "MEASURE_TIME"
     # MANY, ONCE
     TARGET_MATRIX = "adjacent_with_self_loops"
     # adjacent_with_self_loops, adjacent_no_self_loops
@@ -605,7 +605,22 @@ if __name__ == '__main__':
         """ Inverse sigmoid table 0.5 -- 0.95,
         inv_sig = [0.0, 0.201, 0.405, 0.619, 0.847, 1.099, 1.386, 1.735, 2.197, 2.944]
         """
-        if PURPOSE == "MANY_1":
+        if PURPOSE == "MEASURE_TIME":
+            import time
+
+            t0 = time.time()
+            ntds = s2n.node_task_data_splits(
+                mapping_matrix_type="unnormalized",
+                set_sub_x_weight=None,
+                use_sub_edge_index=True,
+                post_edge_normalize="standardize_then_trunc_thres_max_linear",
+                post_edge_normalize_args=[2.1, 1.0],
+                edge_thres=0.0,
+                use_consistent_processing=True,
+                save=False,
+            )
+            print((time.time() - t0) / 3)
+        elif PURPOSE == "MANY_1":
             # standardize_then_thres_max_linear
             for i in [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75,
                       2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
