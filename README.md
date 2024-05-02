@@ -25,6 +25,12 @@ bash install.sh {CUDA:cu102,cu111} {TORCH}
 bash install.sh 
 ```
 
+To use graph coarsening methods, install additional libraries
+
+```bash
+bash S2N/graph_coarsening/install.sh
+```
+
 This repository has been confirmed to be working on `nvidia/cuda:10.2-cudnn8-devel-ubuntu18.04`
 and `nvidia/cuda:11.1-cudnn8-devel-ubuntu18.04`
 
