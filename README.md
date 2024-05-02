@@ -1,7 +1,7 @@
 # Subgraph-To-Node (S2N) Translation
 
 Official implementation of Subgraph-To-Node (S2N) Translation from ["Translating Subgraphs to Nodes Makes Simple GNNs
-Strong and Efficient for Subgraph Representation Learning"](https://arxiv.org/abs/2204.04510v3), International
+Strong and Efficient for Subgraph Representation Learning"](https://arxiv.org/abs/2204.04510), International
 Conference on Machine Learning (ICML 2024)
 
 ## BibTeX
