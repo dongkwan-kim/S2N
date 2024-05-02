@@ -3,7 +3,7 @@ TORCH=${2:-"1.9.0"}
 echo "CUDA: ${CUDA} / TORCH: ${TORCH}"
 
 if [ $CUDA = "cu111" ]; then
-  pip3 install torch==1.9.0+${CUDA} -f https://download.pytorch.org/whl/torch_stable.html
+  pip3 install torch==${TORCH}+${CUDA} -f https://download.pytorch.org/whl/torch_stable.html
 elif [ $CUDA = "cu102" ]; then
   pip3 install torch==${TORCH}
 else
