@@ -1,5 +1,4 @@
 import inspect
-from argparse import Namespace
 from typing import Type, Any, Optional, Union, Dict, Tuple, List, Callable
 from pprint import pprint
 
@@ -14,11 +13,8 @@ from pytorch_lightning import LightningDataModule
 from torch_geometric.loader import DataLoader
 from torch_sparse import SparseTensor
 
-from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, SubgraphDataset
-from data_sub import WLKSRandomTree
-from data_sub import Density, Component, Coreness, CutRatio
+from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, Density, Component, Coreness, CutRatio, SubgraphDataset
 from data_utils import AddSelfLoopsV2, RemoveAttrs
-from dataset_wl import SliceYByIndex, ReplaceXWithWL4Pattern
 from s2n_coarsening import SubgraphToNodePlusCoarsening
 from sub2node import SubgraphToNode
 from utils import get_log_func, EternalIter, merge_dict_by_keys
@@ -232,17 +228,7 @@ class SubgraphDataModule(LightningDataModule):
             else:
                 raise ValueError(f"Wrong subgraph_batching: {self.h.subgraph_batching}")
             if self.h.replace_x_with_wl4pattern:
-                assert self.h.wl4pattern_args is not None and len(self.h.wl4pattern_args) == 2
-                assert isinstance(self.h.wl4pattern_args[0], int) and isinstance(self.h.wl4pattern_args[1], str)
-                self.train_data, self.val_data, self.test_data = ReplaceXWithWL4Pattern(
-                    num_layers=4,  # NOTE: num_layer is hard-coded.
-                    wl_step_to_use=self.h.wl4pattern_args[0],
-                    wl_type_to_use=self.h.wl4pattern_args[1],
-                    num_color_clusters=self.h.wl_num_color_clusters,
-                    cache_path=os.path.join(self.dataset.processed_dir,
-                                            f"WL4Pattern_{self.h.subgraph_batching}.pt"),
-                )([self.train_data, self.val_data, self.test_data])
-                # The output will be a List of Data(x=[S, F], y=[S])
+                raise NotImplementedError  # deprecated
 
     def train_dataloader(self):
         if isinstance(self.train_data, (Data, Batch)):  # s2n, connected
@@ -290,6 +276,10 @@ def _print_data(data):
         print("\t- adj_t", data.adj_t)
     if hasattr(data, "sub_edge_index"):
         print("\t- sub_edge (Tensor)", f"{data.edge_index.min()} -- {data.edge_index.max()}")
+    if hasattr(data, "batch") and data.batch is not None:
+        print("\t- batch", f"{data.batch.min()} -- {data.batch.max()}")
+    if hasattr(data, "x_to_xs"):
+        print("\t- x_to_xs", f"{data.x_to_xs.min()} -- {data.x_to_xs.max()}")
 
 
 def get_subgraph_datamodule_for_test(name, **kwargs):
@@ -305,36 +295,6 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
     USE_S2N = True
     USE_SPARSE_TENSOR = False
     SUBGRAPH_BATCHING = None if USE_S2N else "connected"  # separated, connected
-
-    if USE_S2N:
-        REPLACE_X_WITH_WL4PATTERN = False
-    else:
-        REPLACE_X_WITH_WL4PATTERN = False  # False
-    if REPLACE_X_WITH_WL4PATTERN:
-        WL4PATTERN_ARGS = [0, "color"]
-    else:
-        WL4PATTERN_ARGS = None
-
-    MORE_KWARGS = {
-        "num_subgraphs": 2000,
-        "subgraph_size": None,  # NOTE: Using None will use ego-graphs
-        "wl_hop_to_use": None,
-        "wl_max_hop": 2,
-        "wl_x_type_for_hists": "color",  # color, cluster
-        "wl_num_color_clusters": None,
-        "wl_num_hist_clusters": 2,
-    }
-    if NAME == "WLKSRandomTree":
-        MORE_KWARGS = {
-            "num_nodes": 10000,
-            "num_branch": 4,
-            "height": 8,
-            "rewiring_ratio": 0.05,  # 0.05, 0.025
-            "wl_seed": None,  # NOTE: Using None will use wl_seed_that_makes_balanced_datasets
-            **MORE_KWARGS,
-        }
-    else:
-        MORE_KWARGS = {"wl_num_color_clusters": None}
 
     KWARGS = dict(
         dataset_name=NAME,
@@ -357,10 +317,9 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
         eval_batch_size=5,
         use_sparse_tensor=USE_SPARSE_TENSOR,
         pre_add_self_loops=False,
-        replace_x_with_wl4pattern=REPLACE_X_WITH_WL4PATTERN,
-        wl4pattern_args=WL4PATTERN_ARGS,
+        replace_x_with_wl4pattern=False,
+        wl4pattern_args=None,
         custom_splits=None,
-        **MORE_KWARGS,
     )
     KWARGS.update(kwargs)
     sdm = SubgraphDataModule(**KWARGS)
@@ -369,15 +328,26 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
 
 if __name__ == '__main__':
 
-    MODE = "SEMI_SUPERVISED_S2N"  # PLAIN, COARSENING, SEMI_SUPERVISED_S2N, SEMI_SUPERVISED_BASELINE
+    MODE = "S2N"  # S2N, CONNECTED, SEPARATED COARSENING, SEMI_SUPERVISED_S2N, SEMI_SUPERVISED_BASELINE
 
     # WLKSRandomTree
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, CC, Coreness, CutRatio
-    if MODE == "PLAIN":
+    if MODE == "S2N":
         _sdm = get_subgraph_datamodule_for_test(
             name="PPIBP",
-            # custom_splits=[0.5, 0.3, 0.1],
+        )
+    elif MODE == "CONNECTED":
+        _sdm = get_subgraph_datamodule_for_test(
+            name="PPIBP",
+            use_s2n=False,
+            subgraph_batching="connected",
+        )
+    elif MODE == "SEPARATED":
+        _sdm = get_subgraph_datamodule_for_test(
+            name="PPIBP",
+            use_s2n=False,
+            subgraph_batching="separated",
         )
     elif MODE == "COARSENING":
         _sdm = get_subgraph_datamodule_for_test(
