@@ -26,12 +26,12 @@ warnings.filterwarnings('ignore', category=ConvergenceWarning)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--MODE', type=str, default="hp_search_for_models")
-parser.add_argument('--dataset_name', type=str, default="PPIBP",
+parser.add_argument('--dataset_name', type=str, default="HPONeuro",
                     choices=["PPIBP", "HPOMetab", "EMUser", "HPONeuro", "Density", "Component", "Coreness", "CutRatio"])
 parser.add_argument('--stype', type=str, default="connected", choices=["connected", "separated"])
 parser.add_argument('--wl_layers', type=int, default=5)
 parser.add_argument('--model', type=str, default="LogisticRegression")
-parser.add_argument('--runs', type=int, default=1)
+parser.add_argument('--runs', type=int, default=3)
 parser.add_argument('--dataset_path', type=str, default="/mnt/nas2/GNN-DATA/SUBGRAPH")
 
 
@@ -114,8 +114,10 @@ def experiment(args, hists, splits, all_data, **model_kwargs):
     cprint(f'Final Test Performance: {test_f1s.mean():.4f} ± {test_f1s.std():.4f} for {args.model} with {model_kwargs}',
            "green")
     return {
-        "best_val_f1_mean": float(best_val_f1s.mean()),
         "test_f1_mean": float(test_f1s.mean()),
+        "test_f1_std": float(test_f1s.std()),
+        "best_val_f1_mean": float(best_val_f1s.mean()),
+        "best_val_f1_std": float(best_val_f1s.std()),
         "best_wl_list": best_wl.tolist(),
     }
 
@@ -149,14 +151,19 @@ def hp_search_for_models(args, file_dir="../_logs_wl4s"):
         new_kwl = [{**kwargs, **mkw} for mkw in more_kwl]
         kwargs_list += new_kwl
 
+    stype_to_data_and_model = {}
+    for stype in ["connected", "separated"]:
+        args.stype = stype
+        stype_to_data_and_model[stype] = get_data_and_model(args)
+
     file_path = Path(file_dir) / f"{args.dataset_name}.csv"
-    hists, splits, all_data = get_data_and_model(args)
     results_dict_list = []
     for i, model_kwargs in enumerate(kwargs_list):
         print(model_kwargs)
         for k in model_kwargs.copy():
             if k in args.__dict__:
                 setattr(args, k, model_kwargs.pop(k))
+        hists, splits, all_data = stype_to_data_and_model[args.stype]
         results = experiment(args, hists, splits, all_data, **model_kwargs)
         results_dict_list.append({**results, **args.__dict__, **model_kwargs})
         pprint(results_dict_list)
