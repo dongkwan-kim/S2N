@@ -1,7 +1,6 @@
 import argparse
 import inspect
 import itertools
-import warnings
 from pathlib import Path
 from pprint import pprint
 from typing import Union
@@ -9,30 +8,45 @@ from typing import Union
 import pandas as pd
 import torch
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
-from sklearn.exceptions import ConvergenceWarning
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score
 from sklearn.multioutput import MultiOutputClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.neural_network import MLPClassifier
 from sklearn.svm import LinearSVC
 from termcolor import cprint
 from torch_geometric.data import Batch
 from torch_geometric.nn.conv import WLConv
 
 from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, Density, Component, Coreness, CutRatio
+from visualize import plot_data_points_by_tsne
 
-ModelType = Union[MultiOutputClassifier, RandomForestClassifier, LogisticRegression, LinearSVC, AdaBoostClassifier]
+ModelType = Union[
+    MultiOutputClassifier, RandomForestClassifier, LogisticRegression, LinearSVC, AdaBoostClassifier,
+    MLPClassifier, KNeighborsClassifier]
 
-warnings.filterwarnings('ignore', category=ConvergenceWarning)
+DATASETS_REAL = ["PPIBP", "EMUser", "HPOMetab", "HPONeuro"]
+DATASETS_SYN = ["Component", "Density", "Coreness", "CutRatio"]
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--MODE', type=str, default="hp_search_for_models")
-parser.add_argument('--dataset_name', type=str, default="HPONeuro",
+parser.add_argument('--dataset_name', type=str, default="PPIBP",
                     choices=["PPIBP", "HPOMetab", "EMUser", "HPONeuro", "Density", "Component", "Coreness", "CutRatio"])
 parser.add_argument('--stype', type=str, default="connected", choices=["connected", "separated"])
 parser.add_argument('--wl_layers', type=int, default=5)
 parser.add_argument('--model', type=str, default="LogisticRegression")
 parser.add_argument('--runs', type=int, default=3)
 parser.add_argument('--dataset_path', type=str, default="/mnt/nas2/GNN-DATA/SUBGRAPH")
+
+
+class MyMLPClassifier(MLPClassifier):
+
+    def __init__(self, C, hidden_layer_sizes, learning_rate_init, **kwargs):
+        kwargs["alpha"] = 1.0 / C
+        kwargs["hidden_layer_sizes"] = hidden_layer_sizes
+        kwargs["learning_rate_init"] = learning_rate_init
+        kwargs["solver"] = "sgd"
+        super().__init__(**kwargs)
 
 
 class WL4S(torch.nn.Module):
@@ -122,22 +136,31 @@ def experiment(args, hists, splits, all_data, **model_kwargs):
     }
 
 
-def run_one(args):
-    hists, splits, all_data = get_data_and_model(args)
+def run_one(args, data_func=get_data_and_model):
+    hists, splits, all_data = data_func(args)
     experiment(args, hists, splits, all_data)
 
 
-def hp_search_for_models(args, file_dir="../_logs_wl4s"):
-    HPARAM_SPACE = {
-        "stype": ["connected", "separated"],
-        "model": ["AdaBoostClassifier", "RandomForestClassifier", "LogisticRegression", "LinearSVC"],
-    }
-    MORE_HPARAM_SPACE = {
-        "n_estimators": [10, 100, 200, 400],
-        "max_depth": [None, 5, 10, 20],
-        "C": [0.2, 0.4, 0.6, 0.8, 1.0] + [2.0, 4.0, 6.0, 8.0, 10.0] + [20.0, 40.0],
-    }
+def plot_tsne_all(args, data_func=get_data_and_model, path="../_figures", extension="png"):
+    kws = dict(path=path, extension=extension, alpha=0.5, s=5)
+    for dataset_name in DATASETS_SYN + DATASETS_REAL:
+        for stype in ["connected", "separated"]:
+            args.dataset_name, args.stype = dataset_name, stype
+            hists, splits, all_data = data_func(args)
+            s = splits
+            for i_wl, hist in enumerate(hists):
+                sub_key = f"{dataset_name}-{stype}, WL: {i_wl + 1}"
+                print(sub_key)
+                train_hist, val_hist, test_hist = hist[s[0]:s[1]], hist[s[1]:s[2]], hist[s[2]:s[3]]
+                train_y, val_y, test_y = all_data.y[s[0]:s[1]], all_data.y[s[1]:s[2]], all_data.y[s[2]:s[3]]
+                all_hist, all_y = torch.cat([train_hist, val_hist, test_hist]), torch.cat([train_y, val_y, test_y])
+                plot_data_points_by_tsne(all_hist, all_y, key=f"{sub_key}, Split: All", **kws)
+                plot_data_points_by_tsne(train_hist, train_y, key=f"{sub_key}, Split: Train", **kws)
+                plot_data_points_by_tsne(val_hist, val_y, key=f"{sub_key}, Split: Val", **kws)
+                plot_data_points_by_tsne(test_hist, test_y, key=f"{sub_key}, Split: Test", **kws)
 
+
+def hp_search_for_models(args, hparam_space, more_hparam_space, data_func=get_data_and_model, file_dir="../_logs_wl4s"):
     def space_to_kwl(space):
         return [dict(zip(space.keys(), cmb)) for cmb in itertools.product(*space.values())]
 
@@ -145,16 +168,16 @@ def hp_search_for_models(args, file_dir="../_logs_wl4s"):
         return [param.name for param in inspect.signature(eval(method_name)).parameters.values()]
 
     kwargs_list = []
-    for kwargs in space_to_kwl(HPARAM_SPACE):
-        more_space = {k: MORE_HPARAM_SPACE[k] for k in MORE_HPARAM_SPACE if k in init_args(kwargs["model"])}
+    for kwargs in space_to_kwl(hparam_space):
+        more_space = {k: more_hparam_space[k] for k in more_hparam_space if k in init_args(kwargs["model"])}
         more_kwl = space_to_kwl(more_space)
         new_kwl = [{**kwargs, **mkw} for mkw in more_kwl]
         kwargs_list += new_kwl
 
     stype_to_data_and_model = {}
-    for stype in ["connected", "separated"]:
+    for stype in hparam_space["stype"]:
         args.stype = stype
-        stype_to_data_and_model[stype] = get_data_and_model(args)
+        stype_to_data_and_model[stype] = data_func(args)
 
     file_path = Path(file_dir) / f"{args.dataset_name}.csv"
     results_dict_list = []
@@ -172,10 +195,43 @@ def hp_search_for_models(args, file_dir="../_logs_wl4s"):
         cprint(f"Save logs at {file_path}", "blue")
 
 
+def hp_search_real(args, hparam_space, more_hparam_space, data_func=get_data_and_model, file_dir="../_logs_wl4s"):
+    for dataset_name in DATASETS_REAL:
+        args.dataset_name = dataset_name
+        hp_search_for_models(args, hparam_space, more_hparam_space, data_func, file_dir)
+
+
+def hp_search_syn(args, hparam_space, more_hparam_space, data_func=get_data_and_model, file_dir="../_logs_wl4s"):
+    for dataset_name in DATASETS_SYN:
+        args.dataset_name = dataset_name
+        hp_search_for_models(args, hparam_space, more_hparam_space, data_func, file_dir)
+
+
 if __name__ == '__main__':
+
+    HPARAM_SPACE = {
+        "stype": ["connected", "separated"],
+        "model": ["MyMLPClassifier", "LogisticRegression", "LinearSVC"],
+    }
+    Cx100 = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768]
+    MORE_HPARAM_SPACE = {
+        "C": [c / 100 for c in Cx100],
+        "hidden_layer_sizes": [(20,), (40,), (80,), (160,)],
+        "learning_rate_init": [0.01, 0.001, 0.0001],
+    }
+
     __args__ = parser.parse_args()
 
-    if __args__.MODE == "run_one":
+    # __args__.dataset_name = "EMUser"
+    # "PPIBP", "HPOMetab", "EMUser", "HPONeuro", "Density", "Component", "Coreness", "CutRatio
+
+    if __args__.MODE == "plot_tsne_all":
+        plot_tsne_all(__args__)
+    elif __args__.MODE == "run_one":
         run_one(__args__)
     elif __args__.MODE == "hp_search_for_models":
-        hp_search_for_models(__args__)
+        hp_search_for_models(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE)
+    elif __args__.MODE == "hp_search_real":
+        hp_search_real(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE)
+    elif __args__.MODE == "hp_search_syn":
+        hp_search_syn(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE)
