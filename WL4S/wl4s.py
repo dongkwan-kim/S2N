@@ -191,7 +191,10 @@ def hp_search_for_models(args, hparam_space, more_hparam_space, data_func=get_da
         results_dict_list.append({**results, **args.__dict__, **model_kwargs})
         pprint(results_dict_list)
 
-        pd.DataFrame(results_dict_list).to_csv(file_path, index=False)
+        df = pd.DataFrame(results_dict_list)
+        if file_path.is_file():
+            df = pd.concat([pd.read_csv(file_path), df], ignore_index=True)
+        df.to_csv(file_path, index=False)
         cprint(f"Save logs at {file_path}", "blue")
 
 
