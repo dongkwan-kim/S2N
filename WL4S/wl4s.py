@@ -198,7 +198,6 @@ def hp_search_for_models(args, hparam_space, more_hparam_space,
             stype_and_norm_to_data_and_model[(stype, hist_norm)] = data_func(args)
 
     file_path = Path(file_dir) / f"{args.dataset_name}.csv"
-    results_dict_list = []
     for i, model_kwargs in enumerate(kwargs_list):
         print(model_kwargs)
         for k in model_kwargs.copy():
@@ -206,9 +205,8 @@ def hp_search_for_models(args, hparam_space, more_hparam_space,
                 setattr(args, k, model_kwargs.pop(k))
         hists, splits, all_data = stype_and_norm_to_data_and_model[(args.stype, args.hist_norm)]
         results = experiment(args, hists, splits, all_data, **model_kwargs)
-        results_dict_list.append({**results, **args.__dict__, **model_kwargs})
 
-        df = pd.DataFrame(results_dict_list)
+        df = pd.DataFrame([{**results, **args.__dict__, **model_kwargs}])
         if file_path.is_file():
             df = pd.concat([pd.read_csv(file_path), df], ignore_index=True)
         df.to_csv(file_path, index=False)
