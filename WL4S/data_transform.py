@@ -3,11 +3,10 @@ from typing import Any, Optional
 import numpy as np
 import torch
 from torch import Tensor
-
 from torch_geometric.data import Data
 from torch_geometric.transforms import BaseTransform
 from torch_geometric.typing import SparseTensor, OptTensor
-from torch_geometric.utils import get_laplacian, to_scipy_sparse_matrix
+from torch_geometric.utils import get_laplacian, to_scipy_sparse_matrix, k_hop_subgraph
 from torch_geometric.utils.num_nodes import maybe_num_nodes
 from tqdm import tqdm
 
@@ -72,6 +71,28 @@ def add_node_attr(data: Data, value: Any,
         data[attr_name] = value
 
     return data
+
+
+class KHopSubgraph(BaseTransform):
+
+    def __init__(self, global_edge_index, k, relabel_nodes, num_nodes):
+        self.global_edge_index = global_edge_index
+        self.k = k
+        self.relabel_nodes = relabel_nodes
+        self.num_nodes = num_nodes
+
+    def __call__(self, data: Data) -> Data:
+        node_idx = data.x.flatten()
+        subset, edge_index, inv, edge_mask = k_hop_subgraph(
+            node_idx, self.k, self.global_edge_index,
+            relabel_nodes=self.relabel_nodes, num_nodes=self.num_nodes)
+        data.x = subset.view(-1, 1)
+        data.edge_index = edge_index
+        return data
+
+    def map_list(self, data_list_list):
+        return [[self(d) for d in tqdm(data_list, desc="KHopSubgraph")]
+                for data_list in data_list_list]
 
 
 class AddRandomWalkPE(BaseTransform):

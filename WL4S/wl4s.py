@@ -2,7 +2,6 @@ import argparse
 import inspect
 import itertools
 from pathlib import Path
-from pprint import pprint
 from typing import Union
 
 import pandas as pd
@@ -19,6 +18,8 @@ from torch_geometric.data import Batch
 from torch_geometric.nn.conv import WLConv
 
 from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, Density, Component, Coreness, CutRatio
+from data_transform import KHopSubgraph
+from utils import str2bool
 from visualize import plot_data_points_by_tsne
 
 ModelType = Union[
@@ -34,8 +35,9 @@ parser.add_argument('--dataset_name', type=str, default="PPIBP",
                     choices=["PPIBP", "HPOMetab", "EMUser", "HPONeuro", "Density", "Component", "Coreness", "CutRatio"])
 parser.add_argument('--stype', type=str, default="connected", choices=["connected", "separated"])
 parser.add_argument('--wl_layers', type=int, default=4)
-parser.add_argument('--wl_cumcat', type=bool, default=False)
-parser.add_argument('--hist_norm', type=bool, default=True)
+parser.add_argument('--wl_cumcat', type=str2bool, default=False)
+parser.add_argument('--hist_norm', type=str2bool, default=True)
+parser.add_argument('--k_to_sample', type=int, default=None)
 parser.add_argument('--model', type=str, default="LogisticRegression")
 parser.add_argument('--runs', type=int, default=3)
 parser.add_argument('--dataset_path', type=str, default="/mnt/nas2/GNN-DATA/SUBGRAPH")
@@ -81,7 +83,13 @@ def get_data_and_model(args):
     )
     # dts.print_summary()
     splits = [0] + dts.splits + [len(dts)]
-    train_dts, val_dts, test_dts = dts.get_train_val_test_with_individual_relabeling()
+    if args.k_to_sample is None:
+        train_dts, val_dts, test_dts = dts.get_train_val_test_with_individual_relabeling()
+    else:
+        khs = KHopSubgraph(dts.global_data.edge_index, k=args.k_to_sample,
+                           relabel_nodes=True, num_nodes=dts.global_data.num_nodes)
+        train_dts, val_dts, test_dts = dts.get_train_val_test()
+        train_dts, val_dts, test_dts = khs.map_list([train_dts, val_dts, test_dts])
     all_data = Batch.from_data_list(train_dts + val_dts + test_dts)
 
     wl = WL4S(stype=args.stype, num_layers=args.wl_layers, norm=args.hist_norm)
