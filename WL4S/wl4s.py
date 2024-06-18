@@ -33,7 +33,9 @@ parser.add_argument('--MODE', type=str, default="hp_search_for_models")
 parser.add_argument('--dataset_name', type=str, default="PPIBP",
                     choices=["PPIBP", "HPOMetab", "EMUser", "HPONeuro", "Density", "Component", "Coreness", "CutRatio"])
 parser.add_argument('--stype', type=str, default="connected", choices=["connected", "separated"])
-parser.add_argument('--wl_layers', type=int, default=5)
+parser.add_argument('--wl_layers', type=int, default=4)
+parser.add_argument('--wl_cumcat', type=bool, default=False)
+parser.add_argument('--hist_norm', type=bool, default=True)
 parser.add_argument('--model', type=str, default="LogisticRegression")
 parser.add_argument('--runs', type=int, default=3)
 parser.add_argument('--dataset_path', type=str, default="/mnt/nas2/GNN-DATA/SUBGRAPH")
@@ -82,7 +84,7 @@ def get_data_and_model(args):
     train_dts, val_dts, test_dts = dts.get_train_val_test_with_individual_relabeling()
     all_data = Batch.from_data_list(train_dts + val_dts + test_dts)
 
-    wl = WL4S(stype=args.stype, num_layers=args.wl_layers, norm=True)
+    wl = WL4S(stype=args.stype, num_layers=args.wl_layers, norm=args.hist_norm)
 
     if args.stype == "connected":
         dts.global_data.x = torch.ones((dts.global_data.x.size(0), 1)).long()
@@ -100,6 +102,13 @@ def experiment(args, hists, splits, all_data, **model_kwargs):
     test_f1s = torch.zeros(args.runs, dtype=torch.float)
     best_val_f1s = torch.zeros(args.runs, dtype=torch.float)
     best_wl = torch.zeros(args.runs, dtype=torch.float)
+
+    if args.wl_cumcat:
+        cumcat_list, cumcat_h = [], torch.tensor([])
+        for h in hists:
+            cumcat_h = torch.cat((cumcat_h, h), dim=-1)
+            cumcat_list.append(cumcat_h)
+        hists = cumcat_list
 
     for run in range(1, args.runs + 1):
         best_val_f1s[run - 1] = 0
@@ -160,7 +169,8 @@ def plot_tsne_all(args, data_func=get_data_and_model, path="../_figures", extens
                 plot_data_points_by_tsne(test_hist, test_y, key=f"{sub_key}, Split: Test", **kws)
 
 
-def hp_search_for_models(args, hparam_space, more_hparam_space, data_func=get_data_and_model, file_dir="../_logs_wl4s"):
+def hp_search_for_models(args, hparam_space, more_hparam_space,
+                         data_func=get_data_and_model, file_dir="../_logs_wl4s"):
     def space_to_kwl(space):
         return [dict(zip(space.keys(), cmb)) for cmb in itertools.product(*space.values())]
 
@@ -170,14 +180,14 @@ def hp_search_for_models(args, hparam_space, more_hparam_space, data_func=get_da
     kwargs_list = []
     for kwargs in space_to_kwl(hparam_space):
         more_space = {k: more_hparam_space[k] for k in more_hparam_space if k in init_args(kwargs["model"])}
-        more_kwl = space_to_kwl(more_space)
-        new_kwl = [{**kwargs, **mkw} for mkw in more_kwl]
-        kwargs_list += new_kwl
+        kwargs_list += [{**kwargs, **mkw} for mkw in space_to_kwl(more_space)]
 
-    stype_to_data_and_model = {}
+    stype_and_norm_to_data_and_model = {}
     for stype in hparam_space["stype"]:
-        args.stype = stype
-        stype_to_data_and_model[stype] = data_func(args)
+        for hist_norm in hparam_space["hist_norm"]:
+            args.stype, args.hist_norm = stype, hist_norm
+            print(f"Compute WL hists: {stype} & norm={hist_norm}")
+            stype_and_norm_to_data_and_model[(stype, hist_norm)] = data_func(args)
 
     file_path = Path(file_dir) / f"{args.dataset_name}.csv"
     results_dict_list = []
@@ -186,10 +196,9 @@ def hp_search_for_models(args, hparam_space, more_hparam_space, data_func=get_da
         for k in model_kwargs.copy():
             if k in args.__dict__:
                 setattr(args, k, model_kwargs.pop(k))
-        hists, splits, all_data = stype_to_data_and_model[args.stype]
+        hists, splits, all_data = stype_and_norm_to_data_and_model[(args.stype, args.hist_norm)]
         results = experiment(args, hists, splits, all_data, **model_kwargs)
         results_dict_list.append({**results, **args.__dict__, **model_kwargs})
-        pprint(results_dict_list)
 
         df = pd.DataFrame(results_dict_list)
         if file_path.is_file():
@@ -214,13 +223,13 @@ if __name__ == '__main__':
 
     HPARAM_SPACE = {
         "stype": ["connected", "separated"],
-        "model": ["MyMLPClassifier", "LogisticRegression", "LinearSVC"],
+        "wl_cumcat": [True, False],
+        "hist_norm": [False, True],
+        "model": ["LinearSVC"],
     }
-    Cx100 = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768]
     MORE_HPARAM_SPACE = {
-        "C": [c / 100 for c in Cx100],
-        "hidden_layer_sizes": [(20,), (40,), (80,), (160,)],
-        "learning_rate_init": [0.01, 0.001, 0.0001],
+        "C": [1e4, 1e3, 1e2, 1e1, 1e0, 1e-1, 1e-2, 1e-3],
+        "dual": [True, False],
     }
 
     __args__ = parser.parse_args()
