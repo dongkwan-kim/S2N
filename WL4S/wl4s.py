@@ -28,12 +28,12 @@ parser.add_argument('--MODE', type=str, default="hp_search_for_models")
 parser.add_argument('--dataset_name', type=str, default="PPIBP",
                     choices=["PPIBP", "HPOMetab", "EMUser", "HPONeuro", "Density", "Component", "Coreness", "CutRatio"])
 parser.add_argument('--stype', type=str, default="connected", choices=["connected", "separated"])
-parser.add_argument('--wl_layers', type=int, default=4)
+parser.add_argument('--wl_layers', type=int, default=5)
 parser.add_argument('--wl_cumcat', type=str2bool, default=False)
 parser.add_argument('--hist_norm', type=str2bool, default=True)
 parser.add_argument('--k_to_sample', type=int, default=None)
 parser.add_argument('--model', type=str, default="LogisticRegression")
-parser.add_argument('--runs', type=int, default=3)
+parser.add_argument('--runs', type=int, default=2)
 parser.add_argument('--dataset_path', type=str, default="/mnt/nas2/GNN-DATA/SUBGRAPH")
 
 
