@@ -6,12 +6,8 @@ from typing import Union
 
 import pandas as pd
 import torch
-from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
-from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score
 from sklearn.multioutput import MultiOutputClassifier
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.neural_network import MLPClassifier
 from sklearn.svm import LinearSVC
 from termcolor import cprint
 from torch_geometric.data import Batch
@@ -22,9 +18,7 @@ from data_transform import KHopSubgraph
 from utils import str2bool
 from visualize import plot_data_points_by_tsne
 
-ModelType = Union[
-    MultiOutputClassifier, RandomForestClassifier, LogisticRegression, LinearSVC, AdaBoostClassifier,
-    MLPClassifier, KNeighborsClassifier]
+ModelType = Union[MultiOutputClassifier, LinearSVC]
 
 DATASETS_REAL = ["PPIBP", "EMUser", "HPOMetab", "HPONeuro"]
 DATASETS_SYN = ["Component", "Density", "Coreness", "CutRatio"]
@@ -43,16 +37,6 @@ parser.add_argument('--runs', type=int, default=3)
 parser.add_argument('--dataset_path', type=str, default="/mnt/nas2/GNN-DATA/SUBGRAPH")
 
 
-class MyMLPClassifier(MLPClassifier):
-
-    def __init__(self, C, hidden_layer_sizes, learning_rate_init, **kwargs):
-        kwargs["alpha"] = 1.0 / C
-        kwargs["hidden_layer_sizes"] = hidden_layer_sizes
-        kwargs["learning_rate_init"] = learning_rate_init
-        kwargs["solver"] = "sgd"
-        super().__init__(**kwargs)
-
-
 class WL4S(torch.nn.Module):
     def __init__(self, stype, num_layers, norm):
         super(WL4S, self).__init__()
@@ -60,14 +44,17 @@ class WL4S(torch.nn.Module):
         self.norm = norm
         self.convs = torch.nn.ModuleList([WLConv() for _ in range(num_layers)])
 
-    def forward(self, x, edge_index, batch_or_sub_batch, x_to_xs=None):
+    def forward(self, x, edge_index, batch_or_sub_batch, x_to_xs=None, mask=None):
         hists = []
         for conv in self.convs:
             x = conv(x, edge_index)
             if self.stype == "connected":
                 h = conv.histogram(x[x_to_xs], batch_or_sub_batch, norm=self.norm)
             elif self.stype == "separated":
-                h = conv.histogram(x, batch_or_sub_batch, norm=self.norm)
+                _x, _b = x, batch_or_sub_batch
+                if mask is not None:
+                    _x, _b = x[mask], batch_or_sub_batch[mask]
+                h = conv.histogram(_x, _b, norm=self.norm)
             else:
                 raise ValueError
             hists.append(h)
@@ -101,7 +88,7 @@ def get_data_and_model(args):
     else:  # separated
         all_data.x = torch.ones((all_data.x.size(0), 1)).long()
         data = all_data
-        hists = wl(data.x, data.edge_index, batch_or_sub_batch=all_data.batch)
+        hists = wl(data.x, data.edge_index, batch_or_sub_batch=all_data.batch, mask=getattr(data, "mask", None))
     return hists, splits, all_data
 
 
@@ -233,8 +220,9 @@ if __name__ == '__main__':
         "hist_norm": [False, True],
         "model": ["LinearSVC"],
     }
+    Cx100 = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576]
     MORE_HPARAM_SPACE = {
-        "C": [1e4, 1e3, 1e2, 1e1, 1e0, 1e-1, 1e-2, 1e-3],
+        "C": [c / 100 for c in Cx100],
         "dual": [True, False],
     }
 

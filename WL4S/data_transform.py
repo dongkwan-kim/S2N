@@ -86,8 +86,11 @@ class KHopSubgraph(BaseTransform):
         subset, edge_index, inv, edge_mask = k_hop_subgraph(
             node_idx, self.k, self.global_edge_index,
             relabel_nodes=self.relabel_nodes, num_nodes=self.num_nodes)
+        mask = torch.zeros(subset.shape, dtype=torch.bool)
+        mask[inv] = True
         data.x = subset.view(-1, 1)
         data.edge_index = edge_index
+        data.mask = mask
         return data
 
     def map_list(self, data_list_list):
