@@ -16,5 +16,6 @@ if __name__ == '__main__':
     __args__ = parser.parse_args()
     for k_to_sample in [1, 2, 3]:
         __args__.k_to_sample = k_to_sample
-        hp_search_syn(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, file_dir="../_logs_wl4s_k")
-        hp_search_real(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, file_dir="../_logs_wl4s_k")
+        kws = dict(file_dir="../_logs_wl4s_k", log_postfix=f"_{k_to_sample}")
+        hp_search_syn(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)
+        hp_search_real(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)

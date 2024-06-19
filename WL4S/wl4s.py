@@ -165,7 +165,7 @@ def plot_tsne_all(args, data_func=get_data_and_model, path="../_figures", extens
 
 
 def hp_search_for_models(args, hparam_space, more_hparam_space,
-                         data_func=get_data_and_model, file_dir="../_logs_wl4s"):
+                         data_func=get_data_and_model, file_dir="../_logs_wl4s", log_postfix=""):
     def space_to_kwl(space):
         return [dict(zip(space.keys(), cmb)) for cmb in itertools.product(*space.values())]
 
@@ -184,7 +184,7 @@ def hp_search_for_models(args, hparam_space, more_hparam_space,
             print(f"Compute WL hists: {stype} & norm={hist_norm}")
             stype_and_norm_to_data_and_model[(stype, hist_norm)] = data_func(args)
 
-    file_path = Path(file_dir) / f"{args.dataset_name}.csv"
+    file_path = Path(file_dir) / f"{args.dataset_name}{log_postfix}.csv"
     for i, model_kwargs in enumerate(kwargs_list):
         print(model_kwargs)
         for k in model_kwargs.copy():
@@ -200,16 +200,18 @@ def hp_search_for_models(args, hparam_space, more_hparam_space,
         cprint(f"Save logs at {file_path}", "blue")
 
 
-def hp_search_real(args, hparam_space, more_hparam_space, data_func=get_data_and_model, file_dir="../_logs_wl4s"):
+def hp_search_real(args, hparam_space, more_hparam_space, data_func=get_data_and_model,
+                   file_dir="../_logs_wl4s", log_postfix=""):
     for dataset_name in DATASETS_REAL:
         args.dataset_name = dataset_name
-        hp_search_for_models(args, hparam_space, more_hparam_space, data_func, file_dir)
+        hp_search_for_models(args, hparam_space, more_hparam_space, data_func, file_dir, log_postfix)
 
 
-def hp_search_syn(args, hparam_space, more_hparam_space, data_func=get_data_and_model, file_dir="../_logs_wl4s"):
+def hp_search_syn(args, hparam_space, more_hparam_space, data_func=get_data_and_model,
+                  file_dir="../_logs_wl4s", log_postfix=""):
     for dataset_name in DATASETS_SYN:
         args.dataset_name = dataset_name
-        hp_search_for_models(args, hparam_space, more_hparam_space, data_func, file_dir)
+        hp_search_for_models(args, hparam_space, more_hparam_space, data_func, file_dir, log_postfix)
 
 
 if __name__ == '__main__':
