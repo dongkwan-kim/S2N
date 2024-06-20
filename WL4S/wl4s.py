@@ -17,6 +17,7 @@ from tqdm import tqdm
 from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, Density, Component, Coreness, CutRatio
 from data_transform import KHopSubgraph
 from utils import str2bool
+from utils_fscache import fscaches
 from visualize import plot_data_points_by_tsne
 
 ModelType = Union[MultiOutputClassifier, LinearSVC]
@@ -32,6 +33,8 @@ parser.add_argument('--stype', type=str, default="connected", choices=["connecte
 parser.add_argument('--wl_layers', type=int, default=5)
 parser.add_argument('--wl_cumcat', type=str2bool, default=False)
 parser.add_argument('--hist_norm', type=str2bool, default=True)
+parser.add_argument('--hist_indices', type=str, default="None")
+parser.add_argument('--cache_path', type=str, default=None)
 parser.add_argument('--k_to_sample', type=int, default=None)
 parser.add_argument('--model', type=str, default="LogisticRegression")
 parser.add_argument('--runs', type=int, default=2)
@@ -39,25 +42,38 @@ parser.add_argument('--dataset_path', type=str, default="/mnt/nas2/GNN-DATA/SUBG
 
 
 class WL4S(torch.nn.Module):
-    def __init__(self, stype, num_layers, norm):
+    def __init__(self, stype, num_layers, norm, hist_indices=None, cache_path=None):
         super(WL4S, self).__init__()
         self.stype = stype
         self.norm = norm
+        self.hist_indices = hist_indices
+        self.cache_path = cache_path
         self.convs = torch.nn.ModuleList([WLConv() for _ in range(num_layers)])
+
+    @staticmethod
+    @fscaches(path_attrname_in_kwargs="path", verbose=True)
+    def cache_conv(path, conv, x, edge_index, i):
+        return conv(x, edge_index)
 
     def forward(self, x, edge_index, batch_or_sub_batch, x_to_xs=None, mask=None):
         hists = []
-        for conv in tqdm(self.convs, desc="WL4S.forward"):
-            x = conv(x, edge_index)
-            if self.stype == "connected":
-                h = conv.histogram(x[x_to_xs], batch_or_sub_batch, norm=self.norm)
-            elif self.stype == "separated":
-                _x, _b = x, batch_or_sub_batch
-                if mask is not None:
-                    _x, _b = x[mask], batch_or_sub_batch[mask]
-                h = conv.histogram(_x, _b, norm=self.norm)
+        for i, conv in enumerate(tqdm(self.convs, desc="WL4S.forward")):
+            if self.cache_path is None:
+                x = conv(x, edge_index)
             else:
-                raise ValueError
+                x = self.cache_conv(path=self.cache_path, conv=conv, x=x, edge_index=edge_index, i=i)
+            h = None
+            if self.hist_indices is None or (i in self.hist_indices):
+                cprint(f"Compute histogram: {i} | hist_indices={self.hist_indices}", "yellow")
+                if self.stype == "connected":
+                    h = conv.histogram(x[x_to_xs], batch_or_sub_batch, norm=self.norm)
+                elif self.stype == "separated":
+                    _x, _b = x, batch_or_sub_batch
+                    if mask is not None:
+                        _x, _b = x[mask], batch_or_sub_batch[mask]
+                    h = conv.histogram(_x, _b, norm=self.norm)
+                else:
+                    raise ValueError
             hists.append(h)
         return hists
 
@@ -80,7 +96,8 @@ def get_data_and_model(args):
         train_dts, val_dts, test_dts = khs.map_list([train_dts, val_dts, test_dts])
     all_data = Batch.from_data_list(train_dts + val_dts + test_dts)
 
-    wl = WL4S(stype=args.stype, num_layers=args.wl_layers, norm=args.hist_norm)
+    wl = WL4S(stype=args.stype, num_layers=args.wl_layers, norm=args.hist_norm,
+              hist_indices=eval(args.hist_indices), cache_path=args.cache_path)
 
     if args.stype == "connected":
         dts.global_data.x = torch.ones((dts.global_data.x.size(0), 1)).long()
@@ -110,6 +127,8 @@ def experiment(args, hists, splits, all_data, **model_kwargs):
         best_val_f1s[run - 1] = 0
 
         for i_wl, hist in enumerate(hists):
+            if hist is None:
+                continue
             train_hist, val_hist, test_hist = hist[s[0]:s[1]], hist[s[1]:s[2]], hist[s[2]:s[3]]
             train_y, val_y, test_y = all_data.y[s[0]:s[1]], all_data.y[s[1]:s[2]], all_data.y[s[2]:s[3]]
 

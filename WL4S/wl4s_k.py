@@ -1,3 +1,5 @@
+import gc
+
 from wl4s import parser, hp_search_for_models
 
 if __name__ == '__main__':
@@ -14,9 +16,28 @@ if __name__ == '__main__':
     }
 
     __args__ = parser.parse_args()
-    for k_to_sample in [1, 2, 3, 4]:
-        __args__.k_to_sample = k_to_sample
-        kws = dict(file_dir="../_logs_wl4s_k", log_postfix=f"_{k_to_sample}")
-        for dataset_name in ["Component", "Density", "Coreness", "CutRatio", "PPIBP", "EMUser"]:
-            __args__.dataset_name = dataset_name
-            hp_search_for_models(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)
+    __args__.runs = 1
+
+    MODE = "real"  # syn, real
+
+    if MODE == "syn":
+        for k_to_sample in [1, 2, 3, 4]:
+            __args__.k_to_sample = k_to_sample
+            kws = dict(file_dir="../_logs_wl4s_k", log_postfix=f"_{k_to_sample}")
+            for dataset_name in ["Component", "Density", "Coreness", "CutRatio"]:
+                __args__.dataset_name = dataset_name
+                hp_search_for_models(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)
+    elif MODE == "real":
+        __args__.cache_path = "../_cache"  # real dataset is big
+        for k_to_sample in [1, 2, 3, 4]:
+            for hist_norm in [False, True]:
+                for hist_indices in ["[4]", "[3]", "[2]", "[1]", "[0]"]:
+                    for dataset_name in ["PPIBP", "EMUser"]:
+                        HPARAM_SPACE["hist_norm"] = [hist_norm]
+                        __args__.k_to_sample = k_to_sample
+                        __args__.hist_indices = hist_indices
+                        __args__.wl_layers = eval(hist_indices)[0] + 1
+                        __args__.dataset_name = dataset_name
+                        kws = dict(file_dir="../_logs_wl4s_k", log_postfix=f"_{k_to_sample}")
+                        hp_search_for_models(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)
+                        gc.collect()
