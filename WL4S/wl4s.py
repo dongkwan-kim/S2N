@@ -51,8 +51,8 @@ class WL4S(torch.nn.Module):
         self.convs = torch.nn.ModuleList([WLConv() for _ in range(num_layers)])
 
     @staticmethod
-    @fscaches(path_attrname_in_kwargs="path", verbose=True)
-    def cache_conv(path, conv, x, edge_index, i):
+    @fscaches(path_attrname_in_kwargs="path", keys_to_exclude=["x", "edge_index"], verbose=True)
+    def cache_conv(path, conv, x, edge_index, N, E, stype, norm, i):
         return conv(x, edge_index)
 
     def forward(self, x, edge_index, batch_or_sub_batch, x_to_xs=None, mask=None):
@@ -61,7 +61,8 @@ class WL4S(torch.nn.Module):
             if self.cache_path is None:
                 x = conv(x, edge_index)
             else:
-                x = self.cache_conv(path=self.cache_path, conv=conv, x=x, edge_index=edge_index, i=i)
+                x = self.cache_conv(path=self.cache_path, conv=conv, x=x, edge_index=edge_index,
+                                    N=x.size(0), E=edge_index.size(1), stype=self.stype, norm=self.norm, i=i)
             h = None
             if self.hist_indices is None or (i in self.hist_indices):
                 cprint(f"Compute histogram: {i} | hist_indices={self.hist_indices}", "yellow")
