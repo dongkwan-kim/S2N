@@ -17,7 +17,6 @@ from tqdm import tqdm
 from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, Density, Component, Coreness, CutRatio
 from data_transform import KHopSubgraph
 from utils import str2bool
-from utils_fscache import fscaches
 from visualize import plot_data_points_by_tsne
 
 ModelType = Union[MultiOutputClassifier, LinearSVC]
@@ -34,7 +33,6 @@ parser.add_argument('--wl_layers', type=int, default=5)
 parser.add_argument('--wl_cumcat', type=str2bool, default=False)
 parser.add_argument('--hist_norm', type=str2bool, default=True)
 parser.add_argument('--hist_indices', type=str, default="None")
-parser.add_argument('--cache_path', type=str, default=None)
 parser.add_argument('--k_to_sample', type=int, default=None)
 parser.add_argument('--model', type=str, default="LogisticRegression")
 parser.add_argument('--runs', type=int, default=2)
@@ -42,27 +40,17 @@ parser.add_argument('--dataset_path', type=str, default="/mnt/nas2/GNN-DATA/SUBG
 
 
 class WL4S(torch.nn.Module):
-    def __init__(self, stype, num_layers, norm, hist_indices=None, cache_path=None):
+    def __init__(self, stype, num_layers, norm, hist_indices=None):
         super(WL4S, self).__init__()
         self.stype = stype
         self.norm = norm
         self.hist_indices = hist_indices
-        self.cache_path = cache_path
         self.convs = torch.nn.ModuleList([WLConv() for _ in range(num_layers)])
-
-    @staticmethod
-    @fscaches(path_attrname_in_kwargs="path", keys_to_exclude=["x", "edge_index"], verbose=True)
-    def cache_conv(path, conv, x, edge_index, N, E, stype, norm, i):
-        return conv(x, edge_index)
 
     def forward(self, x, edge_index, batch_or_sub_batch, x_to_xs=None, mask=None):
         hists = []
         for i, conv in enumerate(tqdm(self.convs, desc="WL4S.forward")):
-            if self.cache_path is None:
-                x = conv(x, edge_index)
-            else:
-                x = self.cache_conv(path=self.cache_path, conv=conv, x=x, edge_index=edge_index,
-                                    N=x.size(0), E=edge_index.size(1), stype=self.stype, norm=self.norm, i=i)
+            x = conv(x, edge_index)
             h = None
             if self.hist_indices is None or (i in self.hist_indices):
                 cprint(f"Compute histogram: {i} | hist_indices={self.hist_indices}", "yellow")
@@ -97,8 +85,7 @@ def get_data_and_model(args):
         train_dts, val_dts, test_dts = khs.map_list([train_dts, val_dts, test_dts])
     all_data = Batch.from_data_list(train_dts + val_dts + test_dts)
 
-    wl = WL4S(stype=args.stype, num_layers=args.wl_layers, norm=args.hist_norm,
-              hist_indices=eval(args.hist_indices), cache_path=args.cache_path)
+    wl = WL4S(stype=args.stype, num_layers=args.wl_layers, norm=args.hist_norm, hist_indices=eval(args.hist_indices))
 
     if args.stype == "connected":
         dts.global_data.x = torch.ones((dts.global_data.x.size(0), 1)).long()
