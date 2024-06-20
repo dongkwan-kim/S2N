@@ -1,4 +1,4 @@
-from wl4s import parser, hp_search_syn, hp_search_real
+from wl4s import parser, hp_search_for_models
 
 if __name__ == '__main__':
     HPARAM_SPACE = {
@@ -14,8 +14,9 @@ if __name__ == '__main__':
     }
 
     __args__ = parser.parse_args()
-    for k_to_sample in [1, 2, 3]:
+    for k_to_sample in [1, 2, 3, 4]:
         __args__.k_to_sample = k_to_sample
         kws = dict(file_dir="../_logs_wl4s_k", log_postfix=f"_{k_to_sample}")
-        hp_search_syn(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)
-        hp_search_real(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)
+        for dataset_name in ["Component", "Density", "Coreness", "CutRatio", "PPIBP", "EMUser"]:
+            __args__.dataset_name = dataset_name
+            hp_search_for_models(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)

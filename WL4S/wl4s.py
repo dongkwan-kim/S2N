@@ -12,6 +12,7 @@ from sklearn.svm import LinearSVC
 from termcolor import cprint
 from torch_geometric.data import Batch
 from torch_geometric.nn.conv import WLConv
+from tqdm import tqdm
 
 from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, Density, Component, Coreness, CutRatio
 from data_transform import KHopSubgraph
@@ -46,7 +47,7 @@ class WL4S(torch.nn.Module):
 
     def forward(self, x, edge_index, batch_or_sub_batch, x_to_xs=None, mask=None):
         hists = []
-        for conv in self.convs:
+        for conv in tqdm(self.convs, desc="WL4S.forward"):
             x = conv(x, edge_index)
             if self.stype == "connected":
                 h = conv.histogram(x[x_to_xs], batch_or_sub_batch, norm=self.norm)
