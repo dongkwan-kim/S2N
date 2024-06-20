@@ -2,6 +2,14 @@
 
 This is a very small follow-up work of S2N.
 
+## Install
+
+```bash
+bash install.sh
+```
+
+## Run
+
 ```bash
 python wl4s.py --MODE hp_search_for_models --dataset_name PPIBP
 python wl4s.py --MODE hp_search_for_models --dataset_name EMUser
