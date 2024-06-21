@@ -1,4 +1,5 @@
 import argparse
+import gc
 import inspect
 import itertools
 from pathlib import Path
@@ -9,7 +10,7 @@ import torch
 from sklearn.metrics import f1_score
 from sklearn.metrics.pairwise import linear_kernel
 from sklearn.multioutput import MultiOutputClassifier
-from sklearn.svm import LinearSVC
+from sklearn.svm import LinearSVC, SVC
 from termcolor import cprint
 from torch_geometric.data import Batch
 from torch_geometric.nn.conv import WLConv
@@ -18,9 +19,10 @@ from tqdm import tqdm
 from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, Density, Component, Coreness, CutRatio
 from data_transform import KHopSubgraph
 from utils import str2bool
+from utils_fscache import fscaches
 from visualize import plot_data_points_by_tsne
 
-ModelType = Union[MultiOutputClassifier, LinearSVC]
+ModelType = Union[MultiOutputClassifier, LinearSVC, SVC]
 
 DATASETS_REAL = ["PPIBP", "EMUser", "HPOMetab", "HPONeuro"]
 DATASETS_SYN = ["Component", "Density", "Coreness", "CutRatio"]
@@ -30,6 +32,7 @@ parser.add_argument('--MODE', type=str, default="hp_search_for_models")
 parser.add_argument('--dataset_name', type=str, default="PPIBP",
                     choices=["PPIBP", "HPOMetab", "EMUser", "HPONeuro", "Density", "Component", "Coreness", "CutRatio"])
 parser.add_argument('--stype', type=str, default="connected", choices=["connected", "separated"])
+parser.add_argument('--dtype', type=str, default="kernel", choices=["histogram", "kernel"])
 parser.add_argument('--wl_layers', type=int, default=5)
 parser.add_argument('--wl_cumcat', type=str2bool, default=False)
 parser.add_argument('--hist_norm', type=str2bool, default=True)
@@ -41,15 +44,18 @@ parser.add_argument('--dataset_path', type=str, default="/mnt/nas2/GNN-DATA/SUBG
 
 
 class WL4S(torch.nn.Module):
-    def __init__(self, stype, num_layers, norm, hist_indices=None):
+    def __init__(self, stype, num_layers, norm, hist_indices=None, dtype="histogram", splits=None, precompute=False):
         super(WL4S, self).__init__()
         self.stype = stype
         self.norm = norm
         self.hist_indices = hist_indices
+        self.dtype = dtype
+        self.splits = splits
+        self.precompute = precompute
         self.convs = torch.nn.ModuleList([WLConv() for _ in range(num_layers)])
 
     def forward(self, x, edge_index, batch_or_sub_batch, x_to_xs=None, mask=None):
-        hists = []
+        hists_or_kernels = []
         for i, conv in enumerate(tqdm(self.convs, desc="WL4S.forward")):
             x = conv(x, edge_index)
             h = None
@@ -64,11 +70,40 @@ class WL4S(torch.nn.Module):
                     h = conv.histogram(_x, _b, norm=self.norm)
                 else:
                     raise ValueError
-            hists.append(h)
-        return hists
+                if self.dtype == "kernel":
+                    h = hist_linear_kernels(hist=h, splits=self.splits, key=f"{self.stype}_{self.norm}_{i}")
+                    if self.precompute:
+                        del h
+                        gc.collect()
+                        h = None
+            hists_or_kernels.append(h)
+        return hists_or_kernels
 
 
-def get_data_and_model(args):
+@fscaches(path="../_caches", keys_to_exclude=["hist"], verbose=True)
+def hist_linear_kernels(hist, splits, key):
+    s = splits
+    train_hist, val_hist, test_hist = hist[s[0]:s[1]], hist[s[1]:s[2]], hist[s[2]:s[3]]
+    K_train = linear_kernel(train_hist, train_hist)
+    K_val = linear_kernel(val_hist, train_hist)
+    K_test = linear_kernel(test_hist, train_hist)
+    return K_train, K_val, K_test
+
+
+def get_all_kernels(args, splits):
+    try:
+        kernels = [hist_linear_kernels(hist=None, splits=splits, key=f"{args.stype}_{args.hist_norm}_{i}")
+                   for i in range(args.wl_layers)]
+    except:
+        kernels = None
+    return kernels
+
+
+def precompute_all_kernels(args):
+    get_data_and_model(args, precompute=True)
+
+
+def get_data_and_model(args, precompute=False):
     dts: Union[HPONeuro, PPIBP, HPOMetab, EMUser, Density, Component, Coreness, CutRatio] = eval(args.dataset_name)(
         root=args.dataset_path,
         name=args.dataset_name,
@@ -85,40 +120,50 @@ def get_data_and_model(args):
         train_dts, val_dts, test_dts = dts.get_train_val_test()
         train_dts, val_dts, test_dts = khs.map_list([train_dts, val_dts, test_dts])
     all_data = Batch.from_data_list(train_dts + val_dts + test_dts)
+    if args.dtype == "kernel":
+        k_list = get_all_kernels(args, splits)
+        if k_list is not None:
+            return k_list, splits, all_data.y
 
-    wl = WL4S(stype=args.stype, num_layers=args.wl_layers, norm=args.hist_norm, hist_indices=eval(args.hist_indices))
+    wl = WL4S(stype=args.stype, num_layers=args.wl_layers, norm=args.hist_norm, hist_indices=eval(args.hist_indices),
+              dtype=args.dtype, splits=splits, precompute=precompute)
 
     if args.stype == "connected":
         dts.global_data.x = torch.ones((dts.global_data.x.size(0), 1)).long()
         data = dts.global_data
-        hists = wl(data.x, data.edge_index, batch_or_sub_batch=all_data.batch, x_to_xs=all_data.x.flatten())
+        h_or_k_list = wl(data.x, data.edge_index, batch_or_sub_batch=all_data.batch, x_to_xs=all_data.x.flatten())
     else:  # separated
         all_data.x = torch.ones((all_data.x.size(0), 1)).long()
         data = all_data
-        hists = wl(data.x, data.edge_index, batch_or_sub_batch=all_data.batch, mask=getattr(data, "mask", None))
-    return hists, splits, all_data.y
+        h_or_k_list = wl(data.x, data.edge_index, batch_or_sub_batch=all_data.batch, mask=getattr(data, "mask", None))
+    return h_or_k_list, splits, all_data.y
 
 
-def experiment(args, hists, splits, all_y, **model_kwargs):
+def experiment(args, h_or_k_list, splits, all_y, **model_kwargs):
     s = splits
     test_f1s = torch.zeros(args.runs, dtype=torch.float)
     best_val_f1s = torch.zeros(args.runs, dtype=torch.float)
     best_wl = torch.zeros(args.runs, dtype=torch.float)
 
     if args.wl_cumcat:
+        assert args.dtype == "histogram"
         cumcat_list, cumcat_h = [], torch.tensor([])
-        for h in hists:
+        for h in h_or_k_list:
             cumcat_h = torch.cat((cumcat_h, h), dim=-1)
             cumcat_list.append(cumcat_h)
-        hists = cumcat_list
+        h_or_k_list = cumcat_list
 
     for run in range(1, args.runs + 1):
         best_val_f1s[run - 1] = 0
 
-        for i_wl, hist in enumerate(hists):
-            if hist is None:
+        for i_wl, h_or_k in enumerate(h_or_k_list):
+            if h_or_k is None:
                 continue
-            train_hist, val_hist, test_hist = hist[s[0]:s[1]], hist[s[1]:s[2]], hist[s[2]:s[3]]
+            if args.dtype == "histogram":
+                train_x, val_x, test_x = h_or_k[s[0]:s[1]], h_or_k[s[1]:s[2]], h_or_k[s[2]:s[3]]
+            else:
+                assert model_kwargs["kernel"] == "precomputed"
+                train_x, val_x, test_x = h_or_k
             train_y, val_y, test_y = all_y[s[0]:s[1]], all_y[s[1]:s[2]], all_y[s[2]:s[3]]
 
             model: ModelType = eval(args.model)(**model_kwargs)
@@ -126,12 +171,12 @@ def experiment(args, hists, splits, all_y, **model_kwargs):
             if args.dataset_name == "HPONeuro":
                 model = MultiOutputClassifier(model)
 
-            model.fit(train_hist, train_y)
+            model.fit(train_x, train_y)
 
-            val_f1 = f1_score(val_y, model.predict(val_hist), average="micro")
-            test_f1 = f1_score(test_y, model.predict(test_hist), average="micro")
+            val_f1 = f1_score(val_y, model.predict(val_x), average="micro")
+            test_f1 = f1_score(test_y, model.predict(test_x), average="micro")
 
-            print(f"\t - wl: {i_wl + 1}, shape: {list(train_hist.shape)}, model: {args.model}, "
+            print(f"\t - wl: {i_wl + 1}, shape: {list(train_x.shape)}, model: {args.model}, "
                   f"val_f1: {val_f1:.5f}, test_f1: {test_f1:.5f}")
             if val_f1 > best_val_f1s[run - 1]:
                 best_val_f1s[run - 1] = val_f1
@@ -150,11 +195,12 @@ def experiment(args, hists, splits, all_y, **model_kwargs):
 
 
 def run_one(args, data_func=get_data_and_model):
-    hists, splits, all_y = data_func(args)
-    experiment(args, hists, splits, all_y)
+    h_or_k_list, splits, all_y = data_func(args)
+    experiment(args, h_or_k_list, splits, all_y)
 
 
 def plot_tsne_all(args, data_func=get_data_and_model, path="../_figures", extension="png"):
+    assert args.dtype == "histogram"
     kws = dict(path=path, extension=extension, alpha=0.5, s=5)
     for dataset_name in DATASETS_SYN + DATASETS_REAL:
         for stype in ["connected", "separated"]:
@@ -199,8 +245,8 @@ def hp_search_for_models(args, hparam_space, more_hparam_space,
         for k in model_kwargs.copy():
             if k in args.__dict__:
                 setattr(args, k, model_kwargs.pop(k))
-        hists, splits, all_y = stype_and_norm_to_data_and_model[(args.stype, args.hist_norm)]
-        results = experiment(args, hists, splits, all_y, **model_kwargs)
+        h_or_k_list, splits, all_y = stype_and_norm_to_data_and_model[(args.stype, args.hist_norm)]
+        results = experiment(args, h_or_k_list, splits, all_y, **model_kwargs)
 
         df = pd.DataFrame([{**results, **args.__dict__, **model_kwargs}])
         if file_path.is_file():
@@ -225,11 +271,19 @@ def hp_search_syn(args, hparam_space, more_hparam_space, data_func=get_data_and_
 
 if __name__ == '__main__':
 
+    # HPARAM_SPACE = {
+    #     "stype": ["connected", "separated"],
+    #     "wl_cumcat": [True, False],
+    #     "hist_norm": [False, True],
+    #     "model": ["LinearSVC"],
+    # }
     HPARAM_SPACE = {
         "stype": ["connected", "separated"],
-        "wl_cumcat": [True, False],
-        "hist_norm": [False, True],
-        "model": ["LinearSVC"],
+        "wl_cumcat": [False],
+        "hist_norm": [False],
+        "model": ["SVC"],
+        "kernel": ["precomputed"],
+        "dtype": ["kernel"],
     }
     Cx100 = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576]
     MORE_HPARAM_SPACE = {
