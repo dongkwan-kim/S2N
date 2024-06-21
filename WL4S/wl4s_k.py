@@ -21,7 +21,7 @@ if __name__ == '__main__':
     __args__.dtype = "kernel"
     __args__.wl_cumcat = False
 
-    MODE = "real"  # syn, real
+    MODE = "real_precomputation"  # syn, real
 
     if MODE == "syn":
         for k_to_sample in [1, 2, 3, 4]:
@@ -31,7 +31,7 @@ if __name__ == '__main__':
                 __args__.dataset_name = dataset_name
                 hp_search_for_models(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)
 
-    elif MODE == "real":
+    elif MODE == "real_precomputation":
         for k_to_sample in [None, 1, 2, 3, 4]:
             for dataset_name in ["PPIBP", "EMUser"]:
                 __args__.k_to_sample = k_to_sample
@@ -40,6 +40,12 @@ if __name__ == '__main__':
                 for hist_norm in [False, True]:
                     __args__.hist_norm = hist_norm
                     precompute_all_kernels(__args__)
+                    gc.collect()
 
+    elif MODE == "real":
+        for k_to_sample in [None, 1, 2, 3, 4]:
+            for dataset_name in ["PPIBP", "EMUser"]:
+                __args__.k_to_sample = k_to_sample
+                __args__.dataset_name = dataset_name
+                kws = dict(file_dir="../_logs_wl4s_k", log_postfix=f"_{k_to_sample}")
                 hp_search_for_models(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)
-                gc.collect()
