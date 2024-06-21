@@ -7,6 +7,7 @@ from typing import Union
 import pandas as pd
 import torch
 from sklearn.metrics import f1_score
+from sklearn.metrics.pairwise import linear_kernel
 from sklearn.multioutput import MultiOutputClassifier
 from sklearn.svm import LinearSVC
 from termcolor import cprint
@@ -95,10 +96,10 @@ def get_data_and_model(args):
         all_data.x = torch.ones((all_data.x.size(0), 1)).long()
         data = all_data
         hists = wl(data.x, data.edge_index, batch_or_sub_batch=all_data.batch, mask=getattr(data, "mask", None))
-    return hists, splits, all_data
+    return hists, splits, all_data.y
 
 
-def experiment(args, hists, splits, all_data, **model_kwargs):
+def experiment(args, hists, splits, all_y, **model_kwargs):
     s = splits
     test_f1s = torch.zeros(args.runs, dtype=torch.float)
     best_val_f1s = torch.zeros(args.runs, dtype=torch.float)
@@ -118,7 +119,7 @@ def experiment(args, hists, splits, all_data, **model_kwargs):
             if hist is None:
                 continue
             train_hist, val_hist, test_hist = hist[s[0]:s[1]], hist[s[1]:s[2]], hist[s[2]:s[3]]
-            train_y, val_y, test_y = all_data.y[s[0]:s[1]], all_data.y[s[1]:s[2]], all_data.y[s[2]:s[3]]
+            train_y, val_y, test_y = all_y[s[0]:s[1]], all_y[s[1]:s[2]], all_y[s[2]:s[3]]
 
             model: ModelType = eval(args.model)(**model_kwargs)
 
@@ -149,8 +150,8 @@ def experiment(args, hists, splits, all_data, **model_kwargs):
 
 
 def run_one(args, data_func=get_data_and_model):
-    hists, splits, all_data = data_func(args)
-    experiment(args, hists, splits, all_data)
+    hists, splits, all_y = data_func(args)
+    experiment(args, hists, splits, all_y)
 
 
 def plot_tsne_all(args, data_func=get_data_and_model, path="../_figures", extension="png"):
@@ -158,13 +159,13 @@ def plot_tsne_all(args, data_func=get_data_and_model, path="../_figures", extens
     for dataset_name in DATASETS_SYN + DATASETS_REAL:
         for stype in ["connected", "separated"]:
             args.dataset_name, args.stype = dataset_name, stype
-            hists, splits, all_data = data_func(args)
+            hists, splits, all_y = data_func(args)
             s = splits
             for i_wl, hist in enumerate(hists):
                 sub_key = f"{dataset_name}-{stype}, WL: {i_wl + 1}"
                 print(sub_key)
                 train_hist, val_hist, test_hist = hist[s[0]:s[1]], hist[s[1]:s[2]], hist[s[2]:s[3]]
-                train_y, val_y, test_y = all_data.y[s[0]:s[1]], all_data.y[s[1]:s[2]], all_data.y[s[2]:s[3]]
+                train_y, val_y, test_y = all_y[s[0]:s[1]], all_y[s[1]:s[2]], all_y[s[2]:s[3]]
                 all_hist, all_y = torch.cat([train_hist, val_hist, test_hist]), torch.cat([train_y, val_y, test_y])
                 plot_data_points_by_tsne(all_hist, all_y, key=f"{sub_key}, Split: All", **kws)
                 plot_data_points_by_tsne(train_hist, train_y, key=f"{sub_key}, Split: Train", **kws)
@@ -198,8 +199,8 @@ def hp_search_for_models(args, hparam_space, more_hparam_space,
         for k in model_kwargs.copy():
             if k in args.__dict__:
                 setattr(args, k, model_kwargs.pop(k))
-        hists, splits, all_data = stype_and_norm_to_data_and_model[(args.stype, args.hist_norm)]
-        results = experiment(args, hists, splits, all_data, **model_kwargs)
+        hists, splits, all_y = stype_and_norm_to_data_and_model[(args.stype, args.hist_norm)]
+        results = experiment(args, hists, splits, all_y, **model_kwargs)
 
         df = pd.DataFrame([{**results, **args.__dict__, **model_kwargs}])
         if file_path.is_file():
