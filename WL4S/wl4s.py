@@ -32,7 +32,7 @@ parser.add_argument('--MODE', type=str, default="hp_search_for_models")
 parser.add_argument('--dataset_name', type=str, default="PPIBP",
                     choices=["PPIBP", "HPOMetab", "EMUser", "HPONeuro", "Density", "Component", "Coreness", "CutRatio"])
 parser.add_argument('--stype', type=str, default="connected", choices=["connected", "separated"])
-parser.add_argument('--dtype', type=str, default="kernel", choices=["histogram", "kernel"])
+parser.add_argument('--dtype', type=str, default="histogram", choices=["histogram", "kernel"])
 parser.add_argument('--wl_layers', type=int, default=5)
 parser.add_argument('--wl_cumcat', type=str2bool, default=False)
 parser.add_argument('--hist_norm', type=str2bool, default=True)
@@ -44,7 +44,8 @@ parser.add_argument('--dataset_path', type=str, default="/mnt/nas2/GNN-DATA/SUBG
 
 
 class WL4S(torch.nn.Module):
-    def __init__(self, stype, num_layers, norm, hist_indices=None, dtype="histogram", splits=None, precompute=False):
+    def __init__(self, stype, num_layers, norm, hist_indices=None,
+                 dtype="histogram", splits=None, k_to_sample=None, precompute=False):
         super(WL4S, self).__init__()
         self.stype = stype
         self.norm = norm
@@ -52,6 +53,7 @@ class WL4S(torch.nn.Module):
         self.dtype = dtype
         self.splits = splits
         self.precompute = precompute
+        self.k_to_sample = k_to_sample
         self.convs = torch.nn.ModuleList([WLConv() for _ in range(num_layers)])
 
     def forward(self, x, edge_index, batch_or_sub_batch, x_to_xs=None, mask=None):
@@ -71,13 +73,18 @@ class WL4S(torch.nn.Module):
                 else:
                     raise ValueError
                 if self.dtype == "kernel":
-                    h = hist_linear_kernels(hist=h, splits=self.splits, key=f"{self.stype}_{self.norm}_{i}")
+                    h = hist_linear_kernels(hist=h, splits=self.splits,
+                                            key=kk(self.k_to_sample, self.stype, self.norm, i))
                     if self.precompute:
                         del h
                         gc.collect()
                         h = None
             hists_or_kernels.append(h)
         return hists_or_kernels
+
+
+def kk(k_to_sample, stype, norm, i):
+    return "_".join([str(s) for s in [k_to_sample, stype, norm, i]])
 
 
 @fscaches(path="../_caches", keys_to_exclude=["hist"], verbose=True)
@@ -92,14 +99,17 @@ def hist_linear_kernels(hist, splits, key):
 
 def get_all_kernels(args, splits):
     try:
-        kernels = [hist_linear_kernels(hist=None, splits=splits, key=f"{args.stype}_{args.hist_norm}_{i}")
-                   for i in range(args.wl_layers)]
+        kernels = [
+            hist_linear_kernels(hist=None, splits=splits, key=kk(args.k_to_sample, args.stype, args.hist_norm, i))
+            for i in range(args.wl_layers)
+        ]
     except:
         kernels = None
     return kernels
 
 
 def precompute_all_kernels(args):
+    cprint("Precomputing kernels...", "yellow")
     get_data_and_model(args, precompute=True)
 
 
@@ -112,6 +122,15 @@ def get_data_and_model(args, precompute=False):
     )
     # dts.print_summary()
     splits = [0] + dts.splits + [len(dts)]
+
+    if args.dtype == "kernel":
+        k_list = get_all_kernels(args, splits)
+        if k_list is not None:
+            cprint(f"Use precomputed kernels...", "yellow")
+            train_dts, val_dts, test_dts = dts.get_train_val_test()
+            all_data = Batch.from_data_list(train_dts + val_dts + test_dts)
+            return k_list, splits, all_data.y
+
     if args.k_to_sample is None:
         train_dts, val_dts, test_dts = dts.get_train_val_test_with_individual_relabeling()
     else:
@@ -120,13 +139,9 @@ def get_data_and_model(args, precompute=False):
         train_dts, val_dts, test_dts = dts.get_train_val_test()
         train_dts, val_dts, test_dts = khs.map_list([train_dts, val_dts, test_dts])
     all_data = Batch.from_data_list(train_dts + val_dts + test_dts)
-    if args.dtype == "kernel":
-        k_list = get_all_kernels(args, splits)
-        if k_list is not None:
-            return k_list, splits, all_data.y
 
     wl = WL4S(stype=args.stype, num_layers=args.wl_layers, norm=args.hist_norm, hist_indices=eval(args.hist_indices),
-              dtype=args.dtype, splits=splits, precompute=precompute)
+              dtype=args.dtype, splits=splits, k_to_sample=args.k_to_sample, precompute=precompute)
 
     if args.stype == "connected":
         dts.global_data.x = torch.ones((dts.global_data.x.size(0), 1)).long()
@@ -271,19 +286,11 @@ def hp_search_syn(args, hparam_space, more_hparam_space, data_func=get_data_and_
 
 if __name__ == '__main__':
 
-    # HPARAM_SPACE = {
-    #     "stype": ["connected", "separated"],
-    #     "wl_cumcat": [True, False],
-    #     "hist_norm": [False, True],
-    #     "model": ["LinearSVC"],
-    # }
     HPARAM_SPACE = {
         "stype": ["connected", "separated"],
-        "wl_cumcat": [False],
-        "hist_norm": [False],
-        "model": ["SVC"],
-        "kernel": ["precomputed"],
-        "dtype": ["kernel"],
+        "wl_cumcat": [True, False],
+        "hist_norm": [False, True],
+        "model": ["LinearSVC"],
     }
     Cx100 = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576]
     MORE_HPARAM_SPACE = {
