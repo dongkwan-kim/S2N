@@ -32,7 +32,7 @@ if __name__ == '__main__':
                 hp_search_for_models(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)
 
     elif MODE == "real":
-        for k_to_sample in [0, 1, 2, 3, 4]:
+        for k_to_sample in [None, 1, 2, 3, 4]:
             for dataset_name in ["PPIBP", "EMUser"]:
                 __args__.k_to_sample = k_to_sample
                 __args__.dataset_name = dataset_name
