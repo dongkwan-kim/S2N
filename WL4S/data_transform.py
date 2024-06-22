@@ -74,6 +74,20 @@ def add_node_attr(data: Data, value: Any,
     return data
 
 
+class ShuffleAndSample(BaseTransform):
+
+    def __init__(self, splits):
+        self.splits = splits
+        random.seed(1)
+
+    def map_list(self, data_list_list):
+        for data_list in data_list_list:
+            random.shuffle(data_list)
+        num_samples = [s2 - s1 for s1, s2 in zip(self.splits, self.splits[1:])]
+        data_list_list = [data_list[:s] for data_list, s in zip(data_list_list, num_samples)]
+        return data_list_list
+
+
 class KHopSubgraph(BaseTransform):
 
     def __init__(self, global_edge_index, k, relabel_nodes, num_nodes):
@@ -94,14 +108,8 @@ class KHopSubgraph(BaseTransform):
         data.mask = mask
         return data
 
-    def map_list(self, data_list_list, ratio_samples=1.0):
-        if ratio_samples < 1.0:
-            random.seed(1)
-            for data_list in data_list_list:
-                random.shuffle(data_list)
-            data_list_list = [data_list[:int(len(data_list) * ratio_samples)] for data_list in data_list_list]
-        return [[self(d) for d in tqdm(data_list, desc="KHopSubgraph")]
-                for data_list in data_list_list]
+    def map_list(self, data_list_list):
+        return [[self(d) for d in tqdm(data_list, desc="KHopSubgraph")] for data_list in data_list_list]
 
 
 class AddRandomWalkPE(BaseTransform):

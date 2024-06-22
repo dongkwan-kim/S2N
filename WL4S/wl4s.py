@@ -17,7 +17,7 @@ from torch_geometric.nn.conv import WLConv
 from tqdm import tqdm
 
 from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, Density, Component, Coreness, CutRatio
-from data_transform import KHopSubgraph
+from data_transform import KHopSubgraph, ShuffleAndSample
 from utils import str2bool
 from utils_fscache import fscaches
 from visualize import plot_data_points_by_tsne
@@ -120,7 +120,7 @@ def get_data_and_model(args, precompute=False):
     )
     # dts.print_summary()
     splits = [0] + dts.splits + [len(dts)]
-    if args.k_to_sample is not None and args.ratio_samples < 1.0:
+    if args.ratio_samples < 1.0:
         splits = [int(s * args.ratio_samples) for s in splits]
 
     if args.dtype == "kernel":
@@ -133,13 +133,19 @@ def get_data_and_model(args, precompute=False):
 
     if args.k_to_sample is None:
         train_dts, val_dts, test_dts = dts.get_train_val_test_with_individual_relabeling()
+        if args.ratio_samples < 1.0:
+            train_dts, val_dts, test_dts = ShuffleAndSample(splits).map_list([train_dts, val_dts, test_dts])
     else:
+        train_dts, val_dts, test_dts = dts.get_train_val_test()
+        if args.ratio_samples < 1.0:
+            train_dts, val_dts, test_dts = ShuffleAndSample(splits).map_list([train_dts, val_dts, test_dts])
         khs = KHopSubgraph(dts.global_data.edge_index, k=args.k_to_sample,
                            relabel_nodes=True, num_nodes=dts.global_data.num_nodes)
-        train_dts, val_dts, test_dts = dts.get_train_val_test()
-        train_dts, val_dts, test_dts = khs.map_list([train_dts, val_dts, test_dts], ratio_samples=args.ratio_samples)
+        train_dts, val_dts, test_dts = khs.map_list([train_dts, val_dts, test_dts])
+
     assert (len(train_dts) == splits[1] and len(train_dts + val_dts) == splits[2] and
-            len(train_dts + val_dts + test_dts) == splits[3])
+            len(train_dts + val_dts + test_dts) == splits[3]), \
+        f"{splits} != [{len(train_dts), len(val_dts), len(test_dts)}]"
     all_data = Batch.from_data_list(train_dts + val_dts + test_dts)
 
     wl = WL4S(stype=args.stype, num_layers=args.wl_layers, norm=args.hist_norm,
