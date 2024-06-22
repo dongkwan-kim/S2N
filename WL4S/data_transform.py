@@ -1,3 +1,4 @@
+import random
 from typing import Any, Optional
 
 import numpy as np
@@ -93,7 +94,12 @@ class KHopSubgraph(BaseTransform):
         data.mask = mask
         return data
 
-    def map_list(self, data_list_list):
+    def map_list(self, data_list_list, ratio_samples=1.0):
+        if ratio_samples < 1.0:
+            random.seed(1)
+            for data_list in data_list_list:
+                random.shuffle(data_list)
+            data_list_list = [data_list[:int(len(data_list) * ratio_samples)] for data_list in data_list_list]
         return [[self(d) for d in tqdm(data_list, desc="KHopSubgraph")]
                 for data_list in data_list_list]
 

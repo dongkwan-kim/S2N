@@ -37,6 +37,7 @@ parser.add_argument('--wl_layers', type=int, default=5)
 parser.add_argument('--wl_cumcat', type=str2bool, default=False)
 parser.add_argument('--hist_norm', type=str2bool, default=True)
 parser.add_argument('--k_to_sample', type=int, default=None)
+parser.add_argument('--ratio_samples', type=float, default=1.0, help="Only when k_to_sample != 0")
 parser.add_argument('--model', type=str, default="LinearSVC")
 parser.add_argument('--runs', type=int, default=2)
 parser.add_argument('--dataset_path', type=str, default="/mnt/nas2/GNN-DATA/SUBGRAPH")
@@ -119,6 +120,8 @@ def get_data_and_model(args, precompute=False):
     )
     # dts.print_summary()
     splits = [0] + dts.splits + [len(dts)]
+    if args.k_to_sample is not None and args.ratio_samples < 1.0:
+        splits = [int(s * args.ratio_samples) for s in splits]
 
     if args.dtype == "kernel":
         k_list = get_all_kernels(args, splits)
@@ -134,7 +137,9 @@ def get_data_and_model(args, precompute=False):
         khs = KHopSubgraph(dts.global_data.edge_index, k=args.k_to_sample,
                            relabel_nodes=True, num_nodes=dts.global_data.num_nodes)
         train_dts, val_dts, test_dts = dts.get_train_val_test()
-        train_dts, val_dts, test_dts = khs.map_list([train_dts, val_dts, test_dts])
+        train_dts, val_dts, test_dts = khs.map_list([train_dts, val_dts, test_dts], ratio_samples=args.ratio_samples)
+    assert (len(train_dts) == splits[1] and len(train_dts + val_dts) == splits[2] and
+            len(train_dts + val_dts + test_dts) == splits[3])
     all_data = Batch.from_data_list(train_dts + val_dts + test_dts)
 
     wl = WL4S(stype=args.stype, num_layers=args.wl_layers, norm=args.hist_norm,
