@@ -128,6 +128,8 @@ def get_data_and_model(args, precompute=False):
         if k_list is not None:
             cprint(f"Use precomputed kernels...", "yellow")
             train_dts, val_dts, test_dts = dts.get_train_val_test()
+            if args.ratio_samples < 1.0:
+                train_dts, val_dts, test_dts = ShuffleAndSample(splits).map_list([train_dts, val_dts, test_dts])
             all_data = Batch.from_data_list(train_dts + val_dts + test_dts)
             return k_list, splits, all_data.y
 
