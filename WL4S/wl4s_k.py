@@ -12,7 +12,7 @@ if __name__ == '__main__':
     MORE_HPARAM_SPACE = {
         "C": [c / 100 for c in Cx100],
     }
-    RATIO_SAMPLES = 0.25
+    DATA_TO_RATIO_SAMPLES = {"HPOMetab": 1800 / 2400, "HPONeuro": 1800 / 4000}
 
     __args__ = parser.parse_args()
     __args__.stype = "separated"
@@ -45,11 +45,11 @@ if __name__ == '__main__':
                         gc.collect()
 
         elif MODE == "real_large_precomputation":
-            __args__.ratio_samples = RATIO_SAMPLES
             for k_to_sample in [2, 1, None]:
                 for dataset_name in ["HPONeuro", "HPOMetab"]:
                     __args__.k_to_sample = k_to_sample
                     __args__.dataset_name = dataset_name
+                    __args__.ratio_samples = DATA_TO_RATIO_SAMPLES[dataset_name]
                     for hist_norm in [False, True]:
                         __args__.hist_norm = hist_norm
                         precompute_all_kernels(__args__)
@@ -64,11 +64,11 @@ if __name__ == '__main__':
                     hp_search_for_models(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)
 
         elif MODE == "real_large_k":
-            __args__.ratio_samples = RATIO_SAMPLES
             for k_to_sample in [None, 1, 2]:
                 for dataset_name in ["HPONeuro", "HPOMetab"]:
                     __args__.k_to_sample = k_to_sample
                     __args__.dataset_name = dataset_name
+                    __args__.ratio_samples = DATA_TO_RATIO_SAMPLES[dataset_name]
                     kws = dict(file_dir="../_logs_wl4s_k", log_postfix=f"_{k_to_sample or 0}")
                     hp_search_for_models(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)
 
@@ -81,10 +81,10 @@ if __name__ == '__main__':
                 hp_search_for_models(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)
 
         elif MODE == "real_large_k_inf":
-            __args__.ratio_samples = RATIO_SAMPLES
             __args__.stype = "connected"
             HPARAM_SPACE["stype"] = ["connected"]
             for dataset_name in ["HPONeuro", "HPOMetab"]:
                 __args__.dataset_name = dataset_name
+                __args__.ratio_samples = DATA_TO_RATIO_SAMPLES[dataset_name]
                 kws = dict(file_dir="../_logs_wl4s_k", log_postfix=f"_inf")
                 hp_search_for_models(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)
