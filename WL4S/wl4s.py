@@ -171,11 +171,16 @@ def experiment(args, h_or_k_list, splits, all_y, **model_kwargs):
     best_wl = torch.zeros(args.runs, dtype=torch.float)
 
     if args.wl_cumcat:
-        assert args.dtype == "histogram"
         cumcat_list, cumcat_h = [], torch.tensor([])
-        for h in h_or_k_list:
-            cumcat_h = torch.cat((cumcat_h, h), dim=-1)
-            cumcat_list.append(cumcat_h)
+        sum_k_list = [None, None, None]
+        if args.dtype == "histogram":
+            for h in h_or_k_list:
+                cumcat_h = torch.cat((cumcat_h, h), dim=-1)
+                cumcat_list.append(cumcat_h)
+        else:  # kernel
+            for i, k_list in enumerate(h_or_k_list):
+                sum_k_list = k_list if sum_k_list[0] is None else [k + sum_k for k, sum_k in zip(k_list, sum_k_list)]
+                cumcat_list.append(tuple(sum_k_list))
         h_or_k_list = cumcat_list
 
     for run in range(1, args.runs + 1):
