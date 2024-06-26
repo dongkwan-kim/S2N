@@ -26,20 +26,23 @@ ModelType = Union[MultiOutputClassifier, LinearSVC, SVC]
 
 DATASETS_REAL = ["PPIBP", "EMUser", "HPOMetab", "HPONeuro"]
 DATASETS_SYN = ["Component", "Density", "Coreness", "CutRatio"]
+MODEL_KWARGS_KEY = ["C", "kernel", "dual"]
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--MODE', type=str, default="hp_search_for_models")
+parser.add_argument('--MODE', type=str, default="run_one")
 parser.add_argument('--dataset_name', type=str, default="PPIBP",
                     choices=["PPIBP", "HPOMetab", "EMUser", "HPONeuro", "Density", "Component", "Coreness", "CutRatio"])
 parser.add_argument('--stype', type=str, default="connected", choices=["connected", "separated"])
-parser.add_argument('--dtype', type=str, default="histogram", choices=["histogram", "kernel"])
+parser.add_argument('--dtype', type=str, default="kernel", choices=["histogram", "kernel"])
 parser.add_argument('--wl_layers', type=int, default=5)
-parser.add_argument('--wl_cumcat', type=str2bool, default=False)
-parser.add_argument('--hist_norm', type=str2bool, default=True)
-parser.add_argument('--k_to_sample', type=int, default=None)
+parser.add_argument('--wl_cumcat', type=str2bool, default=False, help="Whether to concat WL hists")
+parser.add_argument('--hist_norm', type=str2bool, default=True, help="Whether to normalize WL hists")
+parser.add_argument('--k_to_sample', type=int, default=None, help="For wl4s_k.py")
 parser.add_argument('--ratio_samples', type=float, default=1.0, help="Only when k_to_sample != 0")
-parser.add_argument('--model', type=str, default="LinearSVC")
-parser.add_argument('--runs', type=int, default=2)
+parser.add_argument('--model', type=str, default="SVC", choices=["LinearSVC", "SVC"])
+parser.add_argument('--C', type=float, default=1.0)
+parser.add_argument('--kernel', type=str, default="precomputed")
+parser.add_argument('--runs', type=int, default=10)
 parser.add_argument('--dataset_path', type=str, default="/mnt/nas2/GNN-DATA/SUBGRAPH")
 
 
@@ -230,7 +233,8 @@ def experiment(args, h_or_k_list, splits, all_y, **model_kwargs):
 
 def run_one(args, data_func=get_data_and_model):
     h_or_k_list, splits, all_y = data_func(args)
-    experiment(args, h_or_k_list, splits, all_y)
+    model_kwargs = {k: getattr(args, k) for k in MODEL_KWARGS_KEY if hasattr(args, k)}
+    experiment(args, h_or_k_list, splits, all_y, **model_kwargs)
 
 
 def plot_tsne_all(args, data_func=get_data_and_model, path="../_figures", extension="png"):
@@ -273,11 +277,12 @@ def hp_search_for_models(args, hparam_space, more_hparam_space,
             print(f"Compute WL hists: {stype} & norm={hist_norm}")
             stype_and_norm_to_data_and_model[(stype, hist_norm)] = data_func(args)
 
+    Path(file_dir).mkdir(exist_ok=True)
     file_path = Path(file_dir) / f"{args.dataset_name}{log_postfix}.csv"
     for i, model_kwargs in enumerate(kwargs_list):
         print(model_kwargs)
         for k in model_kwargs.copy():
-            if k in args.__dict__:
+            if k not in MODEL_KWARGS_KEY:
                 setattr(args, k, model_kwargs.pop(k))
         h_or_k_list, splits, all_y = stype_and_norm_to_data_and_model[(args.stype, args.hist_norm)]
         results = experiment(args, h_or_k_list, splits, all_y, **model_kwargs)
@@ -307,14 +312,16 @@ if __name__ == '__main__':
 
     HPARAM_SPACE = {
         "stype": ["connected", "separated"],
-        "wl_cumcat": [True, False],
+        "wl_cumcat": [False, True],
         "hist_norm": [False, True],
-        "model": ["LinearSVC"],
+        "model": ["SVC"],
+        "kernel": ["precomputed"],
+        "dtype": ["kernel"],
     }
     Cx100 = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576]
     MORE_HPARAM_SPACE = {
         "C": [c / 100 for c in Cx100],
-        "dual": [True, False],
+        "dual": [True, False],  # for SVC
     }
 
     __args__ = parser.parse_args()
@@ -328,7 +335,3 @@ if __name__ == '__main__':
         run_one(__args__)
     elif __args__.MODE == "hp_search_for_models":
         hp_search_for_models(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE)
-    elif __args__.MODE == "hp_search_real":
-        hp_search_real(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE)
-    elif __args__.MODE == "hp_search_syn":
-        hp_search_syn(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE)
