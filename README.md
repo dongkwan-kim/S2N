@@ -34,6 +34,26 @@ bash S2N/graph_coarsening/install.sh
 This repository has been confirmed to be working on `nvidia/cuda:10.2-cudnn8-devel-ubuntu18.04`
 and `nvidia/cuda:11.1-cudnn8-devel-ubuntu18.04`
 
+## Datasets
+
+Dataset files (`raw`) can be downloaded from https://github.com/mims-harvard/SubGNN.
+Additionally,  `raw/glass_embeddings.pth ` can be downloaded from https://github.com/Xi-yuanWang/GLASS/tree/main/Emb.
+Then,  `SubgraphDataset.process` automatically generates `processed_{dataset}_42_False_undirected` folder.
+
+```
+ls /mnt/nas2/GNN-DATA/SUBGRAPH
+COMPONENT  CORENESS  CUTRATIO  DENSITY  EMUSER  HPOMETAB  HPONEURO  PPIBP
+
+ls /mnt/nas2/GNN-DATA/SUBGRAPH/PPIBP
+processed_PPIBP_42_False_undirected  raw
+
+ls  /mnt/nas2/GNN-DATA/SUBGRAPH/PPIBP/raw
+degree_sequence.txt  edge_list.txt  ego_graphs.txt  gin_embeddings.pth  glass_embeddings.pth  graphsaint_gcn_embeddings.pth  shortest_path_matrix.npy  similarities  subgraphs.pth
+
+ls /mnt/nas2/GNN-DATA/SUBGRAPH/PPIBP/processed_PPIBP_42_False_undirected
+args.txt  data.pt  global_gin.pt  global_glass.pt  global_graphsaint_gcn.pt  meta.pt  pre_filter.pt  pre_transform.pt
+```
+
 ## Run
 
 - `${model}`: `gcn, gcn2`
