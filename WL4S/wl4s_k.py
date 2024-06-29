@@ -7,6 +7,9 @@ if __name__ == '__main__':
         "stype": ["separated"],
         "wl_cumcat": [False, True],
         "hist_norm": [False, True],
+        "model": ["SVC"],
+        "kernel": ["precomputed"],
+        "dtype": ["kernel"],
     }
     Cx100 = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576]
     MORE_HPARAM_SPACE = {
@@ -18,26 +21,19 @@ if __name__ == '__main__':
 
     MODE = __args__.MODE
     if MODE == "syn_k":
-        __args__.stype = "separated"
-        HPARAM_SPACE = {**HPARAM_SPACE, "model": ["LinearSVC"]}
-        MORE_HPARAM_SPACE = {**MORE_HPARAM_SPACE, "dual": [True, False]}
-        for k_to_sample in [None, 1, 2]:
-            __args__.k_to_sample = k_to_sample
-            kws = dict(file_dir="../_logs_wl4s_k", log_postfix=f"_{k_to_sample or 0}")
-            hp_search_syn(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)
-
         __args__.stype = "connected"
         HPARAM_SPACE["stype"] = ["connected"]
         kws = dict(file_dir="../_logs_wl4s_k", log_postfix=f"_inf")
         hp_search_syn(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)
 
-    else:
-        HPARAM_SPACE = {
-            **HPARAM_SPACE,
-            "model": ["SVC"], "kernel": ["precomputed"], "dtype": ["kernel"],
-        }
-        __args__.dtype = "kernel"
+        __args__.stype = "separated"
+        HPARAM_SPACE["stype"] = ["separated"]
+        for k_to_sample in [None, 1, 2]:
+            __args__.k_to_sample = k_to_sample
+            kws = dict(file_dir="../_logs_wl4s_k", log_postfix=f"_{k_to_sample or 0}")
+            hp_search_syn(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **kws)
 
+    else:
         if MODE == "real_precomputation":
             for k_to_sample in [None, 1, 2]:
                 for dataset_name in ["PPIBP", "EMUser"]:
@@ -62,6 +58,7 @@ if __name__ == '__main__':
 
         elif MODE == "real_k":
             for dataset_name in ["PPIBP", "EMUser", "HPOMetab", "HPONeuro"]:
+                # OOM for HPOMetab & HPONeuro with k >= 1
                 k_to_sample_list = [None] if dataset_name in ["HPOMetab", "HPONeuro"] else [None, 1, 2]
                 for k_to_sample in k_to_sample_list:
                     __args__.k_to_sample = k_to_sample

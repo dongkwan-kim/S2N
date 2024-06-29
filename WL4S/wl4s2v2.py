@@ -2,6 +2,8 @@ from wl4s import parser, hp_search_for_models, hp_search_real, get_data_and_mode
 
 
 def get_data_mixed_kernels(args):
+    assert args.dtype == "kernel"
+    
     args.stype = "separated"
     k_list_s, splits_s, y_s = get_data_and_model(args)
 
@@ -45,8 +47,8 @@ if __name__ == '__main__':
         run_one(__args__)
     else:
         for _a_c, _a_s in [
-            (0.99, 0.01), (0.9, 0.1), (0.5, 0.1),
-            (0.01, 0.99), (0.1, 0.9), (0.1, 0.5),
+            (0.999, 0.001), (0.99, 0.01), (0.9, 0.1),
+            (0.001, 0.999), (0.01, 0.99), (0.1, 0.9),
         ]:
             __args__.a_c, __args__.a_s = _a_c, _a_s
 

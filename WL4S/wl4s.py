@@ -25,7 +25,7 @@ from visualize import plot_data_points_by_tsne
 ModelType = Union[MultiOutputClassifier, LinearSVC, SVC]
 
 DATASETS_REAL = ["PPIBP", "EMUser", "HPOMetab", "HPONeuro"]
-DATASETS_SYN = ["Component", "Density", "Coreness", "CutRatio"]
+DATASETS_SYN = ["CutRatio", "Density", "Coreness", "Component"]
 MODEL_KWARGS_KEY = ["C", "kernel", "dual"]
 
 parser = argparse.ArgumentParser()
@@ -47,9 +47,10 @@ parser.add_argument('--dataset_path', type=str, default="/mnt/nas2/GNN-DATA/SUBG
 
 
 class WL4S(torch.nn.Module):
-    def __init__(self, stype, num_layers, norm,
+    def __init__(self, dataset_name, stype, num_layers, norm,
                  dtype="histogram", splits=None, k_to_sample=None, precompute=False):
         super(WL4S, self).__init__()
+        self.dataset_name = dataset_name
         self.stype = stype
         self.norm = norm
         self.dtype = dtype
@@ -77,7 +78,7 @@ class WL4S(torch.nn.Module):
             if self.dtype == "kernel":
                 kernel_key = kk(self.k_to_sample, self.stype, self.norm, i)
                 if self.splits[-1] <= 250:  # synthetic graphs, backward compatibility
-                    kernel_key = kk(self.k_to_sample, self.stype[:3], self.norm, i, edge_index.size(1) // 100)
+                    kernel_key = kk(self.k_to_sample, self.stype[:3], self.norm, i, self.dataset_name)
 
                 h = hist_linear_kernels(hist=h, splits=self.splits, key=kernel_key)
                 if self.precompute:
@@ -89,7 +90,7 @@ class WL4S(torch.nn.Module):
 
 
 def kk(k_to_sample, stype, norm, i, *args):
-    return "_".join([str(s) for s in [k_to_sample, stype, norm, i, *args]])
+    return "_".join([str(s) for s in [*args, k_to_sample, stype, norm, i]])
 
 
 @fscaches(path="../_caches", keys_to_exclude=["hist"], verbose=True)
@@ -157,7 +158,7 @@ def get_data_and_model(args, precompute=False):
         f"{splits} != [{len(train_dts), len(val_dts), len(test_dts)}]"
     all_data = Batch.from_data_list(train_dts + val_dts + test_dts)
 
-    wl = WL4S(stype=args.stype, num_layers=args.wl_layers, norm=args.hist_norm,
+    wl = WL4S(dataset_name=args.dataset_name, stype=args.stype, num_layers=args.wl_layers, norm=args.hist_norm,
               dtype=args.dtype, splits=splits, k_to_sample=args.k_to_sample, precompute=precompute)
 
     if args.stype == "connected":
