@@ -3,12 +3,15 @@ from wl4s import parser, hp_search_for_models, hp_search_real, get_data_and_mode
 
 def get_data_mixed_kernels(args):
     assert args.dtype == "kernel"
-    
+
     args.stype = "separated"
     k_list_s, splits_s, y_s = get_data_and_model(args)
 
     args.stype = "connected"
     k_list_c, splits_c, y_c = get_data_and_model(args)
+
+    for s_s, s_c in zip(splits_s, splits_c):
+        assert s_s == s_c
 
     k_list_new = []
     for kt_c, kt_s in zip(k_list_c, k_list_s):
@@ -46,11 +49,8 @@ if __name__ == '__main__':
     if __args__.MODE == "run_one":
         run_one(__args__)
     else:
-        for _a_c, _a_s in [
-            (0.999, 0.001), (0.99, 0.01), (0.9, 0.1),
-            (0.001, 0.999), (0.01, 0.99), (0.1, 0.9),
-        ]:
-            __args__.a_c, __args__.a_s = _a_c, _a_s
+        for _a_c in [0.999, 0.99, 0.9, 0.5, 0.1, 0.01, 0.001]:
+            __args__.a_c, __args__.a_s = _a_c, 1.0 - _a_c
 
             if __args__.MODE == "hp_search_for_models":
                 hp_search_for_models(__args__, HPARAM_SPACE, MORE_HPARAM_SPACE, **WL4S2_KWS)
