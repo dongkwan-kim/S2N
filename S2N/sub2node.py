@@ -1,8 +1,6 @@
-import os
 import multiprocessing as mp
 from collections import Counter
 from pathlib import Path
-from pprint import pprint
 from typing import List, Callable, Union, Tuple, Dict, Optional
 
 import networkx as nx
@@ -18,6 +16,7 @@ from tqdm import tqdm
 
 from data_utils import RelabelNodes
 from dataset_wl import ReplaceXWithWL4Pattern
+from sub2node_wl_utils import get_ewmat_by_wl_kernel_for_s2n
 from utils import try_getattr, spspmm_quad, repr_kvs, filter_living_edge_index
 from visualize import plot_dis
 
@@ -38,7 +37,9 @@ class SubgraphToNode:
                  edge_aggr: Union[Callable[[Tensor], Tensor], str] = None,
                  num_workers: int = None,
                  undirected: bool = None,
-                 node_spl_cutoff=None):
+                 node_spl_cutoff=None,
+                 wl_cumcat=None,
+                 wl_hist_norm=None):
         """
         :param global_data: Single Data(edge_index=[2, *], x=[*, F])
         :param subgraph_data_list: List of Data(x=[*, 1], edge_index=[2, *], y=[1])
@@ -73,8 +74,13 @@ class SubgraphToNode:
         self.undirected = undirected or is_undirected(global_data.edge_index)
         self.node_spl_cutoff = node_spl_cutoff
 
+        self.wl_cumcat = wl_cumcat
+        self.wl_hist_norm = wl_hist_norm
+
         assert self.target_matrix in [
-            "adjacent", "adjacent_with_self_loops", "adjacent_no_self_loops", "shortest_path"
+            "adjacent", "adjacent_with_self_loops", "adjacent_no_self_loops",
+            "wl_kernel",  # NOTE: WL4S
+            "shortest_path",  # NOTE: deprecated
         ]
         assert self.undirected, "Now only support undirected graphs"
         assert len(self.splits) >= 3
@@ -95,6 +101,8 @@ class SubgraphToNode:
     def node_task_name(self):
         if self.target_matrix.startswith("adjacent"):
             return f"{self.name}-ADJ-{self.target_matrix}"
+        elif self.target_matrix == "wl_kernel":
+            return f"{self.name}-{self.target_matrix}-{self.wl_cumcat}-{self.wl_hist_norm}"
         else:
             return f"{self.name}-SP-EA-{self.edge_aggr.__name__}"
 
@@ -249,6 +257,14 @@ class SubgraphToNode:
         # edge = 1 / (spl + 1) where 0 <= spl, then 0 < edge <= 1
         return 1 / (sub_spl_mat + 1)
 
+    def get_ewmat_by_wl_kernel(self):
+        kwargs = {k: v for k, v in {"wl_cumcat": self.wl_cumcat, "hist_norm": self.wl_hist_norm}.items()
+                  if v is not None}
+        ewmat = get_ewmat_by_wl_kernel_for_s2n(s2n_splits=self.splits, dataset_name=self.name, **kwargs)
+        print(f"ewmat, shape: {ewmat.shape}" + "-" * 150)
+        print(ewmat)
+        return ewmat
+
     def has_node_task_data_precursor(self, matrix_type=None, use_sub_edge_index=False, **kwargs):
         name_key = repr_kvs(mmt=matrix_type, use_sei=use_sub_edge_index, **kwargs)
         path = self.path / f"{self.node_task_name}_node_task_data_precursor_{name_key}.pth"
@@ -297,6 +313,8 @@ class SubgraphToNode:
             self._node_task_data_precursor.edge_weight_matrix = self.get_ewmat_by_multiplying_adj(matrix_type)
         elif self.target_matrix == "shortest_path":
             self._node_task_data_precursor.edge_weight_matrix = self.get_ewmat_by_aggregating_sub_spl_mat(save)
+        elif self.target_matrix == "wl_kernel":
+            self._node_task_data_precursor.edge_weight_matrix = self.get_ewmat_by_wl_kernel()
 
         if save:
             torch.save(self._node_task_data_precursor, path)
@@ -466,7 +484,7 @@ class SubgraphToNode:
         _decimal = 5
         _mean = lambda t: round(torch.mean(t).item(), _decimal)
         _std = lambda t: round(torch.std(t).item(), _decimal)
-        _min = lambda t: round(torch.min(t).item(), _decimal)
+        _min = lambda t: round(torch.min(t).item(), _decimal) if t.sum() != 0. else 0.
         _median = lambda t: round(torch.median(t).item(), _decimal)
         _1q = lambda t: safe_quantile(t, 0.25)
         _3q = lambda t: safe_quantile(t, 0.75)
@@ -479,10 +497,15 @@ class SubgraphToNode:
         print(
             f"\tmean / std = {_mean(matrix)} / {_std(matrix)} \n"
             f"\tmin / 1q / median / 3q / max = {_min(matrix)} / {_1q(matrix)} / {_median(matrix)}"
-            f" / {_3q(matrix)} / {_max(matrix)} \n"
-            f"\tmean+ / std+ = {_mean(matrix_pos)} / {_std(matrix_pos)} \n"
-            f"\tmin+ / 1q+ / median+ / 3q+ / max+ = {_min(matrix_pos)} / {_1q(matrix_pos)} / {_median(matrix_pos)}"
-            f" / {_3q(matrix_pos)} / {_max(matrix_pos)} \n"
+            f" / {_3q(matrix)} / {_max(matrix)}"
+        )
+        if matrix_pos.numel() > 0:
+            print(
+                f"\tmean+ / std+ = {_mean(matrix_pos)} / {_std(matrix_pos)} \n"
+                f"\tmin+ / 1q+ / median+ / 3q+ / max+ = {_min(matrix_pos)} / {_1q(matrix_pos)} / {_median(matrix_pos)}"
+                f" / {_3q(matrix_pos)} / {_max(matrix_pos)}"
+            )
+        print(
             f"\tN = {matrix.numel()}, N+ = {(matrix > 0).sum().item()}, "
             f"d = {(matrix > 0).sum().item() / matrix.numel()}"
         )
@@ -557,7 +580,7 @@ if __name__ == '__main__':
     MODE = "PPIBP"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, Component, Coreness, CutRatio
-    PURPOSE = "MEASURE_TIME"
+    PURPOSE = "PRECURSOR"
     # MANY, ONCE
     TARGET_MATRIX = "adjacent_with_self_loops"
     # adjacent_with_self_loops, adjacent_no_self_loops
@@ -568,8 +591,7 @@ if __name__ == '__main__':
 
     if PURPOSE == "PRECURSOR":
         _cls = eval(MODE)
-        dts = _cls(root=PATH, name=MODE, debug=DEBUG, embedding_type=E_TYPE,
-                   num_training_tails_to_tile_per_class=80)
+        dts = _cls(root=PATH, name=MODE, debug=DEBUG, embedding_type=E_TYPE)
         _subgraph_data_list = dts.get_data_list_with_split_attr()
         _global_data = dts.global_data
 
@@ -581,8 +603,8 @@ if __name__ == '__main__':
             splits=dts.splits,
             target_matrix=TARGET_MATRIX,
         )
-        s2n.node_task_data_precursor(matrix_type="unnormalized", use_sub_edge_index=True, ntt2tpc=80)
-        s2n.node_task_data_precursor(matrix_type="unnormalized", use_sub_edge_index=False, ntt2tpc=80)
+        s2n.node_task_data_precursor(matrix_type="unnormalized", use_sub_edge_index=True)
+        s2n.node_task_data_precursor(matrix_type="unnormalized", use_sub_edge_index=False)
         exit()
 
     if MODE in ["HPOMetab", "PPIBP", "HPONeuro", "EMUser",
