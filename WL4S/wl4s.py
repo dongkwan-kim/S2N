@@ -76,10 +76,7 @@ class WL4S(torch.nn.Module):
                 raise ValueError
 
             if self.dtype == "kernel":
-                kernel_key = kk(self.k_to_sample, self.stype, self.norm, i)
-                if self.splits[-1] <= 250:  # synthetic graphs, backward compatibility
-                    kernel_key = kk(self.k_to_sample, self.stype[:3], self.norm, i, self.dataset_name)
-
+                kernel_key = get_kernel_key(self, self.splits, i)
                 h = hist_linear_kernels(hist=h, splits=self.splits, key=kernel_key)
                 if self.precompute:
                     del h
@@ -91,6 +88,13 @@ class WL4S(torch.nn.Module):
 
 def kk(k_to_sample, stype, norm, i, *args):
     return "_".join([str(s) for s in [*args, k_to_sample, stype, norm, i]])
+
+
+def get_kernel_key(args, splits, i):
+    kernel_key = kk(args.k_to_sample, args.stype, args.norm, i)
+    if splits[-1] <= 250:  # synthetic graphs, backward compatibility
+        kernel_key = kk(args.k_to_sample, args.stype[:3], args.norm, i, args.dataset_name)
+    return kernel_key
 
 
 @fscaches(path="../_caches", keys_to_exclude=["hist"], verbose=True)
@@ -105,10 +109,8 @@ def hist_linear_kernels(hist, splits, key):
 
 def get_all_kernels(args, splits):
     try:
-        kernels = [
-            hist_linear_kernels(hist=None, splits=splits, key=kk(args.k_to_sample, args.stype, args.hist_norm, i))
-            for i in range(args.wl_layers)
-        ]
+        kernels = [hist_linear_kernels(hist=None, splits=splits, key=get_kernel_key(args, splits, i))
+                   for i in range(args.wl_layers)]
     except:
         kernels = None
     return kernels
