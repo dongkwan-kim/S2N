@@ -88,7 +88,7 @@ def get_ewmat_by_wl_kernel_for_s2n(s2n_splits, dataset_name, **kwargs):
     ewmat[tr_v:, :tr] = k_te
     ewmat[:tr, tr:tr_v] = k_v.transpose()
     ewmat[:tr, tr_v:] = k_te.transpose()
-    return torch.from_numpy(ewmat)
+    return torch.from_numpy(ewmat).float()
 
 
 if __name__ == '__main__':
