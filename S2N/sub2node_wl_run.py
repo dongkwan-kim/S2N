@@ -7,7 +7,7 @@ if __name__ == '__main__':
 
     from data_sub import HPOMetab, HPONeuro, PPIBP, EMUser, Density, Component, Coreness, CutRatio
 
-    MODE = "EMUser"
+    MODE = "HPONeuro"
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, Component, Coreness, CutRatio
     PURPOSE = "MANY"
@@ -63,11 +63,9 @@ if __name__ == '__main__':
                 )
                 print(s2n)
 
-                for i in [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75,
-                          2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
+                for i in [1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]:
                     for j in [0.5, 1.0, 1.5, 2.0]:
                         for usei in [True, False]:
-
                             ntds = s2n.node_task_data_splits(
                                 mapping_matrix_type="unnormalized",
                                 set_sub_x_weight=None,

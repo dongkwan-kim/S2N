@@ -343,7 +343,7 @@ if __name__ == '__main__':
     else:
         E_TYPE = "glass"  # gin, graphsaint_gcn, glass
 
-    USE_S2N = False  # NOTE: important
+    USE_S2N = True  # NOTE: important
     USE_SPARSE_TENSOR = False
     PRE_ADD_SELF_LOOPS = False
     SUBGRAPH_BATCHING = None if USE_S2N else "connected"  # separated, connected
@@ -410,7 +410,7 @@ if __name__ == '__main__':
         embedding_type=E_TYPE,
         use_s2n=USE_S2N,
         s2n_mapping_matrix_type="unnormalized",
-        s2n_set_sub_x_weight="original_sqrt_d_node_div_d_sub",
+        s2n_set_sub_x_weight=None,
         s2n_use_sub_edge_index=USE_SUB_EDGE_INDEX,
         s2n_add_sub_x_wl=False,
         edge_thres=0.0,
@@ -418,7 +418,9 @@ if __name__ == '__main__':
         post_edge_normalize="standardize_then_trunc_thres_max_linear",
         post_edge_normalize_arg_1=2.0,
         post_edge_normalize_arg_2=2.0,
-        s2n_target_matrix="adjacent_with_self_loops",
+        s2n_target_matrix="wl_kernel",
+        wl_cumcat=False,
+        wl_hist_norm=True,
         s2n_is_weighted=True,
         subgraph_batching=SUBGRAPH_BATCHING,
         batch_size=32,

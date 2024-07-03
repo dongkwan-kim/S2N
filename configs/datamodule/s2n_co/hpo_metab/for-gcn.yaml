@@ -7,7 +7,7 @@ dataset_name: HPOMetab
 use_s2n: true
 s2n_mapping_matrix_type: unnormalized
 s2n_set_sub_x_weight: null
-s2n_target_matrix: adjacent_with_self_loops
+s2n_target_matrix: wl_kernel
 post_edge_normalize: standardize_then_trunc_thres_max_linear
 post_edge_normalize_arg_1: 3.75
 post_edge_normalize_arg_2: 1.0

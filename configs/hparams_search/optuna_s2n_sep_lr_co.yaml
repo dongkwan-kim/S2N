@@ -42,6 +42,16 @@ hydra:
     # https://hydra.cc/docs/plugins/optuna_sweeper/
     # https://github.com/facebookresearch/hydra/blob/02495f9c781615e2fe7ae5588e16f596fcec010c/plugins/hydra_optuna_sweeper/tests/test_optuna_sweeper_plugin.py#L49
     search_space:
+      datamodule.wl_cumcat:
+        type: categorical
+        choices:
+          - True
+          - False
+      datamodule.wl_hist_norm:
+        type: categorical
+        choices:
+          - True
+          - False
       datamodule.post_edge_normalize_arg_1:
         type: float
         low: 1.0

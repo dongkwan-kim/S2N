@@ -12,7 +12,9 @@ embedding_type: glass  # gin, graphsaint_gcn, glass
 edge_thres: 0.0  # important
 use_consistent_processing: True
 s2n_set_sub_x_weight: null
-s2n_target_matrix: adjacent_with_self_loops
+s2n_target_matrix: wl_kernel
+wl_cumcat: null
+wl_hist_norm: null
 s2n_add_sub_x_wl: False
 s2n_is_weighted: True
 post_edge_normalize_arg_1: null

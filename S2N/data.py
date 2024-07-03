@@ -38,6 +38,8 @@ class SubgraphDataModule(LightningDataModule):
                  edge_thres: Union[float, Callable, List[float]] = None,
                  post_edge_normalize: Union[str, Callable, None] = None,
                  s2n_target_matrix: str = None,
+                 wl_cumcat: bool = None,
+                 wl_hist_norm: bool = None,
                  s2n_edge_aggr: Union[Callable[[Tensor], Tensor], str] = None,
                  s2n_is_weighted: bool = True,
                  s2n_transform=None,
@@ -159,6 +161,8 @@ class SubgraphDataModule(LightningDataModule):
                 target_matrix=self.h.s2n_target_matrix,
                 edge_aggr=self.h.s2n_edge_aggr,
                 undirected=True,
+                wl_cumcat=self.h.wl_cumcat,
+                wl_hist_norm=self.h.wl_hist_norm,
             )
 
             precursor_kwargs = {}
@@ -312,6 +316,8 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
         post_edge_normalize_arg_2=2.0,
         s2n_target_matrix="adjacent_with_self_loops",
         s2n_is_weighted=True,
+        wl_cumcat=False,
+        wl_hist_norm=True,
         subgraph_batching=SUBGRAPH_BATCHING,
         batch_size=32,
         eval_batch_size=5,
@@ -329,6 +335,7 @@ def get_subgraph_datamodule_for_test(name, **kwargs):
 if __name__ == '__main__':
 
     MODE = "S2N"  # S2N, CONNECTED, SEPARATED COARSENING, SEMI_SUPERVISED_S2N, SEMI_SUPERVISED_BASELINE
+    TARGET_MATRIX = "wl_kernel"  # wl_kernel, adjacent_with_self_loops
 
     # WLKSRandomTree
     # PPIBP, HPOMetab, HPONeuro, EMUser
@@ -336,6 +343,7 @@ if __name__ == '__main__':
     if MODE == "S2N":
         _sdm = get_subgraph_datamodule_for_test(
             name="PPIBP",
+            s2n_target_matrix=TARGET_MATRIX,
         )
     elif MODE == "CONNECTED":
         _sdm = get_subgraph_datamodule_for_test(

@@ -46,6 +46,16 @@ hydra:
         type: categorical
         choices:
           - 0.001
+      datamodule.wl_cumcat:
+        type: categorical
+        choices:
+          - True
+          - False
+      datamodule.wl_hist_norm:
+        type: categorical
+        choices:
+          - True
+          - False
       datamodule.post_edge_normalize_arg_1:
         type: float
         low: 1.0
