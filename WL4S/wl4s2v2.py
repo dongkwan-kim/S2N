@@ -47,7 +47,11 @@ if __name__ == '__main__':
     __args__.dtype = "kernel"
 
     if __args__.MODE == "run_one":
-        run_one(__args__)
+        import time
+
+        t0 = time.time()
+        run_one(__args__, data_func=get_data_mixed_kernels)
+        print("Time (s): ", time.time() - t0)
     else:
         for _a_c in [0.999, 0.99, 0.9, 0.5, 0.1, 0.01, 0.001]:
             __args__.a_c, __args__.a_s = _a_c, 1.0 - _a_c
