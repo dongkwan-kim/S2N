@@ -25,7 +25,7 @@ def analyze_hparams_sensitivity(dataset_name="PPIBP", extension="png"):
         key=f"hp_{dataset_name}",
         extension=extension,
         markers=True, dashes=False,
-        aspect=1.0,
+        aspect=1.4,
     )
 
     df = load_best_df(f"../_logs_wl4s2/complete_real/{dataset_name}.csv", ["wl_cumcat", "hist_norm", "C"],
