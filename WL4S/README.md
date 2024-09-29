@@ -36,6 +36,12 @@ args.txt  data.pt  global_gin.pt  global_glass.pt  global_graphsaint_gcn.pt  met
 ## Run
 
 ```bash
+# Best HParams
+python wl4s2v2.py --MODE run_one --runs 1 --dataset_name EMUser --wl_layers 2 --wl_cumcat False --hist_norm False --a_c 0.9 --a_s 0.1 --C 0.08  
+python wl4s2v2.py --MODE run_one --runs 1 --dataset_name HPOMetab --wl_layers 2 --wl_cumcat False --hist_norm True --a_c 0.999 --a_s 0.001 --C 1.28
+python wl4s2v2.py --MODE run_one --runs 1 --dataset_name HPONeuro --wl_layers 3 --wl_cumcat False --hist_norm False --a_c 0.999 --a_s 0.001 --C 0.64
+python wl4s2v2.py --MODE run_one --runs 1 --dataset_name PPIBP --wl_layers 2 --wl_cumcat False --hist_norm True --a_c 0.99 --a_s 0.01 --C 1.28
+
 # For HPOMetab, search hparams with one run.
 python wl4s.py --MODE hp_search_for_models --dataset_name HPOMetab --runs 1
 # For PPIBP, k=D (or inf) (connected), precompute kernels, then run SVC (C=1.28) with 2 seeds.
