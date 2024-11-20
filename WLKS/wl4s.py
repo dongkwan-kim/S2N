@@ -52,7 +52,7 @@ class WL4S(torch.nn.Module):
         super(WL4S, self).__init__()
         self.dataset_name = dataset_name
         self.stype = stype
-        self.norm = norm
+        self.norm = self.hist_norm = norm
         self.dtype = dtype
         self.splits = splits
         self.precompute = precompute
@@ -91,9 +91,9 @@ def kk(k_to_sample, stype, norm, i, *args):
 
 
 def get_kernel_key(args, splits, i):
-    kernel_key = kk(args.k_to_sample, args.stype, args.norm, i)
+    kernel_key = kk(args.k_to_sample, args.stype, args.hist_norm, i)
     if splits[-1] <= 250:  # synthetic graphs, backward compatibility
-        kernel_key = kk(args.k_to_sample, args.stype[:3], args.norm, i, args.dataset_name)
+        kernel_key = kk(args.k_to_sample, args.stype[:3], args.hist_norm, i, args.dataset_name)
     return kernel_key
 
 
@@ -111,7 +111,8 @@ def get_all_kernels(args, splits):
     try:
         kernels = [hist_linear_kernels(hist=None, splits=splits, key=get_kernel_key(args, splits, i))
                    for i in range(args.wl_layers)]
-    except:
+    except Exception as e:
+        print(e)
         kernels = None
     return kernels
 
@@ -133,7 +134,7 @@ def get_data_and_model(args, precompute=False):
     if args.ratio_samples < 1.0:
         splits = [int(s * args.ratio_samples) for s in splits]
 
-    if args.dtype == "kernel":
+    if args.dtype == "kernel" and precompute:
         k_list = get_all_kernels(args, splits)
         if k_list is not None:
             cprint(f"Use precomputed kernels...", "yellow")
@@ -234,8 +235,8 @@ def experiment(args, h_or_k_list, splits, all_y, **model_kwargs):
     }
 
 
-def run_one(args, data_func=get_data_and_model):
-    h_or_k_list, splits, all_y = data_func(args)
+def run_one(args, data_func=get_data_and_model, precompute=True):
+    h_or_k_list, splits, all_y = data_func(args, precompute=precompute)
     model_kwargs = {k: getattr(args, k) for k in MODEL_KWARGS_KEY if hasattr(args, k)}
     experiment(args, h_or_k_list, splits, all_y, **model_kwargs)
 

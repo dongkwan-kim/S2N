@@ -1,17 +1,25 @@
-from wl4s import parser, hp_search_for_models, hp_search_real, get_data_and_model, hp_search_syn, run_one
+from termcolor import cprint
+
+from wl4s import (
+    parser, hp_search_for_models, hp_search_real, hp_search_syn,
+    get_data_and_model, run_one, get_all_kernels,
+)
 
 
-def get_data_mixed_kernels(args):
+def get_data_mixed_kernels(args, precompute):
     assert args.dtype == "kernel"
 
-    args.stype = "separated"
-    k_list_s, splits_s, y_s = get_data_and_model(args)
-
     args.stype = "connected"
-    k_list_c, splits_c, y_c = get_data_and_model(args)
+    k_list_c, splits_c, y_c = get_data_and_model(args, precompute)
 
-    for s_s, s_c in zip(splits_s, splits_c):
-        assert s_s == s_c
+    args.stype = "separated"
+    k_list_s = get_all_kernels(args, splits_c) if precompute else None
+    if k_list_s is None:
+        k_list_s, _, _ = get_data_and_model(args, precompute)
+    else:
+        cprint(f"Use precomputed kernels...", "yellow")
+    # for s_s, s_c in zip(splits_s, splits_c):
+    #     assert s_s == s_c
 
     k_list_new = []
     for kt_c, kt_s in zip(k_list_c, k_list_s):
@@ -50,7 +58,7 @@ if __name__ == '__main__':
         import time
 
         t0 = time.time()
-        run_one(__args__, data_func=get_data_mixed_kernels)
+        run_one(__args__, data_func=get_data_mixed_kernels, precompute=False)
         print("Time (s): ", time.time() - t0)
     else:
         for _a_c in [0.999, 0.99, 0.9, 0.5, 0.1, 0.01, 0.001]:
