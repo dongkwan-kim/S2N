@@ -9,7 +9,7 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from termcolor import cprint
 from torch_geometric.data import Data
 from torch_geometric.transforms import LocalDegreeProfile
-from torch_geometric.utils import subgraph, sort_edge_index, to_undirected
+from torch_geometric.utils import subgraph, sort_edge_index, to_undirected, to_networkx
 from tqdm import tqdm
 
 from data_base import DatasetBase
@@ -577,12 +577,12 @@ if __name__ == '__main__':
 
     FIND_SEED = False  # NOTE: If True, find_seed_that_makes_balanced_datasets will be performed
 
-    NAME = "HPOMetab"
+    NAME = "PPIBP"
     # WLKSRandomTree
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, Component, Coreness, CutRatio
 
-    USE_RWPE = False
+    USE_RWPE = True
     USE_LEPE = False
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
