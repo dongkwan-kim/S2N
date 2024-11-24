@@ -553,17 +553,37 @@ class Component(SynSubgraphGLASSDataset):
         super().process()
 
 
+def largest_component_diameter(data):
+    # Convert edge_index to a NetworkX graph
+    G = to_networkx(data, to_undirected=True)
+
+    # Find connected components
+    components = list(nx.connected_components(G))
+
+    # Find the largest connected component
+    largest_component = max(components, key=len)
+    print("lc size: ", len(largest_component))
+
+    # Create subgraph for the largest component
+    subgraph = G.subgraph(largest_component)
+    print("lc nx: ", subgraph)
+
+    # Calculate the diameter of the largest component
+    diameter = nx.diameter(subgraph)
+    return diameter
+
+
 if __name__ == '__main__':
 
     FIND_SEED = False  # NOTE: If True, find_seed_that_makes_balanced_datasets will be performed
 
-    NAME = "EMUser"
+    NAME = "HPOMetab"
     # WLKSRandomTree
     # PPIBP, HPOMetab, HPONeuro, EMUser
     # Density, Component, Coreness, CutRatio
 
     USE_RWPE = False
-    USE_LEPE = True
+    USE_LEPE = False
 
     PATH = "/mnt/nas2/GNN-DATA/SUBGRAPH"
     if NAME.startswith("WL"):
@@ -620,3 +640,5 @@ if __name__ == '__main__':
                 print(round(v, 3))
     except AttributeError:
         pass
+
+    print("LCD of global_data: ", largest_component_diameter(dts.global_data))
