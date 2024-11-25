@@ -589,7 +589,7 @@ if __name__ == '__main__':
     if NAME.startswith("WL"):
         E_TYPE = "no_embedding"
     elif NAME in ["Density", "Component", "Coreness", "CutRatio"]:
-        E_TYPE = "ones_1/64/LEPE"
+        E_TYPE = "ones_1/64/LEPE"  # e.g., RWPE_K_64
     else:
         E_TYPE = "glass"  # gin, graphsaint_gcn, glass
 

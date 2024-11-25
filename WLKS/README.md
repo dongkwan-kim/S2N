@@ -52,6 +52,10 @@ python3 wl4s2v2.py --MODE run_one --dataset_name PPIBP --wl_cumcat False --hist_
 # Search hparams for k=0&D
 python3 wl4s2v2.py --MODE hp_search_real
 python3 wl4s2v2.py --MODE hp_search_syn
+python3 wl4s2v2.py --MODE hp_search_for_models --runs 1 --dataset_name PPIBP 
+python3 wl4s2v2.py --MODE hp_search_for_models --runs 1 --dataset_name EMUser 
+python3 wl4s2v2.py --MODE hp_search_for_models --runs 1 --dataset_name HPOMetab
+python3 wl4s2v2.py --MODE hp_search_for_models --runs 1 --dataset_name HPONeuro
 
 # Run wl4s for all k in [0, 1, 2, D]
 python3 wl4s_k.py --MODE real_k
