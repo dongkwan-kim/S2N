@@ -1,4 +1,5 @@
 import argparse
+import copy
 import gc
 import inspect
 import itertools
@@ -14,6 +15,7 @@ from sklearn.svm import LinearSVC, SVC
 from termcolor import cprint
 from torch_geometric.data import Batch
 from torch_geometric.nn.conv import WLConv
+from torch_geometric.nn.glob import global_add_pool
 from tqdm import tqdm
 
 from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, Density, Component, Coreness, CutRatio
@@ -48,7 +50,7 @@ parser.add_argument('--dataset_path', type=str, default="/mnt/nas2/GNN-DATA/SUBG
 
 class WL4S(torch.nn.Module):
     def __init__(self, dataset_name, stype, num_layers, norm,
-                 dtype="histogram", splits=None, k_to_sample=None, precompute=False):
+                 dtype="histogram", splits=None, k_to_sample=None, precompute=False, de=None):
         super(WL4S, self).__init__()
         self.dataset_name = dataset_name
         self.stype = stype
@@ -56,6 +58,7 @@ class WL4S(torch.nn.Module):
         self.dtype = dtype
         self.splits = splits
         self.precompute = precompute
+        self.de = de
         self.k_to_sample = k_to_sample
         self.convs = torch.nn.ModuleList([WLConv() for _ in range(num_layers)])
 
@@ -74,6 +77,10 @@ class WL4S(torch.nn.Module):
                 h = conv.histogram(_x, _b, norm=self.norm)
             else:
                 raise ValueError
+
+            if self.de is not None:
+                des = 10000 * global_add_pool(self.de[x_to_xs], batch_or_sub_batch, size=None)
+                h = torch.cat([h, des], dim=-1)
 
             if self.dtype == "kernel":
                 kernel_key = get_kernel_key(self, self.splits, i)
@@ -94,6 +101,10 @@ def get_kernel_key(args, splits, i):
     kernel_key = kk(args.k_to_sample, args.stype, args.hist_norm, i)
     if splits[-1] <= 250:  # synthetic graphs, backward compatibility
         kernel_key = kk(args.k_to_sample, args.stype[:3], args.hist_norm, i, args.dataset_name)
+
+    if hasattr(args, "de") and args.de is not None:
+        kernel_key = f"{kernel_key}_de_{args.de.size(-1)}_add10"
+        print(kernel_key)
     return kernel_key
 
 
@@ -122,13 +133,21 @@ def precompute_all_kernels(args):
     get_data_and_model(args, precompute=True)
 
 
-def get_data_and_model(args, precompute=False):
+def get_data_and_model(args, precompute=False, use_de=False):
+    args = copy.deepcopy(args)
+    embedding_type = "glass"
+    if args.dataset_name in ["Density", "Component", "Coreness", "CutRatio"] and use_de:
+        embedding_type = "RWPE_K_64"
+
     dts: Union[HPONeuro, PPIBP, HPOMetab, EMUser, Density, Component, Coreness, CutRatio] = eval(args.dataset_name)(
         root=args.dataset_path,
         name=args.dataset_name,
-        embedding_type="glass",
+        embedding_type=embedding_type,
         debug=False,
+        load_rwpe=use_de,
     )
+    if use_de:
+        args.de = dts.global_data.pe
     # dts.print_summary()
     splits = [0] + dts.splits + [len(dts)]
     if args.ratio_samples < 1.0:
@@ -162,7 +181,8 @@ def get_data_and_model(args, precompute=False):
     all_data = Batch.from_data_list(train_dts + val_dts + test_dts)
 
     wl = WL4S(dataset_name=args.dataset_name, stype=args.stype, num_layers=args.wl_layers, norm=args.hist_norm,
-              dtype=args.dtype, splits=splits, k_to_sample=args.k_to_sample, precompute=precompute)
+              dtype=args.dtype, splits=splits, k_to_sample=args.k_to_sample, precompute=precompute,
+              de=dts.global_data.pe if use_de else None)
 
     if args.stype == "connected":
         dts.global_data.x = torch.ones((dts.global_data.x.size(0), 1)).long()
@@ -235,8 +255,8 @@ def experiment(args, h_or_k_list, splits, all_y, **model_kwargs):
     }
 
 
-def run_one(args, data_func=get_data_and_model, precompute=True):
-    h_or_k_list, splits, all_y = data_func(args, precompute=precompute)
+def run_one(args, data_func=get_data_and_model, precompute=True, **kwargs):
+    h_or_k_list, splits, all_y = data_func(args, precompute=precompute, **kwargs)
     model_kwargs = {k: getattr(args, k) for k in MODEL_KWARGS_KEY if hasattr(args, k)}
     experiment(args, h_or_k_list, splits, all_y, **model_kwargs)
 

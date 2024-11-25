@@ -6,11 +6,11 @@ from wl4s import (
 )
 
 
-def get_data_mixed_kernels(args, precompute):
+def get_data_mixed_kernels(args, precompute=True, use_de_0=False, use_de_D=True):
     assert args.dtype == "kernel"
 
     args.stype = "connected"
-    k_list_c, splits_c, y_c = get_data_and_model(args, precompute)
+    k_list_c, splits_c, y_c = get_data_and_model(args, precompute, use_de=use_de_D)
 
     args.stype = "separated"
     k_list_s = get_all_kernels(args, splits_c) if precompute else None
@@ -48,14 +48,14 @@ if __name__ == '__main__':
     }
     WL4S2_KWS = dict(
         data_func=get_data_mixed_kernels,  # NOTE: important
-        file_dir="../_logs_wl4s2",
+        file_dir="../_logs_wl4s2_add10000",
     )
 
     __args__ = parser.parse_args()
     __args__.dtype = "kernel"
 
     if __args__.MODE == "run_one":
-        run_one(__args__, data_func=get_data_mixed_kernels, precompute=True)
+        run_one(__args__, data_func=get_data_mixed_kernels, precompute=True, use_de_0=True, use_de_D=True)
 
     elif __args__.MODE == "run_eff":
         import time
