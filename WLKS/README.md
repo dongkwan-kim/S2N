@@ -56,6 +56,11 @@ python3 wl4s2v2.py --MODE hp_search_for_models --runs 1 --dataset_name PPIBP
 python3 wl4s2v2.py --MODE hp_search_for_models --runs 1 --dataset_name EMUser 
 python3 wl4s2v2.py --MODE hp_search_for_models --runs 1 --dataset_name HPOMetab
 python3 wl4s2v2.py --MODE hp_search_for_models --runs 1 --dataset_name HPONeuro
+# Search hparams for k=0&D + x
+python3 wl4s2vx.py --MODE hp_search_for_models --runs 1 --layer_name Identity --scaler StandardScaler --dataset_name PPIBP 
+python3 wl4s2vx.py --MODE hp_search_for_models --runs 1 --layer_name Identity --scaler StandardScaler --dataset_name EMUser 
+python3 wl4s2vx.py --MODE hp_search_for_models --runs 1 --layer_name Identity --scaler StandardScaler --dataset_name HPOMetab
+python3 wl4s2vx.py --MODE hp_search_for_models --runs 1 --layer_name Identity --scaler StandardScaler --dataset_name HPONeuro
 
 # Run wl4s for all k in [0, 1, 2, D]
 python3 wl4s_k.py --MODE real_k

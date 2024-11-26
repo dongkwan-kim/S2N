@@ -6,7 +6,7 @@ from wl4s import (
 )
 
 
-def get_data_mixed_kernels(args, precompute):
+def get_data_mixed_kernels(args, precompute=True):
     assert args.dtype == "kernel"
 
     args.stype = "connected"
@@ -42,7 +42,7 @@ if __name__ == '__main__':
         "kernel": ["precomputed"],
         "dtype": ["kernel"],
     }
-    Cx100 = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576]
+    Cx100 = [8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384]
     MORE_HPARAM_SPACE = {
         "C": [c / 100 for c in Cx100],
     }

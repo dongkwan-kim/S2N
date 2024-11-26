@@ -8,12 +8,14 @@ from typing import Union
 import pandas as pd
 import torch
 from sklearn.metrics import f1_score
-from sklearn.metrics.pairwise import linear_kernel
+from sklearn.metrics.pairwise import linear_kernel, rbf_kernel, sigmoid_kernel
 from sklearn.multioutput import MultiOutputClassifier
+from sklearn.preprocessing import StandardScaler
 from sklearn.svm import LinearSVC, SVC
 from termcolor import cprint
 from torch_geometric.data import Batch
 from torch_geometric.nn.conv import WLConv
+from torch_geometric.nn.glob import global_add_pool
 from tqdm import tqdm
 
 from data_sub import HPONeuro, PPIBP, HPOMetab, EMUser, Density, Component, Coreness, CutRatio
@@ -21,6 +23,7 @@ from data_transform import KHopSubgraph, ShuffleAndSample
 from utils import str2bool
 from utils_fscache import fscaches
 from visualize import plot_data_points_by_tsne
+from wl_utils import WLConvContinuous, MyIdentity
 
 ModelType = Union[MultiOutputClassifier, LinearSVC, SVC]
 
@@ -42,13 +45,17 @@ parser.add_argument('--ratio_samples', type=float, default=1.0, help="Only when 
 parser.add_argument('--model', type=str, default="SVC", choices=["LinearSVC", "SVC"])
 parser.add_argument('--C', type=float, default=1.0)
 parser.add_argument('--kernel', type=str, default="precomputed")
+parser.add_argument('--layer_name', type=str, default="WLConv")
+parser.add_argument("--kernel_type", type=str, default="linear")
+parser.add_argument("--scaler", type=str, default="")
 parser.add_argument('--runs', type=int, default=10)
 parser.add_argument('--dataset_path', type=str, default="/mnt/nas2/GNN-DATA/SUBGRAPH")
 
 
 class WL4S(torch.nn.Module):
     def __init__(self, dataset_name, stype, num_layers, norm,
-                 dtype="histogram", splits=None, k_to_sample=None, precompute=False):
+                 dtype="histogram", splits=None, k_to_sample=None, precompute=False,
+                 layer_name="WLConv", kernel_type="linear", scaler=""):
         super(WL4S, self).__init__()
         self.dataset_name = dataset_name
         self.stype = stype
@@ -57,7 +64,27 @@ class WL4S(torch.nn.Module):
         self.splits = splits
         self.precompute = precompute
         self.k_to_sample = k_to_sample
-        self.convs = torch.nn.ModuleList([WLConv() for _ in range(num_layers)])
+
+        self.layer_name = layer_name
+        self.kernel_type = kernel_type
+        self.scaler = scaler
+        if layer_name == "WLConv":
+            self.convs = torch.nn.ModuleList([WLConv() for _ in range(num_layers)])
+        elif layer_name == "WLConvContinuous":
+            self.convs = torch.nn.ModuleList([WLConvContinuous() for _ in range(num_layers)])
+        elif layer_name == "Identity":
+            self.convs = torch.nn.ModuleList([MyIdentity() for _ in range(num_layers)])
+        else:
+            raise ValueError
+
+    def __histogram__(self, conv, x, batch_or_sub_batch, norm):
+        if self.layer_name == "WLConv":
+            return conv.histogram(x, batch_or_sub_batch, norm=norm)
+        else:
+            h = global_add_pool(x, batch_or_sub_batch, size=None)
+            if norm:
+                h /= h.norm(dim=-1, keepdim=True)
+            return h
 
     def forward(self, x, edge_index, batch_or_sub_batch, x_to_xs=None, mask=None):
         hists_or_kernels = []
@@ -66,18 +93,26 @@ class WL4S(torch.nn.Module):
             x = conv(x, edge_index)
 
             if self.stype == "connected":
-                h = conv.histogram(x[x_to_xs], batch_or_sub_batch, norm=self.norm)
+                # h = conv.histogram(x[x_to_xs], batch_or_sub_batch, norm=self.norm)
+                h = self.__histogram__(conv, x[x_to_xs], batch_or_sub_batch, norm=self.norm)
             elif self.stype == "separated":
                 _x, _b = x, batch_or_sub_batch
                 if mask is not None:
                     _x, _b = x[mask], batch_or_sub_batch[mask]
-                h = conv.histogram(_x, _b, norm=self.norm)
+                # h = conv.histogram(_x, _b, norm=self.norm)
+                h = self.__histogram__(conv, _x, _b, norm=self.norm)
             else:
                 raise ValueError
 
             if self.dtype == "kernel":
                 kernel_key = get_kernel_key(self, self.splits, i)
-                h = hist_linear_kernels(hist=h, splits=self.splits, key=kernel_key)
+                if self.kernel_type == "linear":
+                    h = hist_linear_kernels(hist=h, splits=self.splits, key=kernel_key)
+                elif self.kernel_type == "rbf":
+                    h = hist_rbf_kernels(hist=h, splits=self.splits, key=kernel_key)
+                else:
+                    h = hist_sigmoid_kernels(hist=h, splits=self.splits, key=kernel_key)
+
                 if self.precompute:
                     del h
                     gc.collect()
@@ -91,19 +126,64 @@ def kk(k_to_sample, stype, norm, i, *args):
 
 
 def get_kernel_key(args, splits, i):
+    if args.layer_name == "Identity":
+        i = 0
     kernel_key = kk(args.k_to_sample, args.stype, args.hist_norm, i)
     if splits[-1] <= 250:  # synthetic graphs, backward compatibility
         kernel_key = kk(args.k_to_sample, args.stype[:3], args.hist_norm, i, args.dataset_name)
+    if args.layer_name != "WLConv":
+        kernel_key = f"{kernel_key}_{args.layer_name}"
+    if hasattr(args, "kernel_type") and args.kernel_type != "linear":
+        kernel_key = f"{kernel_key}_{args.kernel_type}"
+    if hasattr(args, "scaler") and args.scaler != "":
+        kernel_key = f"{kernel_key}_{args.scaler}"
+
+    cprint(f"{kernel_key=}", "red", "on_cyan")
     return kernel_key
+
+
+def _apply_scaler(key, train_hist, val_hist, test_hist):
+    if "StandardScaler" in key:
+        print(test_hist)
+        scaler = StandardScaler()
+        scaler.fit(train_hist)
+        train_hist = scaler.transform(train_hist)
+        val_hist = scaler.transform(val_hist)
+        test_hist = scaler.transform(test_hist)
+        print(test_hist)
+    return train_hist, val_hist, test_hist
 
 
 @fscaches(path="../_caches", keys_to_exclude=["hist"], verbose=True)
 def hist_linear_kernels(hist, splits, key):
     s = splits
     train_hist, val_hist, test_hist = hist[s[0]:s[1]], hist[s[1]:s[2]], hist[s[2]:s[3]]
+    train_hist, val_hist, test_hist = _apply_scaler(key, train_hist, val_hist, test_hist)
     K_train = linear_kernel(train_hist, train_hist)
     K_val = linear_kernel(val_hist, train_hist)
     K_test = linear_kernel(test_hist, train_hist)
+    return K_train, K_val, K_test
+
+
+@fscaches(path="../_caches", keys_to_exclude=["hist"], verbose=True)
+def hist_rbf_kernels(hist, splits, key):
+    s = splits
+    train_hist, val_hist, test_hist = hist[s[0]:s[1]], hist[s[1]:s[2]], hist[s[2]:s[3]]
+    train_hist, val_hist, test_hist = _apply_scaler(key, train_hist, val_hist, test_hist)
+    K_train = rbf_kernel(train_hist, train_hist)
+    K_val = rbf_kernel(val_hist, train_hist)
+    K_test = rbf_kernel(test_hist, train_hist)
+    return K_train, K_val, K_test
+
+
+@fscaches(path="../_caches", keys_to_exclude=["hist"], verbose=True)
+def hist_sigmoid_kernels(hist, splits, key):
+    s = splits
+    train_hist, val_hist, test_hist = hist[s[0]:s[1]], hist[s[1]:s[2]], hist[s[2]:s[3]]
+    train_hist, val_hist, test_hist = _apply_scaler(key, train_hist, val_hist, test_hist)
+    K_train = sigmoid_kernel(train_hist, train_hist)
+    K_val = sigmoid_kernel(val_hist, train_hist)
+    K_test = sigmoid_kernel(test_hist, train_hist)
     return K_train, K_val, K_test
 
 
@@ -123,10 +203,13 @@ def precompute_all_kernels(args):
 
 
 def get_data_and_model(args, precompute=False):
+    embedding_type = "glass"
+    if args.dataset_name in ["Density", "Component", "Coreness", "CutRatio"]:
+        embedding_type = "ones_1/64"
     dts: Union[HPONeuro, PPIBP, HPOMetab, EMUser, Density, Component, Coreness, CutRatio] = eval(args.dataset_name)(
         root=args.dataset_path,
         name=args.dataset_name,
-        embedding_type="glass",
+        embedding_type=embedding_type,
         debug=False,
     )
     # dts.print_summary()
@@ -162,14 +245,21 @@ def get_data_and_model(args, precompute=False):
     all_data = Batch.from_data_list(train_dts + val_dts + test_dts)
 
     wl = WL4S(dataset_name=args.dataset_name, stype=args.stype, num_layers=args.wl_layers, norm=args.hist_norm,
-              dtype=args.dtype, splits=splits, k_to_sample=args.k_to_sample, precompute=precompute)
+              dtype=args.dtype, splits=splits, k_to_sample=args.k_to_sample, precompute=precompute,
+              layer_name=args.layer_name, kernel_type=args.kernel_type, scaler=args.scaler)
 
     if args.stype == "connected":
-        dts.global_data.x = torch.ones((dts.global_data.x.size(0), 1)).long()
+        if args.layer_name == "WLConv":
+            dts.global_data.x = torch.ones((dts.global_data.x.size(0), 1)).long()
+        else:
+            dts.global_data.x = dts.global_data.x.detach()
         data = dts.global_data
         h_or_k_list = wl(data.x, data.edge_index, batch_or_sub_batch=all_data.batch, x_to_xs=all_data.x.flatten())
     else:  # separated
-        all_data.x = torch.ones((all_data.x.size(0), 1)).long()
+        if args.layer_name == "WLConv":
+            all_data.x = torch.ones((all_data.x.size(0), 1)).long()
+        else:
+            all_data.x = dts.global_data.x[all_data.x.flatten()].detach()
         data = all_data
         h_or_k_list = wl(data.x, data.edge_index, batch_or_sub_batch=all_data.batch, mask=getattr(data, "mask", None))
     return h_or_k_list, splits, all_data.y
