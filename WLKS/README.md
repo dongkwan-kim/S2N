@@ -1,5 +1,18 @@
 # WL Kernel for Subgraphs (WLKS)
 
+## BibTeX
+
+```
+@inproceedings{
+  kim2025generalizing,
+  title={Generalizing Weisfeiler-Lehman Kernels to Subgraphs},
+  author={Dongkwan Kim and Alice Oh},
+  booktitle={The Thirteenth International Conference on Learning Representations},
+  year={2025},
+  url={https://openreview.net/forum?id=HZgZrtIreg}
+}
+```
+
 ## Install
 
 This repository has been confirmed to be working on `nvidia/cuda:10.2-cudnn8-devel-ubuntu18.04`
